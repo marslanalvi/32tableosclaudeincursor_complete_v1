@@ -1,6 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { request, type FieldDto, type FilterAst, type TableDto } from "../../lib/api.ts";
+import { integrationsApi } from "../../lib/api-areas/integrations.ts";
+import { errorMessage } from "../../app/toast.tsx";
+import { confirmDisconnect, ConnectGmailButton, ConnectTokenForm, connectionsOf, useConnections, useDisconnect } from "../connectors/connect.tsx";
 import type {
   ActionConfig,
   AutomationAction,
@@ -28,6 +31,11 @@ function asGroup(f: FilterAst | null | undefined): FilterGroup {
   if (!f) return { kind: "and", children: [] } as FilterGroup;
   if (f.kind === "condition") return { kind: "and", children: [f] } as FilterGroup;
   return f as FilterGroup;
+}
+
+/** Values that hold a record ID (`….id` tokens, or fields such as "Record ID"). */
+function isRecordIdToken(t: TokenOption): boolean {
+  return /\.id\}\}$/.test(t.token) || /\bID\b/.test(t.label);
 }
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
@@ -451,8 +459,151 @@ function RecipientPicker({
   );
 }
 
+/** One of the editor's own Gmail / Slack connections (automations run with the accounts of whoever last edited them). */
+function ConnectionPicker({
+  provider,
+  value,
+  returnTo,
+  onChange,
+}: {
+  provider: "gmail" | "slack";
+  value: string;
+  /** Where Google sends the user back to after "Sign in with Google". */
+  returnTo: string;
+  onChange: (id: string) => void;
+}) {
+  const conns = useConnections();
+  const disconnect = useDisconnect();
+  const [adding, setAdding] = useState(false);
+  const list = connectionsOf(conns.data?.connections, provider);
+  const name = provider === "gmail" ? "Gmail" : "Slack";
+  const label = provider === "gmail" ? "Gmail account" : "Slack account";
+  useEffect(() => {
+    if (!value && list[0]) onChange(list[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conns.data, value]);
+  if (conns.isLoading) return <p className={styles.muted}>Loading your {name} accounts…</p>;
+  const missing = Boolean(value) && !list.some((c) => c.id === value);
+  const current = list.find((c) => c.id === value);
+  const connectForm =
+    provider === "gmail" ? (
+      <div className={styles.connectInline}>
+        <ConnectGmailButton available={conns.data?.providers.gmail.available ?? false} returnTo={returnTo} />
+        {adding ? (
+          <button type="button" className={styles.linkBtn} onClick={() => setAdding(false)}>
+            Cancel
+          </button>
+        ) : null}
+      </div>
+    ) : (
+      <ConnectTokenForm
+        provider="slack"
+        onConnected={(c) => {
+          setAdding(false);
+          onChange(c.id);
+        }}
+        {...(adding ? { onCancel: () => setAdding(false) } : {})}
+      />
+    );
+  return (
+    <div className={styles.field}>
+      <span className={styles.fieldLabel}>{label}</span>
+      {list.length ? (
+        <div className={styles.connectInline}>
+          <select
+            className={styles.select}
+            value={missing ? "__other" : value}
+            onChange={(e) => {
+              if (e.target.value === "__new") setAdding(true);
+              else onChange(e.target.value);
+            }}
+            aria-label={label}
+          >
+            {missing ? <option value="__other">Someone else's account (pick one of yours)</option> : null}
+            {list.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.accountLabel && c.accountLabel !== c.name ? ` (${c.accountLabel})` : ""}
+              </option>
+            ))}
+            <option value="__new">+ Connect another {name} account…</option>
+          </select>
+          {current ? (
+            <button
+              type="button"
+              className={styles.linkBtn}
+              disabled={disconnect.isPending}
+              onClick={() => {
+                if (confirmDisconnect(current)) disconnect.mutate(current, { onSuccess: () => onChange("") });
+              }}
+            >
+              Disconnect
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {!list.length || adding ? connectForm : null}
+      {missing ? (
+        <span className={styles.hint}>Automations run with the accounts of the person who last edited them, so this step needs one of your accounts.</span>
+      ) : null}
+    </div>
+  );
+}
+
+function SlackChannelPicker({ connectionId, value, onChange }: { connectionId: string; value: string; onChange: (id: string, name: string) => void }) {
+  const channels = useQuery({
+    queryKey: ["slack-channels", connectionId],
+    queryFn: () => integrationsApi.slackChannels(connectionId),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const list = channels.data?.channels ?? [];
+  const custom = Boolean(value) && channels.isSuccess && !list.some((c) => c.id === value);
+  return (
+    <div className={styles.field}>
+      <span className={styles.fieldLabel}>Channel</span>
+      {channels.isLoading ? <span className={styles.hint}>Loading channels…</span> : null}
+      {channels.isError ? <span className={styles.hint}>{errorMessage(channels.error)}</span> : null}
+      {channels.isSuccess ? (
+        <select
+          className={styles.select}
+          value={custom ? "__custom" : value}
+          aria-label="Slack channel"
+          onChange={(e) => {
+            if (e.target.value === "__custom") onChange("#", "");
+            else onChange(e.target.value, list.find((c) => c.id === e.target.value)?.name ?? "");
+          }}
+        >
+          <option value="">Choose a channel…</option>
+          {list.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.isPrivate ? "🔒 " : "#"}
+              {c.name}
+              {c.isMember ? "" : " (bot not in channel)"}
+            </option>
+          ))}
+          <option value="__custom">Other (channel name or ID)…</option>
+        </select>
+      ) : null}
+      {custom || channels.isError ? (
+        <input
+          className={styles.input}
+          value={value}
+          placeholder="#general or C0123456789"
+          aria-label="Channel name or ID"
+          onChange={(e) => onChange(e.target.value, e.target.value.replace(/^#/, ""))}
+        />
+      ) : null}
+      {value && !custom && list.find((c) => c.id === value && !c.isMember && c.isPrivate) ? (
+        <span className={styles.hint}>Invite the bot to this private channel in Slack (/invite @your-app) or posting fails.</span>
+      ) : null}
+    </div>
+  );
+}
+
 export function ActionEditor({
   baseId,
+  returnTo,
   action,
   index,
   allActions,
@@ -461,6 +612,8 @@ export function ActionEditor({
   onChange,
 }: {
   baseId: string;
+  /** App URL that reopens this step (used after "Sign in with Google"). */
+  returnTo: string;
   action: AutomationAction;
   /** Index among top-level actions (for token availability). */
   index: number;
@@ -497,8 +650,8 @@ export function ActionEditor({
       ) : null}
 
       {action.type === "update_record" || action.type === "delete_record" ? (
-        <Field label="Record ID" hint="Usually the trigger record, or a record found in an earlier step.">
-          <TokenInput value={cfg.recordId ?? ""} onChange={(v) => set({ recordId: v })} tokens={tokens} ariaLabel="Record ID" />
+        <Field label="Record ID" hint="Usually the trigger record's ID, or the first record ID from a Find records step.">
+          <TokenInput value={cfg.recordId ?? ""} onChange={(v) => set({ recordId: v })} tokens={tokens} pickerFilter={isRecordIdToken} ariaLabel="Record ID" />
         </Field>
       ) : null}
 
@@ -582,6 +735,50 @@ export function ActionEditor({
         </>
       ) : null}
 
+      {action.type === "gmail_send" ? (
+        <>
+          <ConnectionPicker provider="gmail" value={cfg.connectionId ?? ""} returnTo={returnTo} onChange={(connectionId) => set({ connectionId })} />
+          <Field label="To" hint="Separate addresses with commas.">
+            <TokenInput value={cfg.to ?? ""} onChange={(v) => set({ to: v })} tokens={tokens} ariaLabel="To" />
+          </Field>
+          <div className={styles.row2}>
+            <Field label="Cc">
+              <TokenInput value={cfg.cc ?? ""} onChange={(v) => set({ cc: v })} tokens={tokens} ariaLabel="Cc" />
+            </Field>
+            <Field label="Bcc">
+              <TokenInput value={cfg.bcc ?? ""} onChange={(v) => set({ bcc: v })} tokens={tokens} ariaLabel="Bcc" />
+            </Field>
+          </div>
+          <Field label="Subject">
+            <TokenInput value={cfg.subject ?? ""} onChange={(v) => set({ subject: v })} tokens={tokens} ariaLabel="Subject" />
+          </Field>
+          <Field label="Message" hint="Sent as plain text from your Gmail address; it appears in your Sent folder.">
+            <TokenInput value={cfg.body ?? ""} onChange={(v) => set({ body: v })} tokens={tokens} multiline ariaLabel="Message" />
+          </Field>
+        </>
+      ) : null}
+
+      {action.type === "slack_message" ? (
+        <>
+          <ConnectionPicker
+            provider="slack"
+            value={cfg.connectionId ?? ""}
+            returnTo={returnTo}
+            onChange={(connectionId) => set({ connectionId, channel: "", channelName: "" })}
+          />
+          {cfg.connectionId ? (
+            <SlackChannelPicker
+              connectionId={cfg.connectionId}
+              value={cfg.channel ?? ""}
+              onChange={(channel, channelName) => set({ channel, channelName })}
+            />
+          ) : null}
+          <Field label="Message" hint="Slack formatting works: *bold*, _italic_, <https://example.com|links>.">
+            <TokenInput value={cfg.text ?? ""} onChange={(v) => set({ text: v })} tokens={tokens} multiline ariaLabel="Slack message" />
+          </Field>
+        </>
+      ) : null}
+
       {action.type === "webhook" ? (
         <>
           <div className={styles.row2}>
@@ -612,9 +809,14 @@ export function ActionEditor({
         </>
       ) : null}
 
+      {action.type === "script" ? (
+        <ScriptEditor value={cfg.script ?? ""} onChange={(script) => set({ script })} tables={tables} />
+      ) : null}
+
       {action.type === "condition" ? (
         <ConditionEditor
           baseId={baseId}
+          returnTo={returnTo}
           action={action}
           index={index}
           allActions={allActions}
@@ -625,6 +827,55 @@ export function ActionEditor({
         />
       ) : null}
     </div>
+  );
+}
+
+function ScriptEditor({ value, onChange, tables }: { value: string; onChange: (v: string) => void; tables: TableDto[] }) {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key !== "Tab" || e.shiftKey) return;
+    e.preventDefault();
+    const el = e.currentTarget;
+    const { selectionStart: s, selectionEnd: end } = el;
+    onChange(`${value.slice(0, s)}  ${value.slice(end)}`);
+    requestAnimationFrame(() => el.setSelectionRange(s + 2, s + 2));
+  };
+  return (
+    <>
+      <Field label="Script (JavaScript)" hint="Runs in a secure sandbox as the automation's owner. Use Test to see console output in the run history.">
+        <textarea
+          className={`${styles.textarea} ${styles.scriptInput}`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          spellCheck={false}
+          rows={18}
+          aria-label="Script"
+        />
+      </Field>
+      <details className={styles.scriptRef}>
+        <summary>Script reference</summary>
+        <ul>
+          <li><code>input.config()</code>: <code>trigger</code> (with <code>trigger.record.fields</code> as text and <code>trigger.record.raw</code> as values), <code>steps</code>, <code>base</code>, <code>now</code>.</li>
+          <li><code>output.set(key, value)</code>: later steps can use <code>{"{{steps.<this step>.<key>}}"}</code>.</li>
+          <li><code>await base.findRecords(table, {"{ view, limit, filter }"})</code> returns up to 500 records.</li>
+          <li><code>await base.getRecord(table, id)</code>, <code>createRecord(table, fields)</code>, <code>updateRecord(table, id, fields)</code>, <code>deleteRecord(table, id)</code>.</li>
+          <li><code>await fetch(url, {"{ method, headers, body }"})</code> to public addresses; <code>res.json()</code> / <code>res.text()</code>.</li>
+          <li>Limits: 30 s per run, 2 s of computing without an <code>await</code>, 100 base/fetch calls, 20 fetches.</li>
+        </ul>
+        {tables.length ? (
+          <>
+            <p className={styles.muted}>Tables and fields in this base:</p>
+            <ul>
+              {tables.map((t) => (
+                <li key={t.id}>
+                  <code>{t.name}</code>: {t.fields.map((f) => f.name).join(", ")}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </details>
+    </>
   );
 }
 
@@ -643,6 +894,7 @@ const COND_OPS: { op: BranchCondition["op"]; label: string; unary?: boolean }[] 
 
 function ConditionEditor({
   baseId,
+  returnTo,
   action,
   index,
   allActions,
@@ -652,6 +904,7 @@ function ConditionEditor({
   onChange,
 }: {
   baseId: string;
+  returnTo: string;
   action: AutomationAction;
   index: number;
   allActions: AutomationAction[];
@@ -711,6 +964,7 @@ function ConditionEditor({
           key={branch}
           label={branch === "then" ? "If true, run" : "Otherwise, run"}
           baseId={baseId}
+          returnTo={returnTo}
           actions={cfg[branch] ?? []}
           index={index}
           allActions={allActions}
@@ -726,6 +980,7 @@ function ConditionEditor({
 function BranchActions({
   label,
   baseId,
+  returnTo,
   actions,
   index,
   allActions,
@@ -735,6 +990,7 @@ function BranchActions({
 }: {
   label: string;
   baseId: string;
+  returnTo: string;
   actions: AutomationAction[];
   index: number;
   allActions: AutomationAction[];
@@ -765,6 +1021,7 @@ function BranchActions({
           {open === a.id ? (
             <ActionEditor
               baseId={baseId}
+              returnTo={returnTo}
               action={a}
               index={index}
               allActions={allActions}

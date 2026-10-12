@@ -10,7 +10,10 @@ import { compileForUser } from "../access/compile.js";
 import { resolveBaseContext } from "../access/helpers.js";
 import { writeAuditEvent } from "../audit/write.js";
 import { bootstrapDefaultTable } from "../base/bootstrap-default-table.js";
-import { loadSync, mapSourceField, runTableSync, sourceFieldsInOrder, type SyncRow } from "./engine.js";
+import { mfaKey } from "../auth/mfa-pending.js";
+import { loadConnection } from "../integrations/connections.js";
+import { HUBSPOT_OBJECTS, type HubSpotObject } from "../integrations/hubspot.js";
+import { editableSyncedFieldIds, loadSync, mapSourceField, runTableSync, sourceFieldsInOrder, type SyncRow } from "./engine.js";
 
 const createBody = z.object({
   sourceTableId: z.string(),
@@ -20,6 +23,8 @@ const createBody = z.object({
 const patchBody = z.object({
   status: z.enum(["active", "paused"]).optional(),
   intervalMinutes: z.number().int().min(1).max(1440).optional(),
+  /** Write edits back to the source (HubSpot syncs only). */
+  twoWay: z.boolean().optional(),
 });
 
 type BaseParams = { baseId: string };
@@ -28,8 +33,10 @@ type TableParams = { baseId: string; tableId: string };
 export function syncDto(s: SyncRow, names: { baseName: string; tableName: string } | null) {
   return {
     id: s.id,
-    sourceBaseId: pid("bas", s.source_base_id),
-    sourceTableId: pid("tbl", s.source_table_id),
+    provider: s.provider,
+    connectionId: s.connection_id,
+    sourceBaseId: s.source_base_id ? pid("bas", s.source_base_id) : null,
+    sourceTableId: s.source_table_id ? pid("tbl", s.source_table_id) : null,
     sourceBaseName: names?.baseName ?? null,
     sourceTableName: names?.tableName ?? null,
     status: s.status,
@@ -38,10 +45,38 @@ export function syncDto(s: SyncRow, names: { baseName: string; tableName: string
     lastError: s.last_error,
     recordCount: s.last_record_count,
     syncedFieldIds: Object.values(s.field_map ?? {}).map((f) => pid("fld", f)),
+    twoWay: s.two_way,
+    /** Synced fields that can be edited here and are written back to the source. */
+    editableFieldIds: [...editableSyncedFieldIds(s)].map((f) => pid("fld", f)),
   };
 }
 
-export async function sourceNames(db: AppContext["db"], s: Pick<SyncRow, "source_base_id" | "source_table_id">) {
+export async function sourceNames(db: AppContext["db"], s: Pick<SyncRow, "provider" | "source_table_id" | "connection_id" | "source_config">) {
+  if (s.provider === "hubspot") {
+    const object = String(s.source_config?.["object"] ?? "");
+    const conn = s.connection_id ? await loadConnection(db, s.connection_id) : null;
+    return {
+      baseName: conn?.account_label ? `HubSpot (${conn.account_label})` : "HubSpot",
+      tableName: HUBSPOT_OBJECTS[object as HubSpotObject]?.label ?? object,
+    };
+  }
+  if (s.provider === "airtable") {
+    const cfg = s.source_config ?? {};
+    const baseName = typeof cfg["baseName"] === "string" ? cfg["baseName"] : null;
+    return {
+      baseName: baseName ? `Airtable (${baseName})` : "Airtable",
+      tableName: typeof cfg["tableName"] === "string" ? cfg["tableName"] : "a table",
+    };
+  }
+  if (s.provider === "gmail") {
+    const conn = s.connection_id ? await loadConnection(db, s.connection_id) : null;
+    const query = typeof s.source_config?.["query"] === "string" ? s.source_config["query"].trim() : "";
+    return {
+      baseName: conn?.account_label ? `Gmail (${conn.account_label})` : "Gmail",
+      tableName: query ? `“${query}”` : "All mail",
+    };
+  }
+  if (!s.source_table_id) return null;
   const r = await sql<{ base_name: string; table_name: string }>`
     SELECT b.name AS base_name, t.name AS table_name
     FROM data.tables t INNER JOIN core.base_directory b ON b.base_id = t.base_id
@@ -52,7 +87,7 @@ export async function sourceNames(db: AppContext["db"], s: Pick<SyncRow, "source
 }
 
 export async function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): Promise<void> {
-  const deps = { db: ctx.db, redis: ctx.redis, storage: ctx.storage };
+  const deps = { db: ctx.db, redis: ctx.redis, storage: ctx.storage, secretKey: mfaKey(ctx.env), google: ctx.env };
 
   function wrap<P>(fn: (request: FastifyRequest<{ Params: P }>, reply: FastifyReply) => Promise<void>) {
     return async (request: FastifyRequest<{ Params: P }>, reply: FastifyReply) => {
@@ -229,7 +264,7 @@ export async function registerSyncRoutes(app: FastifyInstance, ctx: AppContext):
       const { sync } = await tableSync(request, "record.update");
       let result = null;
       try {
-        result = await runTableSync(deps, sync.id);
+        result = await runTableSync(deps, sync.id, { full: true });
       } catch {
         // Stored on the sync row; returned below.
       }
@@ -241,12 +276,26 @@ export async function registerSyncRoutes(app: FastifyInstance, ctx: AppContext):
   app.patch<{ Params: TableParams }>(
     "/v1/bases/:baseId/tables/:tableId/sync",
     wrap<TableParams>(async (request, reply) => {
-      const { sync } = await tableSync(request, "base.manage_schema");
+      const { sync, user } = await tableSync(request, "base.manage_schema");
       const body = patchBody.parse(request.body ?? {});
+      if (body.twoWay === true && sync.provider !== "hubspot") {
+        throw new ApiError(
+          422,
+          "VALIDATION_FAILED",
+          sync.provider === "tableos"
+            ? "Tables synced from another base are one-way; edit the source base instead"
+            : "Only HubSpot tables can sync both ways; edit the records at the source instead",
+        );
+      }
+      if (body.twoWay === true && !sync.two_way && sync.owner_user_id !== user.id) {
+        // Edits are written with the HubSpot account of whoever set up the sync.
+        throw new ApiError(403, "FORBIDDEN", "Only the person who set up this sync can turn on two-way sync");
+      }
       await sql`
         UPDATE data.table_syncs
         SET status = coalesce(${body.status ?? null}, status),
             interval_minutes = coalesce(${body.intervalMinutes ?? null}, interval_minutes),
+            two_way = coalesce(${body.twoWay ?? null}::boolean, two_way),
             updated_at = now()
         WHERE id = ${sync.id}
       `.execute(ctx.db);

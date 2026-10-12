@@ -23,7 +23,10 @@ export const ACTION_TYPES = [
   "delete_record",
   "notify",
   "send_email",
+  "gmail_send",
+  "slack_message",
   "webhook",
+  "script",
   "condition",
 ] as const;
 export type ActionType = (typeof ACTION_TYPES)[number];
@@ -100,11 +103,18 @@ export const actionSchema: z.ZodType<ActionDef> = z.lazy(() =>
         cc: z.string().max(5000).optional(),
         subject: z.string().max(1000).optional(),
         body: z.string().max(100_000).optional(),
+        // gmail_send / slack_message: a connection of the automation's owner
+        connectionId: z.string().max(64).optional(),
+        bcc: z.string().max(5000).optional(),
+        channel: z.string().max(2000).optional(),
+        text: z.string().max(40_000).optional(),
         // webhook
         url: z.string().max(2000).optional(),
         method: z.enum(["POST", "PUT", "PATCH", "GET"]).optional(),
         headers: z.record(z.string(), z.string()).optional(),
         timeoutMs: z.number().int().min(500).max(30_000).optional(),
+        // script
+        script: z.string().max(100_000).optional(),
         // condition
         match: z.enum(["all", "any"]).optional(),
         conditions: z
@@ -154,10 +164,15 @@ export interface ActionDef {
     cc?: string | undefined;
     subject?: string | undefined;
     body?: string | undefined;
+    connectionId?: string | undefined;
+    bcc?: string | undefined;
+    channel?: string | undefined;
+    text?: string | undefined;
     url?: string | undefined;
     method?: "POST" | "PUT" | "PATCH" | "GET" | undefined;
     headers?: Record<string, string> | undefined;
     timeoutMs?: number | undefined;
+    script?: string | undefined;
     match?: "all" | "any" | undefined;
     conditions?: { left: string; op: string; right?: string | undefined }[] | undefined;
     then?: ActionDef[] | undefined;

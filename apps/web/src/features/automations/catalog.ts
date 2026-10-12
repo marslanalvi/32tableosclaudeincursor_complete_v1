@@ -34,7 +34,10 @@ export const ACTIONS: ActionInfo[] = [
   { type: "delete_record", label: "Delete record", description: "Delete a record.", icon: "⌫" },
   { type: "notify", label: "Send in-app notification", description: "Notify collaborators in TableOS.", icon: "◉" },
   { type: "send_email", label: "Send email", description: "Send an email to anyone.", icon: "✉" },
+  { type: "gmail_send", label: "Send email via Gmail", description: "Send from your own Gmail address.", icon: "G" },
+  { type: "slack_message", label: "Send Slack message", description: "Post a message to a Slack channel.", icon: "#" },
   { type: "webhook", label: "Send webhook", description: "POST JSON to an external URL.", icon: "⇢" },
+  { type: "script", label: "Run a script", description: "Run custom JavaScript in a secure sandbox.", icon: "{}" },
   { type: "condition", label: "Conditional group", description: "Run actions only if conditions are met.", icon: "⑂" },
 ];
 
@@ -65,15 +68,60 @@ export function defaultAction(type: ActionType, tableId: string | undefined): Au
       return { id, type, config: { userIds: [], title: "", message: "" } };
     case "send_email":
       return { id, type, config: { to: "", subject: "", body: "" } };
+    case "gmail_send":
+      return { id, type, config: { connectionId: "", to: "", subject: "", body: "" } };
+    case "slack_message":
+      return { id, type, config: { connectionId: "", channel: "", text: "" } };
     case "webhook":
       return { id, type, config: { url: "", method: "POST", timeoutMs: 10000 } };
+    case "script":
+      return { id, type, config: { script: DEFAULT_SCRIPT } };
     case "condition":
       return { id, type, config: { match: "all", conditions: [{ left: "", op: "eq", right: "" }], then: [], else: [] } };
   }
 }
 
+export const DEFAULT_SCRIPT = `// The trigger record and the results of earlier steps
+const { trigger, steps } = input.config();
+console.log("Triggered by record", trigger.record?.id);
+
+// Read and change records (tables and fields can be named)
+// const tasks = await base.findRecords("Tasks", { limit: 50 });
+// await base.updateRecord("Tasks", trigger.record.id, { Status: "Done" });
+
+// Call an external API
+// const res = await fetch("https://api.example.com/data");
+// const data = await res.json();
+
+// Make values available to later steps
+output.set("result", "ok");
+`;
+
+/** Keys a script passes on with literal `output.set("key", …)` calls. */
+export function scriptOutputKeys(script: string | undefined): string[] {
+  const keys = new Set<string>();
+  for (const line of (script ?? "").split("\n")) {
+    if (line.trim().startsWith("//")) continue;
+    for (const m of line.matchAll(/output\.set\(\s*(["'`])([^"'`]+)\1/g)) keys.add(m[2]!);
+  }
+  return [...keys];
+}
+
 /** Short human summary of an action for its card. */
+/** `{{steps.x.first.fields.Name}}` → `[Name]` for one-line summaries. */
+export function readableTokens(text: string): string {
+  return text.replace(/\{\{([^{}]+)\}\}/g, (_m, path: string) => {
+    const p = path.trim();
+    const field = /\.fields\.(.+)$/.exec(p)?.[1];
+    return `[${field ?? p.split(".").pop() ?? p}]`;
+  });
+}
+
 export function summarizeAction(a: AutomationAction, tables: TableDto[]): string {
+  return readableTokens(summarize(a, tables));
+}
+
+function summarize(a: AutomationAction, tables: TableDto[]): string {
   const t = tables.find((x) => x.id === a.config.tableId);
   switch (a.type) {
     case "update_record":
@@ -88,8 +136,16 @@ export function summarizeAction(a: AutomationAction, tables: TableDto[]): string
       return a.config.title ? `Notify: ${a.config.title}` : "Choose recipients";
     case "send_email":
       return a.config.to ? `Email ${a.config.to}` : "Choose recipients";
+    case "gmail_send":
+      return !a.config.connectionId ? "Choose a Gmail account" : a.config.to ? `Gmail to ${a.config.to}` : "Choose recipients";
+    case "slack_message":
+      return !a.config.connectionId ? "Choose a Slack workspace" : a.config.channel ? `Post in #${(a.config.channelName ?? a.config.channel).replace(/^#/, "")}` : "Choose a channel";
     case "webhook":
       return a.config.url ? `${a.config.method ?? "POST"} ${a.config.url}` : "Enter a URL";
+    case "script": {
+      const lines = (a.config.script ?? "").split("\n").filter((l) => l.trim() && !l.trim().startsWith("//")).length;
+      return lines ? `JavaScript, ${lines} line${lines === 1 ? "" : "s"}` : "Write a script";
+    }
     case "condition":
       return `If ${a.config.conditions?.length ?? 0} condition(s) — ${a.config.then?.length ?? 0} action(s), else ${a.config.else?.length ?? 0}`;
   }
@@ -174,9 +230,17 @@ export function availableTokens(
       out.push({ group, label: "Record IDs (list)", token: `{{steps.${a.id}.ids}}` });
       out.push({ group, label: "First record ID", token: `{{steps.${a.id}.first.id}}` });
       for (const f of at?.fields ?? []) out.push({ group, label: `First record: ${f.name}`, token: `{{steps.${a.id}.first.fields.${f.name}}}` });
+    } else if (a.type === "gmail_send") {
+      out.push({ group, label: "Gmail message ID", token: `{{steps.${a.id}.messageId}}` });
+      out.push({ group, label: "Gmail thread ID", token: `{{steps.${a.id}.threadId}}` });
+    } else if (a.type === "slack_message") {
+      out.push({ group, label: "Slack message timestamp", token: `{{steps.${a.id}.ts}}` });
+      out.push({ group, label: "Slack channel ID", token: `{{steps.${a.id}.channel}}` });
     } else if (a.type === "webhook") {
       out.push({ group, label: "Response status", token: `{{steps.${a.id}.status}}` });
       out.push({ group, label: "Response body", token: `{{steps.${a.id}.body}}` });
+    } else if (a.type === "script") {
+      for (const key of scriptOutputKeys(a.config.script)) out.push({ group, label: key, token: `{{steps.${a.id}.${key}}}` });
     }
   });
   out.push({ group: "Other", label: "Now (ISO time)", token: "{{now}}" });

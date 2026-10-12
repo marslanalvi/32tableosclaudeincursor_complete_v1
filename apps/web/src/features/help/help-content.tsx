@@ -300,7 +300,7 @@ export const HELP_TOPICS: HelpTopic[] = [
     group: "Building your base",
     title: "Data from other bases (synced tables)",
     summary: "Bring another base’s table into this base, kept up to date automatically, and link to it.",
-    keywords: "cross base sync synced table link another base share data between bases mirror lookup",
+    keywords: "cross base sync synced table link another base share data between bases mirror lookup hubspot crm contacts deals companies tickets connector integration airtable gmail email inbox slack connectors",
     body: () => (
       <>
         <p>
@@ -335,6 +335,56 @@ export const HELP_TOPICS: HelpTopic[] = [
         <Warn>
           A sync runs with the access of the person who created it. If that person loses access to the source base, the sync stops with an error until
           someone with access sets it up again.
+        </Warn>
+        <h2>Sync from HubSpot</h2>
+        <p>
+          A synced table can also come from HubSpot: contacts, companies, deals or tickets. Choose <b>Sync from HubSpot</b> when adding a table.
+        </p>
+        <ol>
+          <li>
+            In HubSpot, create a <b>private app</b> (Settings → Integrations → Private apps) with read scopes for what you want, for example{" "}
+            <code>crm.objects.contacts.read</code>. Add <code>crm.objects.owners.read</code> to see owner names.
+          </li>
+          <li>Paste the app’s access token to connect. It is stored encrypted and only you can use the connection.</li>
+          <li>Pick the object and the properties to bring in. TableOS also adds the record’s name, HubSpot ID and a link back to HubSpot.</li>
+        </ol>
+        <p>
+          Changes made in HubSpot show up within a couple of minutes, and a full refresh runs every 15 minutes (use <b>Sync now</b> any time).
+          Dropdown properties become select fields, numbers, dates and checkboxes keep their types, and records deleted in HubSpot are removed here.
+        </p>
+        <p>
+          <b>Two-way sync.</b> Tick <b>Two-way sync</b> when setting up the table, or the <b>Two-way</b> box on the bar above it. Edits to synced fields
+          are then written back to HubSpot within a second or two. The private app needs write scopes such as <code>crm.objects.contacts.write</code>.
+          Calculated and read-only HubSpot properties (create date, last modified, the HubSpot ID) stay read-only, and records are still added or
+          deleted in HubSpot. If HubSpot rejects a value (for example an unknown dropdown option), the bar shows why and HubSpot’s value comes back on
+          the next sync. Only the person who set up the sync can turn two-way on, since edits are written with their HubSpot account.
+        </p>
+        <h2>Connectors</h2>
+        <p>
+          Airtable and HubSpot accounts live under <b>Account menu → Connectors</b> and work in every base you can edit. Gmail and Slack are connected
+          right in the automation step that uses them (pick <b>+ Connect another account</b> in its account list to add more). Only you can use the
+          accounts you connect; teammates connect their own.
+        </p>
+        <ul>
+          <li>
+            <b>Airtable</b> — create a personal access token with <code>data.records:read</code> and <code>schema.bases:read</code> and access to your
+            bases, then choose <b>Sync from Airtable</b> when adding a table. Pick a base, a table and all or some fields. The sync is one-way:
+            Airtable stays the source, linked records show the linked record’s name, and attachments show their file names and links.
+          </li>
+          <li>
+            <b>Gmail</b> — <b>Sign in with Google</b> and allow reading and sending email. Choose <b>Sync from Gmail</b> to bring messages matching a
+            Gmail search (for example <code>in:inbox</code>) into a table, and use the <b>Send email via Gmail</b> automation step to send from your
+            own address.
+          </li>
+          <li>
+            <b>Slack</b> — create a Slack app with the bot scopes <code>chat:write</code> and <code>channels:read</code>, install it and paste its bot
+            token. The <b>Send Slack message</b> automation step then posts to any channel the bot is in (invite it with{" "}
+            <code>/invite @your-app</code>).
+          </li>
+        </ul>
+        <Warn>
+          Automations run with the accounts of the person who last edited them. If someone else edits an automation with a Gmail or Slack step, they
+          need to pick one of their own accounts in that step.
         </Warn>
       </>
     ),
@@ -465,10 +515,22 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
             ["When a form is submitted", "Send in-app notification"],
             ["At a scheduled time", "Send email"],
             ["When a button is clicked", "Send webhook"],
-            ["When a webhook is received", "Conditional group (run actions only if conditions are met)"],
+            ["When a webhook is received", "Run a script"],
+            ["", "Conditional group (run actions only if conditions are met)"],
           ]}
         />
         <p>Use <b>Test</b> to try an automation, and the run history to see what happened and why something failed.</p>
+        <h3>Run a script</h3>
+        <p>
+          Write JavaScript that runs in a secure sandbox as the automation&apos;s owner. You can use <code>await</code>. Available inside the script:
+        </p>
+        <ul>
+          <li><code>input.config()</code>: the trigger (<code>trigger.record.fields</code> as text, <code>trigger.record.raw</code> as values) and earlier steps.</li>
+          <li><code>output.set(key, value)</code>: pass values to later steps as <code>{"{{steps.<step>.<key>}}"}</code>.</li>
+          <li><code>base.findRecords(table, {"{ view, limit, filter }"})</code>, <code>base.getRecord(table, id)</code>, <code>base.createRecord(table, fields)</code>, <code>base.updateRecord(table, id, fields)</code>, <code>base.deleteRecord(table, id)</code>. Tables and fields can be named or given by id.</li>
+          <li><code>fetch(url, {"{ method, headers, body }"})</code> to public addresses (up to 20 per run), and <code>console.log</code>.</li>
+        </ul>
+        <p>A script can run for 30 seconds in total, compute for up to 2 seconds without pausing, and make up to 100 base/fetch calls.</p>
       </>
     ),
   },

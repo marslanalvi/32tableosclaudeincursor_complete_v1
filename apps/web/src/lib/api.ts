@@ -180,8 +180,12 @@ export interface FieldDto {
 
 export interface TableSyncInfo {
   id: string;
-  sourceBaseId: string;
-  sourceTableId: string;
+  provider: "tableos" | "hubspot" | "airtable" | "gmail";
+  /** External account the data comes from (HubSpot); null for base-to-base syncs. */
+  connectionId: string | null;
+  /** Null for external sources such as HubSpot. */
+  sourceBaseId: string | null;
+  sourceTableId: string | null;
   sourceBaseName: string | null;
   sourceTableName: string | null;
   status: "active" | "paused" | "error";
@@ -190,6 +194,9 @@ export interface TableSyncInfo {
   lastError: string | null;
   recordCount: number | null;
   syncedFieldIds: string[];
+  /** Edits to editable synced fields are written back to the source. */
+  twoWay: boolean;
+  editableFieldIds: string[];
 }
 
 export interface ViewDto {

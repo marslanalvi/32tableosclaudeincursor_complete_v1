@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { accountApi, type SessionInfo } from "../../lib/api-areas/account.ts";
 import { ApiProblemError } from "../../lib/api.ts";
@@ -350,6 +351,16 @@ export function AccountPage({ onBack }: { onBack?: () => void }) {
             <PasswordSection hasPassword={user.hasPassword !== false} />
             <MfaSection enabled={Boolean(user.mfaEnabled)} hasPassword={user.hasPassword !== false} />
             <SessionsSection />
+            <Section
+              title="Connectors"
+              description="Airtable and HubSpot accounts you've connected for synced tables. They work in all of your bases."
+            >
+              <div className={styles.actions}>
+                <Link className={styles.secondary} to="/connectors" style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}>
+                  Manage connectors
+                </Link>
+              </div>
+            </Section>
           </>
         ) : null}
       </main>

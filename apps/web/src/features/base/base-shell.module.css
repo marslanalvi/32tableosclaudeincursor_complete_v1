@@ -444,8 +444,171 @@
 
 .startOptions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+
+.hsSetup {
+  margin-top: 12px;
+}
+
+.connList {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connItem {
+  border: 1px solid var(--tabula-color-border);
+  border-radius: var(--tabula-radius-md);
+  padding: 10px 12px;
+}
+
+.connHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.connLogo {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #fff;
+  background: #ff7a59;
+}
+
+.connInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.connAccount {
+  margin: 8px 0 0 34px;
+  padding-top: 8px;
+  border-top: 1px solid var(--tabula-color-border);
+}
+
+.connAccount .connTables,
+.connAccount .connNone {
+  margin-left: 0;
+}
+
+.connAdd {
+  margin: 8px 0 0 34px;
+}
+
+.connTables {
+  list-style: none;
+  margin: 8px 0 0 38px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.connTable {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.connTable:hover {
+  background: var(--tabula-color-bg-subtle);
+}
+
+.connNone,
+.connEmpty {
+  margin: 8px 0 0 38px;
+  font-size: var(--tabula-font-size-sm);
+  color: var(--tabula-color-text-subtle);
+}
+
+.connEmpty {
+  margin-left: 0;
+}
+
+.hsConnect {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--tabula-color-border);
+  border-radius: var(--tabula-radius-md);
+  background: var(--tabula-color-bg-subtle, var(--tabula-color-bg));
+}
+
+.hsSteps {
+  margin: 8px 0 12px;
+  padding-left: 18px;
+  font-size: var(--tabula-font-size-sm);
+  color: var(--tabula-color-text-muted);
+  line-height: 1.5;
+}
+
+.hsSteps code {
+  font-size: 0.95em;
+}
+
+.hsRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hsRow > select,
+.hsRow > input {
+  flex: 1;
+  min-width: 0;
+}
+
+.hsRow > .label,
+.hsRow > span:first-child {
+  white-space: nowrap;
+}
+
+.hsProps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 12px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid var(--tabula-color-border);
+  border-radius: var(--tabula-radius-md);
+}
+
+.hsProp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 0;
+  font-size: var(--tabula-font-size-sm);
+  cursor: pointer;
+}
+
+.hsProp > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .startOption {
@@ -622,4 +785,15 @@
 }
 .syncBtn:disabled {
   opacity: 0.6;
+}
+.syncToggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.syncToggle + .syncBtn {
+  margin-left: 0;
 }

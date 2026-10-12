@@ -7,9 +7,14 @@ import { isIP } from "node:net";
 import { pid } from "../../lib/public-ids.js";
 import { compileForUser } from "../access/compile.js";
 import { createServiceSession, revokeSession } from "../auth/session.js";
+import { mfaKey } from "../auth/mfa-pending.js";
+import { loadConnection, openCredentials, PROVIDER_LABELS, type ConnectionProvider, type ConnectionRow } from "../integrations/connections.js";
+import { buildRawEmail, GmailClient, GmailError, gmailTokenProvider, invalidAddresses, parseAddresses } from "../integrations/gmail.js";
+import { SlackClient, SlackError } from "../integrations/slack.js";
 import { AutomationApiClient, AutomationApiError, type BaseDetailLite } from "./api-client.js";
 import { evaluateWireFilter } from "./filter-eval.js";
 import { sendEmail } from "./mailer.js";
+import { runScript, ScriptError } from "./script.js";
 import {
   compareCondition,
   interpolate,
@@ -183,19 +188,25 @@ function tableById(base: BaseDetailLite, tableId: string | undefined | null): Ta
   return base.tables.find((t) => t.id === p);
 }
 
+function fieldByRef(table: TableMeta, key: string) {
+  return (
+    table.fields.find((f) => f.id === key) ??
+    table.fields.find((f) => f.id === toPid(key, "fld")) ??
+    table.fields.find((f) => f.name.toLowerCase() === key.toLowerCase())
+  );
+}
+
+/** `tokens === null` takes values literally (script action) instead of interpolating templates. */
 async function buildFieldInput(
   table: TableMeta,
   mapping: Record<string, unknown> | undefined,
-  tokens: Record<string, unknown>,
+  tokens: Record<string, unknown> | null,
 ): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
   for (const [key, template] of Object.entries(mapping ?? {})) {
-    const field =
-      table.fields.find((f) => f.id === key) ??
-      table.fields.find((f) => f.id === toPid(key, "fld")) ??
-      table.fields.find((f) => f.name.toLowerCase() === key.toLowerCase());
+    const field = fieldByRef(table, key);
     if (!field) throw new StepError(`Field ${key} does not exist in table ${table.name}`);
-    let value = interpolateValue(template, tokens);
+    let value = tokens ? interpolateValue(template, tokens) : template;
     // Link/collaborator/attachment fields want arrays of ids.
     if (value && typeof value === "string" && ["link", "collaborator", "attachment", "multi_select"].includes(field.type)) {
       value = value
@@ -309,8 +320,20 @@ async function runAction(ex: ExecCtx, action: ActionDef): Promise<StepResult> {
         output = { emailId: res.id, status: res.status, to, subject };
         break;
       }
+      case "gmail_send": {
+        output = await gmailSendAction(ex, cfg);
+        break;
+      }
+      case "slack_message": {
+        output = await slackMessageAction(ex, cfg);
+        break;
+      }
       case "webhook": {
         output = await webhookAction(ex, cfg);
+        break;
+      }
+      case "script": {
+        output = await scriptAction(ex, cfg);
         break;
       }
       case "condition": {
@@ -360,7 +383,17 @@ async function runAction(ex: ExecCtx, action: ActionDef): Promise<StepResult> {
     const retryable =
       err instanceof StepError ? err.retryable : err instanceof AutomationApiError ? err.retryable : false;
     const message = err instanceof Error ? err.message : String(err);
-    return { ...base, status: "failed", finishedAt: nowIso(), error: message, ...(retryable ? { output: { retryable: true } } : {}) };
+    const failOutput = {
+      ...(retryable ? { retryable: true } : {}),
+      ...(err instanceof ScriptError && err.logs.length ? { logs: err.logs } : {}),
+    };
+    return {
+      ...base,
+      status: "failed",
+      finishedAt: nowIso(),
+      error: message,
+      ...(Object.keys(failOutput).length ? { output: failOutput } : {}),
+    };
   }
 }
 
@@ -428,6 +461,54 @@ async function notifyAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unkn
   return { notified: delivered, skipped, title };
 }
 
+/** A connection of the automation's owner (the person who last edited it); connections are personal. */
+async function ownerConnection(ex: ExecCtx, id: string | undefined, provider: ConnectionProvider): Promise<ConnectionRow> {
+  const label = PROVIDER_LABELS[provider];
+  if (!id) throw new StepError(`Choose a ${label} account`);
+  const conn = /^[0-9a-f-]{36}$/i.test(id) ? await loadConnection(ex.deps.db, id) : null;
+  if (!conn || conn.provider !== provider) throw new StepError(`The ${label} account for this step was disconnected. Pick another one.`);
+  if (conn.user_id !== ex.run.a_owner) {
+    throw new StepError(`This ${label} account belongs to someone else. Automations use the accounts of the person who last edited them; pick one of yours.`);
+  }
+  return conn;
+}
+
+async function gmailSendAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unknown> {
+  const conn = await ownerConnection(ex, cfg.connectionId, "gmail");
+  const to = parseAddresses(interpolate(cfg.to ?? "", ex.tokens));
+  const cc = parseAddresses(interpolate(cfg.cc ?? "", ex.tokens));
+  const bcc = parseAddresses(interpolate(cfg.bcc ?? "", ex.tokens));
+  if (to.length === 0) throw new StepError("“To” resolved to no email addresses");
+  const bad = invalidAddresses([...to, ...cc, ...bcc]);
+  if (bad.length) throw new StepError(`Not an email address: ${bad.slice(0, 3).join(", ")}`);
+  if (to.length + cc.length + bcc.length > 100) throw new StepError("Gmail steps can send to at most 100 recipients");
+  const subject = interpolate(cfg.subject ?? `Message from ${ex.run.a_name}`, ex.tokens);
+  const text = interpolate(cfg.body ?? "", ex.tokens);
+  const client = new GmailClient(gmailTokenProvider(ex.deps.db, ex.deps.env, conn, mfaKey(ex.deps.env)));
+  try {
+    const sent = await client.send(buildRawEmail({ from: conn.account_id ?? conn.name, to, cc, bcc, subject, text }));
+    return { messageId: sent.id, threadId: sent.threadId, from: conn.account_id, to, subject };
+  } catch (err) {
+    if (err instanceof GmailError) throw new StepError(err.message, err.status === 0 || err.status === 429 || err.status >= 500);
+    throw err;
+  }
+}
+
+async function slackMessageAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unknown> {
+  const conn = await ownerConnection(ex, cfg.connectionId, "slack");
+  const channel = interpolate(cfg.channel ?? "", ex.tokens).trim().replace(/^#/, "");
+  if (!channel) throw new StepError("Choose a Slack channel");
+  const text = interpolate(cfg.text ?? "", ex.tokens);
+  if (!text.trim()) throw new StepError("The Slack message is empty");
+  try {
+    const posted = await new SlackClient(openCredentials(conn, mfaKey(ex.deps.env)).accessToken).postMessage(channel, text.slice(0, 40_000));
+    return { channel: posted.channel, ts: posted.ts, text };
+  } catch (err) {
+    if (err instanceof SlackError) throw new StepError(err.message, err.retryable);
+    throw err;
+  }
+}
+
 async function webhookAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unknown> {
   const rawUrl = interpolate(cfg.url ?? "", ex.tokens).trim();
   if (!rawUrl) throw new StepError("Enter a URL for “Send webhook”");
@@ -478,6 +559,162 @@ async function webhookAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unk
     throw new StepError(`Webhook responded with HTTP ${res.status}`, res.status >= 500 || res.status === 429);
   }
   return { status: res.status, body: json ?? text };
+}
+
+const SCRIPT_MAX_FETCHES = 20;
+const SCRIPT_MAX_RESPONSE_BYTES = 1024 * 1024;
+
+function scriptTable(ex: ExecCtx, ref: unknown): TableMeta {
+  const s = String(ref ?? "").trim();
+  const table = tableById(ex.base, s) ?? ex.base.tables.find((t) => t.name.toLowerCase() === s.toLowerCase());
+  if (!table) throw new StepError(`Table "${s}" does not exist in this base`);
+  return table;
+}
+
+function scriptRecordId(ref: unknown): string {
+  const s = typeof ref === "object" && ref ? String((ref as { id?: unknown }).id ?? "") : String(ref ?? "");
+  const p = toPid(s.trim(), "rec");
+  if (!p) throw new StepError(`"${s}" is not a record id`);
+  return p;
+}
+
+function scriptFields(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new StepError("Fields must be an object of { fieldName: value }");
+  return value as Record<string, unknown>;
+}
+
+/** Filter ASTs from scripts may name fields instead of using fld_ ids. */
+function scriptFilter(table: TableMeta, filter: unknown): unknown {
+  if (!filter || typeof filter !== "object") return filter;
+  const f = filter as Record<string, unknown>;
+  if (f["kind"] === "condition") {
+    const ref = String(f["fieldId"] ?? "");
+    return { ...f, fieldId: fieldByRef(table, ref)?.id ?? ref };
+  }
+  if (Array.isArray(f["children"])) return { ...f, children: (f["children"] as unknown[]).map((c) => scriptFilter(table, c)) };
+  return filter;
+}
+
+async function scriptFetch(args: unknown[], remainingMs: number): Promise<unknown> {
+  const url = await assertPublicUrl(String(args[0] ?? ""));
+  const init = (args[1] && typeof args[1] === "object" ? args[1] : {}) as {
+    method?: unknown;
+    headers?: unknown;
+    body?: unknown;
+  };
+  const method = String(init.method ?? "GET").toUpperCase();
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) throw new StepError(`Unsupported method ${method}`);
+  const headers: Record<string, string> = { "user-agent": "Tabula-Automations/1.0" };
+  if (init.headers && typeof init.headers === "object") {
+    for (const [k, v] of Object.entries(init.headers as Record<string, unknown>)) {
+      if (/^(host|content-length|cookie)$/i.test(k)) continue;
+      headers[k.toLowerCase()] = String(v);
+    }
+  }
+  let body: string | undefined;
+  if (init.body !== undefined && init.body !== null && method !== "GET") {
+    body = typeof init.body === "string" ? init.body : JSON.stringify(init.body);
+    if (typeof init.body !== "string" && !headers["content-type"]) headers["content-type"] = "application/json";
+  }
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      ...(body !== undefined ? { body } : {}),
+      redirect: "manual",
+      signal: AbortSignal.timeout(Math.max(500, Math.min(15_000, remainingMs))),
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? (err.name === "TimeoutError" ? "Request timed out" : err.message) : String(err);
+    throw new StepError(`fetch failed: ${msg}`);
+  }
+  const text = await res.text().catch(() => "");
+  if (text.length > SCRIPT_MAX_RESPONSE_BYTES) throw new StepError("fetch response is larger than 1 MB");
+  return { status: res.status, headers: Object.fromEntries(res.headers.entries()), body: text };
+}
+
+async function scriptAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unknown> {
+  const code = cfg.script ?? "";
+  if (!code.trim()) throw new StepError("Write a script for “Run a script”");
+  const appUrl = ex.deps.env.APP_URL;
+  let fetches = 0;
+  const ctxRecord = (table: TableMeta, rec: WireRecord) => recordContext(table, rec, appUrl, ex.baseId);
+  try {
+    const result = await runScript(code, {
+      input: {
+        trigger: ex.tokens["trigger"],
+        steps: ex.tokens["steps"],
+        automation: ex.tokens["automation"],
+        base: {
+          id: ex.baseId,
+          name: ex.base.name,
+          tables: ex.base.tables.map((t) => ({
+            id: t.id,
+            name: t.name,
+            fields: t.fields.map((f) => ({ id: f.id, name: f.name, type: f.type })),
+          })),
+        },
+        now: ex.tokens["now"],
+        today: ex.tokens["today"],
+      },
+      call: async (name, args, remainingMs) => {
+        switch (name) {
+          case "findRecords": {
+            const table = scriptTable(ex, args[0]);
+            const opts = (args[1] && typeof args[1] === "object" ? args[1] : {}) as { view?: unknown; filter?: unknown; limit?: unknown };
+            const limit = Math.max(1, Math.min(500, Number(opts.limit) || 100));
+            let viewId: string | undefined;
+            if (opts.view) {
+              const v = String(opts.view);
+              const view = table.views?.find((x) => x.id === v || x.id === toPid(v, "viw") || x.name.toLowerCase() === v.toLowerCase());
+              if (!view) throw new StepError(`View "${v}" does not exist in table ${table.name}`);
+              viewId = view.id;
+            }
+            const filter = opts.filter ? normalizeFilterIds(scriptFilter(table, opts.filter)) : undefined;
+            const recs = await ex.client.queryRecords(ex.baseId, table.id, {
+              ...(filter ? { filter } : {}),
+              ...(viewId ? { viewId } : {}),
+              pageSize: limit,
+            });
+            return recs.slice(0, limit).map((r) => ctxRecord(table, r));
+          }
+          case "getRecord": {
+            const table = scriptTable(ex, args[0]);
+            const rec = await ex.client.getRecord(ex.baseId, table.id, scriptRecordId(args[1]));
+            return rec ? ctxRecord(table, rec) : null;
+          }
+          case "createRecord": {
+            const table = scriptTable(ex, args[0]);
+            const fields = await buildFieldInput(table, scriptFields(args[1]), null);
+            return ctxRecord(table, await ex.client.createRecord(ex.baseId, table.id, fields));
+          }
+          case "updateRecord": {
+            const table = scriptTable(ex, args[0]);
+            const fields = await buildFieldInput(table, scriptFields(args[2]), null);
+            if (Object.keys(fields).length === 0) throw new StepError("updateRecord needs at least one field");
+            return ctxRecord(table, await ex.client.updateRecord(ex.baseId, table.id, scriptRecordId(args[1]), fields));
+          }
+          case "deleteRecord": {
+            const table = scriptTable(ex, args[0]);
+            const recordId = scriptRecordId(args[1]);
+            await ex.client.deleteRecord(ex.baseId, table.id, recordId);
+            return { deleted: true, id: recordId };
+          }
+          case "fetch": {
+            if (++fetches > SCRIPT_MAX_FETCHES) throw new StepError(`A script can make at most ${SCRIPT_MAX_FETCHES} fetch requests`);
+            return scriptFetch(args, remainingMs);
+          }
+          default:
+            throw new StepError(`Unknown script call ${name}`);
+        }
+      },
+    });
+    return { ...result.output, ...(result.logs.length ? { logs: result.logs } : {}) };
+  } catch (err) {
+    if (err instanceof ScriptError) throw err;
+    throw new StepError(err instanceof Error ? err.message : String(err));
+  }
 }
 
 async function loadRun(db: TabulaDb, runId: string): Promise<RunRow | null> {

@@ -19,7 +19,10 @@ export type ActionType =
   | "delete_record"
   | "notify"
   | "send_email"
+  | "gmail_send"
+  | "slack_message"
   | "webhook"
+  | "script"
   | "condition";
 
 export interface ScheduleConfig {
@@ -66,10 +69,18 @@ export interface ActionConfig {
   cc?: string;
   subject?: string;
   body?: string;
+  /** gmail_send / slack_message: one of the editor's own connections. */
+  connectionId?: string;
+  bcc?: string;
+  /** Slack channel id (or a name / token); `channelName` is only for display. */
+  channel?: string;
+  channelName?: string;
+  text?: string;
   url?: string;
   method?: "POST" | "PUT" | "PATCH" | "GET" | undefined;
   headers?: Record<string, string>;
   timeoutMs?: number;
+  script?: string;
   match?: "all" | "any";
   conditions?: BranchCondition[];
   then?: AutomationAction[];

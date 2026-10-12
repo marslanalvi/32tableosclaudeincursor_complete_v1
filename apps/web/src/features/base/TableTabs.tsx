@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { syncApi } from "../../lib/api-areas/sync.ts";
 import { SyncSourcePicker } from "./SyncSourcePicker.tsx";
+import { HubSpotSyncSetup, type HubSpotSelection } from "./HubSpotSyncSetup.tsx";
+import { AirtableSyncSetup, emptyAirtableSelection, emptyGmailSelection, GmailSyncSetup, type AirtableSelection, type GmailSelection } from "./ExternalSyncSetup.tsx";
+import { HUBSPOT_OBJECTS, integrationsApi } from "../../lib/api-areas/integrations.ts";
 import { copyText } from "../../lib/ids.ts";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { BaseDetail, TableDto } from "../../lib/api.ts";
@@ -124,7 +127,7 @@ function InlineRename({
   );
 }
 
-type AddMode = "blank" | "import" | "sync";
+export type AddMode = "blank" | "import" | "sync" | "hubspot" | "airtable" | "gmail";
 
 function AddTableDialog({
   baseId,
@@ -143,8 +146,37 @@ function AddTableDialog({
   const [name, setName] = useState(defaultName);
   const [mode, setMode] = useState<AddMode>(initialMode);
   const [sourceId, setSourceId] = useState("");
+  const [hubspot, setHubspot] = useState<HubSpotSelection>({ connectionId: "", object: "contacts", properties: [], twoWay: false });
+  const [airtable, setAirtable] = useState<AirtableSelection>(emptyAirtableSelection);
+  const [gmail, setGmail] = useState<GmailSelection>(emptyGmailSelection);
+  const nameTouched = useRef(false);
+  useEffect(() => {
+    if (nameTouched.current) return;
+    if (mode === "hubspot") setName(`HubSpot ${HUBSPOT_OBJECTS.find((o) => o.key === hubspot.object)?.label ?? ""}`.trim());
+    else if (mode === "airtable" && airtable.tableName) setName(airtable.tableName);
+    else if (mode === "gmail") setName("Gmail inbox");
+  }, [mode, hubspot.object, airtable.tableName]);
   const create = useMutation({
     mutationFn: async () => {
+      const named = name.trim() ? { name: name.trim() } : {};
+      if (mode === "hubspot") {
+        const res = await integrationsApi.createHubSpotSync(baseId, { ...hubspot, ...named });
+        return res.tableId;
+      }
+      if (mode === "airtable") {
+        const res = await integrationsApi.createAirtableSync(baseId, {
+          connectionId: airtable.connectionId,
+          airtableBaseId: airtable.airtableBaseId,
+          airtableTableId: airtable.airtableTableId,
+          ...(airtable.fieldIds ? { fieldIds: airtable.fieldIds } : {}),
+          ...named,
+        });
+        return res.tableId;
+      }
+      if (mode === "gmail") {
+        const res = await integrationsApi.createGmailSync(baseId, { ...gmail, query: gmail.query.trim(), ...named });
+        return res.tableId;
+      }
       if (mode === "sync") {
         const res = await syncApi.create(baseId, { sourceTableId: sourceId, ...(name.trim() ? { name: name.trim() } : {}) });
         if (res.error) toast.error(new Error(res.error), "The table was created, but the first sync failed");
@@ -156,12 +188,27 @@ function AddTableDialog({
       await qc.invalidateQueries({ queryKey: ["bases", baseId] });
       onCreated(tableId, mode === "import");
       if (mode === "sync") toast.success("Synced table created. It stays up to date with the source.");
+      if (mode === "hubspot" || mode === "airtable" || mode === "gmail") {
+        const label = mode === "hubspot" ? "HubSpot" : mode === "airtable" ? "Airtable" : "Gmail";
+        toast.success(`${label} table created. The first sync is running; records appear as they arrive.`);
+      }
     },
   });
-  const ready = mode === "sync" ? Boolean(sourceId) : Boolean(name.trim());
+  const ready =
+    mode === "sync"
+      ? Boolean(sourceId)
+      : mode === "hubspot"
+        ? Boolean(hubspot.connectionId && hubspot.properties.length && name.trim())
+        : mode === "airtable"
+          ? Boolean(airtable.connectionId && airtable.airtableBaseId && airtable.airtableTableId && (airtable.fieldIds === null || airtable.fieldIds.length) && name.trim())
+          : mode === "gmail"
+            ? Boolean(gmail.connectionId && name.trim())
+            : Boolean(name.trim());
+  const syncing = mode === "sync" || mode === "hubspot" || mode === "airtable" || mode === "gmail";
   return (
     <Dialog
       title="Add a table"
+      wide={mode === "hubspot" || mode === "airtable" || mode === "gmail"}
       onClose={onClose}
       footer={
         <>
@@ -174,7 +221,7 @@ function AddTableDialog({
             disabled={!ready || create.isPending}
             onClick={() => create.mutate()}
           >
-            {create.isPending ? (mode === "sync" ? "Syncing…" : "Creating…") : mode === "import" ? "Create and import" : mode === "sync" ? "Create synced table" : "Create table"}
+            {create.isPending ? (syncing ? "Syncing…" : "Creating…") : mode === "import" ? "Create and import" : syncing ? "Create synced table" : "Create table"}
           </button>
         </>
       }
@@ -195,7 +242,10 @@ function AddTableDialog({
             value={name}
             autoFocus
             onFocus={(e) => e.currentTarget.select()}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              nameTouched.current = true;
+              setName(e.target.value);
+            }}
           />
         </div>
         <div className={uiStyles.label}>Start with</div>
@@ -227,7 +277,37 @@ function AddTableDialog({
             <strong>Sync from another base</strong>
             <span>A read-only copy of a table in another base, kept up to date. Link to it and use lookups here.</span>
           </button>
+          <button
+            type="button"
+            className={styles.startOption}
+            data-active={mode === "hubspot"}
+            onClick={() => setMode("hubspot")}
+          >
+            <strong>Sync from HubSpot</strong>
+            <span>Contacts, companies, deals or tickets from your HubSpot CRM, refreshed automatically.</span>
+          </button>
+          <button
+            type="button"
+            className={styles.startOption}
+            data-active={mode === "airtable"}
+            onClick={() => setMode("airtable")}
+          >
+            <strong>Sync from Airtable</strong>
+            <span>A table from one of your Airtable bases, kept up to date. Airtable stays the source.</span>
+          </button>
+          <button
+            type="button"
+            className={styles.startOption}
+            data-active={mode === "gmail"}
+            onClick={() => setMode("gmail")}
+          >
+            <strong>Sync from Gmail</strong>
+            <span>Messages from your inbox (or any Gmail search) as records, refreshed automatically.</span>
+          </button>
         </div>
+        {mode === "hubspot" ? <HubSpotSyncSetup baseId={baseId} value={hubspot} onChange={setHubspot} /> : null}
+        {mode === "airtable" ? <AirtableSyncSetup value={airtable} onChange={setAirtable} /> : null}
+        {mode === "gmail" ? <GmailSyncSetup value={gmail} onChange={setGmail} /> : null}
         {mode === "sync" ? (
           <div className={uiStyles.field}>
             <label className={uiStyles.label}>Table to sync</label>
@@ -594,6 +674,24 @@ function TablesMenu({
               </span>
               <span>Sync from another base</span>
             </button>
+            <button type="button" role="menuitem" className={uiStyles.menuItem} onClick={() => onAdd("hubspot")}>
+              <span className={uiStyles.menuIcon} aria-hidden>
+                ⇄
+              </span>
+              <span>Sync from HubSpot</span>
+            </button>
+            <button type="button" role="menuitem" className={uiStyles.menuItem} onClick={() => onAdd("airtable")}>
+              <span className={uiStyles.menuIcon} aria-hidden>
+                ⇄
+              </span>
+              <span>Sync from Airtable</span>
+            </button>
+            <button type="button" role="menuitem" className={uiStyles.menuItem} onClick={() => onAdd("gmail")}>
+              <span className={uiStyles.menuIcon} aria-hidden>
+                ✉
+              </span>
+              <span>Sync from Gmail</span>
+            </button>
           </div>
         </FloatingPanel>
       ) : null}
@@ -629,6 +727,8 @@ export function TableTabs({
   onSelect,
   onImport,
   onExport,
+  openAdd,
+  onOpenAddHandled,
 }: {
   baseId: string;
   tables: TableDto[];
@@ -637,11 +737,19 @@ export function TableTabs({
   onSelect: (tableId: string) => void;
   onImport: (tableId: string) => void;
   onExport: (tableId: string) => void;
+  /** Open the add-table dialog from elsewhere (e.g. Tools → Connectors). */
+  openAdd?: AddMode | null;
+  onOpenAddHandled?: () => void;
 }) {
   const qc = useQueryClient();
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<TableDto | null>(null);
   const [adding, setAdding] = useState<AddMode | null>(null);
+  useEffect(() => {
+    if (!openAdd) return;
+    setAdding(openAdd);
+    onOpenAddHandled?.();
+  }, [openAdd, onOpenAddHandled]);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -1142,7 +1250,8 @@ function IdsDialog({ baseId, table, onClose }: { baseId: string; table: TableDto
       <CopyRow label="Table ID" value={table.id} />
       {table.sync ? (
         <p className={uiStyles.muted}>
-          Synced from {table.sync.sourceBaseName} › {table.sync.sourceTableName} (source table ID {table.sync.sourceTableId}).
+          Synced from {table.sync.sourceBaseName} › {table.sync.sourceTableName}
+          {table.sync.sourceTableId ? ` (source table ID ${table.sync.sourceTableId})` : ""}.
         </p>
       ) : null}
       <div className={uiStyles.label}>Field IDs</div>

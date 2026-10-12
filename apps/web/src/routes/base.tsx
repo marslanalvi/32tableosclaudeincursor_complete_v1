@@ -1,15 +1,19 @@
 import { Link, useRouter, useRouterState } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiProblemError, type ViewDto } from "../lib/api.ts";
+import { api, ApiProblemError, type AuthUser, type BaseSummary, type ViewDto } from "../lib/api.ts";
+import { forgetBaseStructure, loadBaseStructure, saveBaseStructure } from "../lib/base-structure-cache.ts";
+import { authQueryKey } from "../features/auth/use-auth.ts";
 import { hiddenTableIdsOf, shellApi } from "../lib/api-areas/shell.ts";
+import { connectionsQueryKey } from "../lib/api-areas/integrations.ts";
 import {
   BaseSessionProvider,
   useBaseSession,
 } from "../features/base/BaseSessionProvider.tsx";
 import { PresenceAvatars } from "../features/base/PresenceAvatars.tsx";
 import { ToolsMenu } from "../features/base/ToolsMenu.tsx";
-import { TableTabs } from "../features/base/TableTabs.tsx";
+import { TableTabs, type AddMode } from "../features/base/TableTabs.tsx";
+import { ConnectorsDialog } from "../features/base/ConnectorsDialog.tsx";
 import { TrashDialog } from "../features/base/TrashDialog.tsx";
 import { AccountMenu } from "../features/base/AccountMenu.tsx";
 import { useUndoRedo } from "../features/base/useUndoRedo.ts";
@@ -79,17 +83,84 @@ function UndoRedoButtons({ baseId }: { baseId: string }) {
   );
 }
 
+/** The base's name from the home page's lists, so the header can show it before the base loads. */
+function cachedBaseName(queryClient: QueryClient, baseId: string): string | null {
+  for (const [, data] of queryClient.getQueriesData<{ bases?: BaseSummary[] }>({ queryKey: ["workspaces"] })) {
+    const hit = data?.bases?.find((b) => b.id === baseId);
+    if (hit) return hit.name;
+  }
+  return null;
+}
+
+/** First-ever visit (nothing cached): the base's frame, with placeholders only where records go. */
+function BaseSkeleton({ baseId, name }: { baseId: string; name: string | null }) {
+  return (
+    <div className={styles.shell} aria-busy="true" aria-label="Loading base">
+      <header className={styles.topBar}>
+        <div className={styles.brand}>
+          <Link to="/" className={styles.homeLink} title="All bases" aria-label="Home">
+            <span className={styles.logo} aria-hidden>
+              T
+            </span>
+          </Link>
+          <span className={styles.baseIcon} style={{ background: baseColor(baseId) }} aria-hidden />
+          {name ? (
+            <span className={styles.baseTitleBtn}>
+              <span className={styles.baseTitle}>{name}</span>
+            </span>
+          ) : (
+            <span className={styles.skel} style={{ width: 140, height: 18 }} />
+          )}
+        </div>
+        <nav className={styles.navTabs} aria-hidden>
+          {["Data", "Automations", "Interfaces", "Forms"].map((label, i) => (
+            <span key={label} className={styles.navTab} data-active={i === 0} style={{ display: "inline-flex", alignItems: "center" }}>
+              {label}
+            </span>
+          ))}
+        </nav>
+      </header>
+      <div className={styles.tableBar} />
+      <div className={styles.workspace}>
+        <aside className={styles.skelSidebar} />
+        <div className={styles.content}>
+          <div className={styles.skelToolbar} />
+          <div className={styles.skelGrid}>
+            {Array.from({ length: 10 }, (_, r) => (
+              <div key={r} className={styles.skelRow}>
+                {[160, 180, 140, 120].map((w, c) => (
+                  <span key={c} className={styles.skel} style={{ width: r === 0 ? w * 0.6 : w - ((r * 17 + c * 29) % 60), height: 12 }} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BasePage({ baseId }: { baseId: string }) {
   const queryClient = useQueryClient();
   const router = useRouter();
+  const userId = queryClient.getQueryData<AuthUser>(authQueryKey)?.id;
   const baseQuery = useQuery({
     queryKey: ["bases", baseId],
     queryFn: () => api.getBase(baseId),
+    // Last visit's structure shows the real layout at once; only records wait.
+    placeholderData: () => loadBaseStructure(userId, baseId),
   });
+  useEffect(() => {
+    if (baseQuery.data && !baseQuery.isPlaceholderData) saveBaseStructure(userId, baseId, baseQuery.data);
+  }, [baseQuery.data, baseQuery.isPlaceholderData, userId, baseId]);
+  useEffect(() => {
+    if (baseQuery.isError) forgetBaseStructure(userId, baseId);
+  }, [baseQuery.isError, userId, baseId]);
 
   const tables = baseQuery.data?.tables ?? [];
   const { role } = useBaseRole(baseId);
   const [baseTab, setBaseTab] = useState<BaseTab>("data");
+  const [automationTarget, setAutomationTarget] = useState<{ automationId: string; actionId?: string } | null>(null);
   const [activeTableId, setActiveTableId] = useState<string | null>(null);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -97,8 +168,35 @@ export function BasePage({ baseId }: { baseId: string }) {
   const [exportTableId, setExportTableId] = useState<string | null>(null);
   const [fieldsOpen, setFieldsOpen] = useState(false);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [openAdd, setOpenAdd] = useState<AddMode | null>(null);
+  const clearOpenAdd = useCallback(() => setOpenAdd(null), []);
   const [baseDialog, setBaseDialog] = useState<"rename" | "delete" | null>(null);
   const [pendingImport, setPendingImport] = useState(() => readSearchFlag("import"));
+
+  // Back from "Sign in with Google" (Gmail connector started inside this base).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("connected");
+    const connectError = params.get("connectError");
+    if (!connected && !connectError) return;
+    const automationId = params.get("automation");
+    const actionId = params.get("step");
+    for (const k of ["connected", "reconnected", "connectError", "automation", "step"]) params.delete(k);
+    const q = params.toString();
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${q ? `?${q}` : ""}`);
+    if (automationId) {
+      setAutomationTarget({ automationId, ...(actionId ? { actionId } : {}) });
+      setBaseTab("automations");
+    }
+    if (connectError) {
+      toast.error(new Error(connectError), "Gmail wasn't connected");
+      return;
+    }
+    toast.success("Gmail connected");
+    void queryClient.invalidateQueries({ queryKey: connectionsQueryKey });
+    if (!automationId) setOpenAdd("gmail");
+  }, [queryClient]);
 
   // `?table=tbl_…` (search results, notification links) selects the table.
   const tableParam = useRouterState({
@@ -253,7 +351,7 @@ export function BasePage({ baseId }: { baseId: string }) {
   }, [baseId, queryClient]);
 
   if (baseQuery.isLoading) {
-    return <p className={styles.empty}>Loading base…</p>;
+    return <BaseSkeleton baseId={baseId} name={cachedBaseName(queryClient, baseId)} />;
   }
 
   if (baseQuery.isError || !baseQuery.data) {
@@ -325,6 +423,7 @@ export function BasePage({ baseId }: { baseId: string }) {
                       .then(() => toast.success("Base ID copied"))
                       .catch(() => toast.info(baseId)),
                 },
+                { key: "connectors", icon: "⇄", label: "Connectors", onSelect: () => setConnectorsOpen(true) },
                 { key: "trash", icon: "🗑", label: "Trash", onSelect: () => setTrashOpen(true) },
                 {
                   key: "delete",
@@ -391,6 +490,8 @@ export function BasePage({ baseId }: { baseId: string }) {
                 }}
                 onImport={(id) => setImportTableId(id)}
                 onExport={(id) => setExportTableId(id)}
+                openAdd={openAdd}
+                onOpenAddHandled={clearOpenAdd}
               />
               <ToolsMenu
                 disabled={!activeTable}
@@ -398,6 +499,7 @@ export function BasePage({ baseId }: { baseId: string }) {
                 onImport={() => resolvedTableId && setImportTableId(resolvedTableId)}
                 onExport={() => resolvedTableId && setExportTableId(resolvedTableId)}
                 onTrash={() => setTrashOpen(true)}
+                onConnectors={() => setConnectorsOpen(true)}
               />
             </div>
 
@@ -447,7 +549,7 @@ export function BasePage({ baseId }: { baseId: string }) {
           </>
         ) : null}
 
-        {baseTab === "automations" ? <AutomationsPanel baseId={baseId} /> : null}
+        {baseTab === "automations" ? <AutomationsPanel baseId={baseId} initial={automationTarget} /> : null}
 
         {baseTab === "interfaces" ? (
           <div className={styles.interfacesTab}>
@@ -515,6 +617,23 @@ export function BasePage({ baseId }: { baseId: string }) {
         />
       ) : null}
       {trashOpen ? <TrashDialog baseId={baseId} onClose={() => setTrashOpen(false)} /> : null}
+      {connectorsOpen ? (
+        <ConnectorsDialog
+          tables={tables}
+          onClose={() => setConnectorsOpen(false)}
+          onOpenTable={(id) => {
+            setConnectorsOpen(false);
+            setBaseTab("data");
+            setActiveTableId(id);
+            setActiveViewId(null);
+          }}
+          onSyncTable={(mode) => {
+            setConnectorsOpen(false);
+            setBaseTab("data");
+            setOpenAdd(mode);
+          }}
+        />
+      ) : null}
       {baseDialog === "rename" ? (
         <PromptDialog
           title="Rename base"
