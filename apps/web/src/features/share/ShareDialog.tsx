@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { ApiProblemError } from "../../lib/api.ts";
 import { shareApi, shareLink, type ShareDto, type ShareTargetType } from "../../lib/api-areas/share.ts";
-import { askConfirm } from "../../app/ui.tsx";
 import s from "./surface.module.css";
 
 function errorText(err: unknown): string {
@@ -395,7 +394,7 @@ function SharePanel({
           className={s.btnDanger}
           disabled={busy}
           onClick={() => {
-            void askConfirm({ title: "Disable this link?", message: "People using it will no longer have access.", confirmLabel: "Disable link" }).then((ok) => ok && revoke.mutate());
+            if (window.confirm("Disable this link? People using it will no longer have access.")) revoke.mutate();
           }}
         >
           Disable link
@@ -406,7 +405,7 @@ function SharePanel({
           className={s.btnSecondary}
           disabled={busy}
           onClick={() => {
-            void askConfirm({ title: "Generate a new link?", message: "The current link will stop working.", confirmLabel: "Generate new link" }).then((ok) => ok && regenerate.mutate());
+            if (window.confirm("Generate a new link? The current link will stop working.")) regenerate.mutate();
           }}
         >
           {regenerate.isPending ? "Generating…" : "Generate new link"}

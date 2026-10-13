@@ -77,7 +77,7 @@ export const integrationsApi = {
     return request<{ tables: AirtableTableInfo[] }>(`${c(connectionId)}/airtable/bases/${encodeURIComponent(airtableBaseId)}/tables`);
   },
   slackChannels(connectionId: string) {
-    return request<{ channels: SlackChannel[]; privateListed?: boolean }>(`${c(connectionId)}/slack/channels`);
+    return request<{ channels: SlackChannel[] }>(`${c(connectionId)}/slack/channels`);
   },
   hubspotProperties(baseId: string, connectionId: string, object: HubSpotObject) {
     return request<{ object: HubSpotObject; primaryProperty: string | null; properties: HubSpotProperty[] }>(

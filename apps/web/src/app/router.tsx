@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-router";
 import { api, ApiProblemError, setUnauthorizedHandler } from "../lib/api.ts";
 import { ToastHost } from "./toast.tsx";
-import { ConfirmHost } from "./ui.tsx";
 import { authQueryKey } from "../features/auth/use-auth.ts";
 import { queryClient } from "../lib/query-client.ts";
 import { SearchPaletteHost } from "./providers.tsx";
@@ -82,7 +81,6 @@ const rootRoute = createRootRoute({
       <Outlet />
       <SearchPaletteHost />
       <ToastHost />
-      <ConfirmHost />
     </>
   ),
 });

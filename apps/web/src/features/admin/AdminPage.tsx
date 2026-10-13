@@ -11,7 +11,6 @@ import {
 import { accountApi } from "../../lib/api-areas/account.ts";
 import { ApiProblemError } from "../../lib/api.ts";
 import { copyText } from "../../lib/ids.ts";
-import { askConfirm } from "../../app/ui.tsx";
 import account from "../account/account.module.css";
 import styles from "./admin.module.css";
 
@@ -234,7 +233,7 @@ function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember;
               className={account.danger}
               disabled={remove.isPending}
               onClick={() => {
-                void askConfirm({ title: `Remove ${member.name || member.email}?`, message: "They lose access to every workspace and base here.", confirmLabel: "Remove" }).then((ok) => ok && remove.mutate());
+                if (window.confirm(`Remove ${member.name || member.email}? They lose access to every workspace and base here.`)) remove.mutate();
               }}
             >
               Remove
@@ -537,7 +536,7 @@ function TokensSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
                   className={account.danger}
                   disabled={revoke.isPending}
                   onClick={() => {
-                    void askConfirm({ title: `Revoke “${t.name}”?`, message: "Anything using it stops working immediately.", confirmLabel: "Revoke" }).then((ok) => ok && revoke.mutate(t.id));
+                    if (window.confirm(`Revoke “${t.name}”? Anything using it stops working immediately.`)) revoke.mutate(t.id);
                   }}
                 >
                   Revoke

@@ -8,6 +8,18 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-10-13
+
+### Reverted
+- Everything in 0.8.0 except "Sessions no longer expire". The record activity panel, filter
+  builder, views sidebar, view switcher, confirmation dialogs and Slack channel listing are back
+  to their 0.7.0 behaviour.
+- Migration `0075_comment_threads.sql` stays in place. Its columns are unused but harmless, and
+  keeping it means databases that already ran it match fresh ones.
+
+### Kept
+- Sessions don't expire (migration `0076_sessions_no_expiry.sql`, a 400-day cookie renewed daily).
+
 ## [0.8.0] - 2026-10-13
 
 ### Added

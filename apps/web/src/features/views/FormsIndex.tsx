@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type TableDto } from "../../lib/api.ts";
 import { createFormShare, publicFormUrl, viewConfigOf, viewsApi, type ViewWire } from "../../lib/api-areas/views.ts";
 import { toast } from "../../app/toast.tsx";
-import { askConfirm } from "../../app/ui.tsx";
 import { FormView } from "./FormView.tsx";
 import { useViewConfig } from "./view-hooks.ts";
 import { setViewsInCaches } from "./view-utils.ts";
@@ -74,7 +73,7 @@ export function FormsIndex({
   }
 
   async function removeForm(entry: FormEntry) {
-    if (!(await askConfirm({ title: `Delete the form “${entry.view.name}”?`, message: `Records it collected stay in ${entry.table.name}.` }))) return;
+    if (!window.confirm(`Delete the form “${entry.view.name}”? Records it collected stay in ${entry.table.name}.`)) return;
     try {
       await viewsApi.remove(baseId, entry.table.id, entry.view.id);
       setViewsInCaches(qc, baseId, entry.table.id, (list) => list.filter((v) => v.id !== entry.view.id));

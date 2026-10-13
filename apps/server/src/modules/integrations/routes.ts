@@ -372,7 +372,7 @@ export async function registerIntegrationRoutes(app: FastifyInstance, ctx: AppCo
     wrap<{ Params: ConnParams }>(async (request, reply) => {
       const user = signedIn(request);
       const conn = await ownConnection(user.id, request.params.connectionId, "slack");
-      void reply.send(await new SlackClient(token(conn)).channels());
+      void reply.send({ channels: await new SlackClient(token(conn)).channels() });
     }),
   );
 

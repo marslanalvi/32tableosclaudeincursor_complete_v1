@@ -1,5 +1,4 @@
 import { request } from "../api.ts";
-import type { AttachmentWire } from "./files.ts";
 
 // ── Comments ────────────────────────────────────────────────────────────────
 
@@ -31,21 +30,6 @@ export interface CommentWire {
   isMine: boolean;
   reactions: CommentReaction[];
   mentions: { id: string; name: string; email: string }[];
-  /** Set on a resolved thread (top-level comments only). */
-  resolved?: { at: string; by: { id: string; name: string } | null } | null;
-  /** Files attached to the comment. */
-  attachments?: AttachmentWire[];
-  /** The record attachment the comment is about. */
-  target?: { attachmentId: string; filename: string; attachment: AttachmentWire | null } | null;
-}
-
-export type NotifyLevel = "all" | "mentions" | "off";
-
-export interface NewComment {
-  body: string;
-  parentId?: string | null;
-  attachmentIds?: string[];
-  targetAttachmentId?: string | null;
 }
 
 export const commentsApi = {
@@ -54,35 +38,11 @@ export const commentsApi = {
       `/v1/bases/${baseId}/tables/${tableId}/records/${recordId}/comments`,
     );
   },
-  create(baseId: string, tableId: string, recordId: string, body: string | NewComment, parentId?: string | null) {
-    const c: NewComment = typeof body === "string" ? { body, parentId: parentId ?? null } : body;
+  create(baseId: string, tableId: string, recordId: string, body: string, parentId?: string | null) {
     return request<{ comment: CommentWire }>(
       `/v1/bases/${baseId}/tables/${tableId}/records/${recordId}/comments`,
-      {
-        method: "POST",
-        json: {
-          body: c.body,
-          ...(c.parentId ? { parentId: c.parentId } : {}),
-          ...(c.attachmentIds?.length ? { attachmentIds: c.attachmentIds } : {}),
-          ...(c.targetAttachmentId ? { targetAttachmentId: c.targetAttachmentId } : {}),
-        },
-      },
+      { method: "POST", json: { body, ...(parentId ? { parentId } : {}) } },
     );
-  },
-  resolve(baseId: string, commentId: string, resolved: boolean) {
-    return request<{ comment: CommentWire }>(`/v1/bases/${baseId}/comments/${commentId}/resolve`, {
-      method: "POST",
-      json: { resolved },
-    });
-  },
-  subscription(baseId: string, tableId: string, recordId: string) {
-    return request<{ level: NotifyLevel }>(`/v1/bases/${baseId}/tables/${tableId}/records/${recordId}/subscription`);
-  },
-  setSubscription(baseId: string, tableId: string, recordId: string, level: NotifyLevel) {
-    return request<{ level: NotifyLevel }>(`/v1/bases/${baseId}/tables/${tableId}/records/${recordId}/subscription`, {
-      method: "PUT",
-      json: { level },
-    });
   },
   update(baseId: string, commentId: string, body: string) {
     return request<{ comment: CommentWire }>(`/v1/bases/${baseId}/comments/${commentId}`, {

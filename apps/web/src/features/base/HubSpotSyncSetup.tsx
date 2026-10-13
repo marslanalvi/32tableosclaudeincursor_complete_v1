@@ -114,7 +114,7 @@ export function HubSpotSyncSetup({
             disabled={remove.isPending}
             onClick={() => {
               const c = list.find((x) => x.id === connId);
-              if (c) void confirmDisconnect(c).then((ok) => ok && remove.mutate(c));
+              if (c && confirmDisconnect(c)) remove.mutate(c);
             }}
           >
             Disconnect

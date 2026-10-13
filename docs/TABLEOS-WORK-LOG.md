@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.8.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.8.1**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -24,7 +24,21 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 ---
 
-## Round 7 (v0.8.0): record activity, one-row filters, Airtable-style views sidebar, sessions without expiry, Slack fixes
+## v0.8.1: Round 7 reverted, except sessions
+
+At the owner's request, every Round 7 change except "sessions never expire" was undone: the files were restored from v0.7.0 (`ff1b094`). Kept:
+* `auth/session.ts`
+* `http/auth-hook.ts`
+* migration `0076_sessions_no_expiry.sql`
+* the Help note on sessions
+
+Migration `0075_comment_threads.sql` stays, so databases that already ran it match fresh ones. Its columns are unused.
+
+Round 7 below describes v0.8.0, which is no longer the current behaviour.
+
+---
+
+## Round 7 (v0.8.0, reverted in v0.8.1 except section 3): record activity, one-row filters, Airtable-style views sidebar, sessions without expiry, Slack fixes
 
 ### 1. Record activity (Airtable's activity menu)
 * **Migration `0075_comment_threads.sql`:**
