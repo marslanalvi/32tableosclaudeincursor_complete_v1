@@ -8,6 +8,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.8.2",
+    date: "2026-10-13",
+    title: "Sign-in works again.",
+    items: [
+      "Fixed “The server is unavailable right now” when signing in or creating an account.",
+      "Database updates now install automatically when the server starts, so a release can't run without them.",
+    ],
+  },
+  {
     version: "0.8.1",
     date: "2026-10-13",
     title: "You stay signed in.",

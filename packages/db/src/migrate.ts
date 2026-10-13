@@ -8,11 +8,17 @@ const { Client } = pg;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATIONS_DIR = path.join(__dirname, "..", "migrations");
 
-export async function runMigrations(connectionString: string): Promise<void> {
+/** Arbitrary constant shared by every process that migrates this database. */
+const MIGRATION_LOCK_KEY = 7_302_511_847;
+
+export async function runMigrations(connectionString: string, log: (msg: string) => void = console.log): Promise<string[]> {
   const client = new Client({ connectionString });
   await client.connect();
+  const appliedNow: string[] = [];
 
   try {
+    // Several instances may start together on deploy; only one migrates at a time.
+    await client.query("SELECT pg_advisory_lock($1)", [MIGRATION_LOCK_KEY]);
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.schema_migrations (
         version text PRIMARY KEY,
@@ -43,13 +49,16 @@ export async function runMigrations(connectionString: string): Promise<void> {
           [version],
         );
         await client.query("COMMIT");
-        console.log(`Applied migration ${file}`);
+        appliedNow.push(file);
+        log(`Applied migration ${file}`);
       } catch (error) {
         await client.query("ROLLBACK");
-        throw error;
+        throw new Error(`Migration ${file} failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
       }
     }
+    return appliedNow;
   } finally {
+    await client.query("SELECT pg_advisory_unlock($1)", [MIGRATION_LOCK_KEY]).catch(() => undefined);
     await client.end();
   }
 }

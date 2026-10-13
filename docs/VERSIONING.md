@@ -54,13 +54,17 @@ where `.git` may be missing), otherwise from `git rev-parse --short HEAD`.
 ## Branches
 
 - `master` is always releasable; tags are cut from it.
-- Feature work happens on branches (for example `Awais-Improvements`) and is merged into
-  `master` once typecheck and the verify scripts pass.
-- Hotfixes branch from the release tag, bump PATCH, and are merged back to `master`.
+- Every release is prepared on its own branch, `release/vX.Y.Z`, and pushed there for review.
+  Typecheck and the verify scripts must pass first.
+- **Nothing is merged into `master` without the owner's explicit approval** after previewing the
+  release branch. The version tag is created on `master` only after that merge.
+- Hotfixes follow the same path: branch, bump PATCH, preview, approval, then merge.
+- Database migrations are applied automatically when the API starts (`MIGRATE_ON_START`).
 
 ## Release history
 
 Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was introduced; see
 `CHANGELOG.md` for what each one contains. Since then each release is tagged when it is cut
 (`v0.8.0`: record activity, one-row filters, views sidebar, sessions without expiry;
-`v0.8.1`: reverts 0.8.0 except sessions without expiry).
+`v0.8.1`: reverts 0.8.0 except sessions without expiry;
+`v0.8.2`: production sign-in fix, migrations applied on API start).

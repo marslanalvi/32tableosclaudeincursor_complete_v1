@@ -8,6 +8,21 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-13
+
+### Fixed
+- **Sign-in and sign-up failed in production** ("The server is unavailable right now") with
+  `column "cookie_refreshed_at" of relation "sessions" does not exist`. The 0.8.0/0.8.1 code was
+  deployed, but migration `0076_sessions_no_expiry.sql` was never applied to the production
+  database.
+
+### Changed
+- **The API applies pending migrations when it starts**, before it accepts requests. A Postgres
+  advisory lock makes sure only one instance migrates when several start together. If a
+  migration fails, the API exits instead of serving with a mismatched schema (on Render the
+  previous deploy keeps running). Set `MIGRATE_ON_START=false` to opt out.
+- A failed migration now reports which file failed.
+
 ## [0.8.1] - 2026-10-13
 
 ### Reverted

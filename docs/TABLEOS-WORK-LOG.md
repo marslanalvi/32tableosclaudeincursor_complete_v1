@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.8.1**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.8.2**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -21,6 +21,30 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | Unit tests | `npx pnpm@9.15.0 --filter "@tabula/filter" --filter "@tabula/formula" test` (and other packages' `test`) |
 | API checks | `node .data/verify-interfaces.mjs`, `node .data/verify-round.mjs`, `node .data/verify-access.mjs`, `node .data/verify-sync.mjs`, `node .data/verify-r7.mjs` |
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
+
+---
+
+## v0.8.2: production sign-in fix, migrations on startup
+
+**Symptom:** in production, sign-in showed "The server is unavailable right now". The API logged `column "cookie_refreshed_at" of relation "sessions" does not exist` from `createSession`.
+
+**Cause:** v0.8.0/v0.8.1 was deployed, but migration `0076_sessions_no_expiry.sql` was never run on the production database. Nothing in the deploy applied migrations.
+
+**Fix:**
+* `apps/server/src/entrypoints/api.ts` runs `runMigrations()` before `createApp()`, unless `MIGRATE_ON_START=false`. If a migration fails, the process exits.
+* `packages/db/src/migrate.ts`:
+  * holds `pg_advisory_lock` for the whole run, so concurrent instances migrate once;
+  * returns the files it applied;
+  * names the failing file in errors.
+
+**Process from now on:** release work goes to a `release/vX.Y.Z` branch. The owner previews and approves it before anything is merged into `master`.
+
+**Verification:**
+* `.data/r8-prep-db.mjs` builds `tabula_r8`, a database without 0076, like production.
+* The production bundle (`node dist/api.js`) with `MIGRATE_ON_START=false` reproduces the exact error: signup and login return 500.
+* With the default setting it applies 0076, and signup 201, login 200, `/me` 200. A second start reports "database is up to date".
+* `.data/r8-concurrent.mjs`: three concurrent runs apply the migration exactly once.
+* All verify scripts and `r6-lockout.mjs` pass. That test's "owner got in-app alerts" check used to compare the size of the capped 50-item notifications page; it now looks for new alert IDs.
 
 ---
 
