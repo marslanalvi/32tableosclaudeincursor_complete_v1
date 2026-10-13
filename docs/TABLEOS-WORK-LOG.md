@@ -15,8 +15,8 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 |---|---|
 | Stack | Node 22, pnpm 9.15 monorepo; Fastify + Kysely (Postgres); React 19 + Vite + TanStack Query |
 | Isolated dev ports | API `3200`, realtime `3202`, web `5283`, public app `5284` |
-| Database | `postgres://tabula:tabula@localhost:5432/tabula_cc` |
-| Migrate | `$env:DATABASE_URL="postgres://tabula:tabula@localhost:5432/tabula_cc"; npx pnpm@9.15.0 db:migrate` |
+| Database | `DATABASE_URL` in the root `.env` (not committed). Since v0.9.0, local and live share the Render database `tableos_3yok`; locally use the External URL with `?sslmode=verify-full` |
+| Migrate | `npx pnpm@9.15.0 db:migrate` (reads `.env`); the API also migrates on start |
 | Typecheck | `npx tsc -p apps/server/tsconfig.json --noEmit` and `npx tsc -p apps/web/tsconfig.app.json --noEmit` |
 | Unit tests | `npx pnpm@9.15.0 --filter "@tabula/filter" --filter "@tabula/formula" test` (and other packages' `test`) |
 | API checks | `node .data/verify-interfaces.mjs`, `node .data/verify-round.mjs`, `node .data/verify-access.mjs`, `node .data/verify-sync.mjs`, `node .data/verify-r7.mjs`, `node .data/verify-r9.mjs` |
