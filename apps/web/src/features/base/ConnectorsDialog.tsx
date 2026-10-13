@@ -79,7 +79,7 @@ export function ConnectorsDialog({
                         className={uiStyles.btnGhost}
                         disabled={remove.isPending}
                         onClick={() => {
-                          if (confirmDisconnect(c)) remove.mutate(c);
+                          void confirmDisconnect(c).then((ok) => ok && remove.mutate(c));
                         }}
                       >
                         Disconnect

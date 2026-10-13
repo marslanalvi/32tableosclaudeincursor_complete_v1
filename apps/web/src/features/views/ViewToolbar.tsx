@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DropdownMenu } from "../../app/ui.tsx";
 import type { FieldDto, FilterAst, TableDto, ViewDto } from "../../lib/api.ts";
 import type { RowHeight, SortSpec, ViewConfig } from "../../lib/api-areas/views.ts";
-import { FilterGroupEditor } from "./FilterBuilder.tsx";
+import { CopyFilterFrom, FilterGroupEditor } from "./FilterBuilder.tsx";
 import { Popover } from "./Popover.tsx";
 import { VIEW_CREATE_OPTIONS, type ViewKind } from "./view-types.ts";
 import {
@@ -681,8 +681,30 @@ export function ViewToolbar({
                     {meta?.icon ?? "▦"}
                   </span>
                   <span className={styles.viewName}>{view?.name ?? "Grid view"}</span>
+                  <span
+                    className={styles.viewKind}
+                    title={view?.visibility === "personal" ? "Personal view" : "Collaborative view"}
+                    aria-label={view?.visibility === "personal" ? "Personal view" : "Collaborative view"}
+                  >
+                    <svg viewBox="0 0 16 16" aria-hidden>
+                      {view?.visibility === "personal" ? (
+                        <>
+                          <circle cx="8" cy="5.5" r="2.6" />
+                          <path d="M3 14c.6-2.8 2.6-4.3 5-4.3s4.4 1.5 5 4.3" />
+                        </>
+                      ) : (
+                        <>
+                          <circle cx="6" cy="5.5" r="2.3" />
+                          <path d="M1.5 13.5c.5-2.4 2.2-3.7 4.5-3.7s4 1.3 4.5 3.7" />
+                          <path d="M10.5 3.4a2.3 2.3 0 0 1 0 4.4M12 9.9c1.3.5 2.2 1.7 2.5 3.6" />
+                        </>
+                      )}
+                    </svg>
+                  </span>
                   <span aria-hidden className={styles.viewSwitcherCaret}>
-                    ▾
+                    <svg viewBox="0 0 16 16">
+                      <path d="M4 6l4 4 4-4" />
+                    </svg>
                   </span>
                 </button>
               )}
@@ -729,7 +751,6 @@ export function ViewToolbar({
               🔒 Locked
             </span>
           ) : null}
-          {view?.visibility === "personal" ? <span className={styles.metaBadge}>Personal</span> : null}
         </div>
 
         {showRecordControls ? (
@@ -761,6 +782,7 @@ export function ViewToolbar({
               width={640}
             >
               <div className={styles.panelBody}>
+                <div className={styles.filterTitle}>Filter</div>
                 <div className={styles.panelTitle}>In this view, show records</div>
                 <FilterGroupEditor
                   baseId={baseId}
@@ -769,6 +791,11 @@ export function ViewToolbar({
                   disabled={disabled}
                   onChange={(g: FilterGroup) =>
                     update({ filter: g.children.length ? (g as FilterAst) : null })
+                  }
+                  actions={
+                    !disabled && views?.length ? (
+                      <CopyFilterFrom views={views} currentViewId={view?.id} onCopy={(filter) => update({ filter })} />
+                    ) : null
                   }
                 />
               </div>

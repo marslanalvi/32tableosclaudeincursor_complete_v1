@@ -8,6 +8,23 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.8.0",
+    date: "2026-10-13",
+    title: "Airtable-style record activity, one-row filters, a cleaner views sidebar, and sessions that don't expire.",
+    items: [
+      "Record activity: choose All activity, Revision history or a kind of comment, and show or hide resolved comments.",
+      "Resolve and reopen comment threads.",
+      "Attach files to comments, or comment on a specific attachment.",
+      "The 🔔 menu sets your notifications for a record: all comments, only @mentions and replies, or off.",
+      "Filters: every condition sits on one row with delete and drag handles. Copy conditions from another view.",
+      "Views sidebar: + Create new… at the top, Find a view with expand/collapse all, favorites, collapsible sections and a badge on your personal views.",
+      "The view switcher shows whether a view is personal or collaborative.",
+      "You stay signed in: sessions no longer expire until you sign out or are removed.",
+      "Confirmations (disconnecting an account, deleting a form, removing a member…) now open inside TableOS instead of a browser pop-up.",
+      "Slack: channels load even when the app lacks the optional groups:read permission.",
+    ],
+  },
+  {
     version: "0.7.0",
     date: "2026-10-13",
     title: "Dashboards with date trends, sign-in protection, and links that point to the exact table and record.",

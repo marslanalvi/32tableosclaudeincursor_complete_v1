@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { connectionsQueryKey, integrationsApi, type ConnectorProvider, type IntegrationConnection } from "../../lib/api-areas/integrations.ts";
-import { uiStyles } from "../../app/ui.tsx";
+import { askConfirm, uiStyles } from "../../app/ui.tsx";
 import { errorMessage, toast } from "../../app/toast.tsx";
 import styles from "./connectors.module.css";
 
@@ -82,14 +82,14 @@ export function useDisconnect() {
   });
 }
 
-export function confirmDisconnect(c: IntegrationConnection): boolean {
+export function confirmDisconnect(c: IntegrationConnection): Promise<boolean> {
   const effect =
     c.provider === "slack"
       ? "Automations that post with it will fail until you pick another account."
       : c.provider === "gmail"
         ? "Tables synced with it stop updating (their data stays) and automations that send with it fail."
         : "Tables synced with it stop updating (their data stays).";
-  return window.confirm(`Disconnect “${c.name}”? ${effect}`);
+  return askConfirm({ title: `Disconnect “${c.name}”?`, message: effect, confirmLabel: "Disconnect" });
 }
 
 const TOKEN_HELP: Record<"hubspot" | "airtable" | "slack", { title: string; tokenLabel: string; placeholder: string; steps: ReactNode }> = {

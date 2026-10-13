@@ -8,6 +8,41 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-13
+
+### Added
+- **Record activity menu** (Airtable style): All activity, Revision history, All comments, Record
+  comments, Comments on attachments, Comments with attachments, and Show resolved comments.
+  History and comments share one timeline, oldest first, with the composer docked at the bottom.
+- **Resolve comment threads** (`POST /v1/bases/:baseId/comments/:commentId/resolve`). Resolved
+  threads are hidden unless "Show resolved comments" is on.
+- **Attachments in comments.** Upload or paste files into a comment, or comment on one of the
+  record's attachments ("On <filename>"). Comments may be empty when they carry files.
+- **Per-record notifications** (the 🔔 menu): All comments, Only @mentions and replies, or Off
+  (`GET/PUT …/records/:recordId/subscription`). Commenting subscribes you to all comments.
+- **Filter: Copy from another view**, drag handles to reorder conditions, and a delete button on
+  every condition.
+- **In-app confirmation dialogs** replace the browser's `confirm()` boxes (disconnecting
+  accounts, deleting forms, share links, removing members, revoking tokens).
+- Migrations `0075_comment_threads.sql` and `0076_sessions_no_expiry.sql`.
+
+### Changed
+- **Sessions no longer expire.** You stay signed in until you sign out, an admin removes you, or
+  the session is revoked. The cookie is renewed daily (400-day browser maximum). Existing
+  sessions were extended. Automation sessions stay short-lived.
+- **Filter conditions sit on one row:** Where | field | operator | value | delete | drag.
+- **Views sidebar** matches Airtable: "+ Create new…" at the top (a popover with Collaborative /
+  Personal and the view types), "Find a view" with a settings menu (expand or collapse all
+  sections), ★ My favorites, collapsible My personal views and Collaborative views, an owner
+  badge on personal views, and a grey active row.
+- The view switcher shows whether the view is personal (👤) or collaborative (👥), followed by a ⌄
+  chevron.
+
+### Fixed
+- **Slack channels failed to load** with "The Slack app is missing a permission" when the app
+  didn't have the optional `groups:read` scope. Public channels now load, with a note on how to
+  add private ones. If listing still fails, you can type a channel name or ID.
+
 ## [0.7.0] - 2026-10-13
 
 ### Added

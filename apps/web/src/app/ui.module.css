@@ -107,6 +107,9 @@
   padding: 10vh 16px 16px;
   z-index: 1000;
 }
+.confirmLayer > .backdrop {
+  z-index: 1300;
+}
 .dialog {
   background: var(--tabula-color-bg);
   border-radius: var(--tabula-radius-lg);

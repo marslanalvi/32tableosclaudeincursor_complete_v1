@@ -8,6 +8,7 @@ import type { AppContext } from "../lib/app-context.js";
 import { currentRequestContext } from "../kernel/request-context.js";
 import { blockedOrgsForDevice, ensureDeviceKey } from "../modules/access/devices.js";
 import { requiredScope, resolveApiToken } from "../modules/access/api-tokens.js";
+import { setSessionCookie } from "../modules/auth/session.js";
 import { sendApiError, unauthorized } from "./errors.js";
 
 export interface RequestUser {
@@ -135,8 +136,10 @@ export async function authHook(
       display_name: string;
       auth_method: string;
       time_zone: string | null;
+      cookie_stale: boolean;
     }>`
-      SELECT s.id AS session_id, u.id AS user_id, u.email, u.display_name, s.auth_method, u.time_zone
+      SELECT s.id AS session_id, u.id AS user_id, u.email, u.display_name, s.auth_method, u.time_zone,
+             (s.cookie_refreshed_at IS NULL OR s.cookie_refreshed_at < now() - interval '1 day') AS cookie_stale
       FROM core.sessions s
       INNER JOIN core.users u ON u.id = s.user_id
       WHERE s.token_hash = ${tokenHash}
@@ -153,12 +156,15 @@ export async function authHook(
       return;
     }
 
+    // Sessions have no idle timeout; keep the browser's cookie from aging out instead.
+    const refreshCookie = row.cookie_stale && row.auth_method !== "automation";
     await sql`
       UPDATE core.sessions
       SET last_seen_at = now(),
-          idle_expires_at = LEAST(expires_at, now() + interval '24 hours')
+          cookie_refreshed_at = ${refreshCookie ? sql`now()` : sql`cookie_refreshed_at`}
       WHERE id = ${row.session_id}
     `.execute(ctx.db);
+    if (refreshCookie) setSessionCookie(reply, ctx.env, token);
 
     request.user = {
       id: row.user_id,

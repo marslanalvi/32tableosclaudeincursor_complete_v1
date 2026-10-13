@@ -9,7 +9,11 @@ import type { FastifyReply } from "fastify";
 import type { TabulaDb } from "@tabula/db";
 import type { Env } from "@tabula/config";
 
-const SESSION_TTL_DAYS = 7;
+/**
+ * Sessions don't expire: they last until sign-out or revocation. Browsers cap cookie
+ * lifetimes at about 400 days, so the cookie is re-issued while the user is active.
+ */
+const SESSION_COOKIE_MAX_AGE = 400 * 24 * 60 * 60;
 
 export interface CreateSessionOptions {
   authMethod?: "password" | "oauth";
@@ -41,7 +45,7 @@ export async function createSession(
   await sql`
     INSERT INTO core.sessions (
       id, user_id, token_hash, auth_method, mfa_level, ip, user_agent,
-      idle_expires_at, expires_at
+      idle_expires_at, expires_at, cookie_refreshed_at
     ) VALUES (
       ${sessionId},
       ${userId},
@@ -50,17 +54,22 @@ export async function createSession(
       ${opts.mfaLevel ?? "none"},
       ${opts.ip ?? null}::inet,
       ${opts.userAgent?.slice(0, 500) ?? null},
-      now() + interval '24 hours',
-      now() + interval '7 days'
+      now() + interval '100 years',
+      now() + interval '100 years',
+      now()
     )
   `.execute(db);
 
+  setSessionCookie(reply, env, token);
+  return sessionId;
+}
+
+/** (Re)issue the session cookie with the longest lifetime browsers allow. */
+export function setSessionCookie(reply: FastifyReply, env: Env, token: string): void {
   reply.setCookie(SESSION_COOKIE_NAME, token, {
     ...cookieOptions(env),
-    maxAge: SESSION_TTL_DAYS * 24 * 60 * 60,
+    maxAge: SESSION_COOKIE_MAX_AGE,
   });
-
-  return sessionId;
 }
 
 /**

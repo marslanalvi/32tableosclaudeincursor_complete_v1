@@ -534,7 +534,7 @@ function ConnectionPicker({
               className={styles.linkBtn}
               disabled={disconnect.isPending}
               onClick={() => {
-                if (confirmDisconnect(current)) disconnect.mutate(current, { onSuccess: () => onChange("") });
+                void confirmDisconnect(current).then((ok) => ok && disconnect.mutate(current, { onSuccess: () => onChange("") }));
               }}
             >
               Disconnect
@@ -596,6 +596,14 @@ function SlackChannelPicker({ connectionId, value, onChange }: { connectionId: s
       ) : null}
       {value && !custom && list.find((c) => c.id === value && !c.isMember && c.isPrivate) ? (
         <span className={styles.hint}>Invite the bot to this private channel in Slack (/invite @your-app) or posting fails.</span>
+      ) : null}
+      {channels.data?.privateListed === false ? (
+        <span className={styles.hint}>
+          Showing public channels only. To pick a private channel, add the groups:read bot scope in Slack and reinstall the app, or type its ID under Other.
+        </span>
+      ) : null}
+      {channels.isError ? (
+        <span className={styles.hint}>You can still type a channel name or ID below; it's checked when the step runs.</span>
       ) : null}
     </div>
   );

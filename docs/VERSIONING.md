@@ -61,4 +61,5 @@ where `.git` may be missing), otherwise from `git rev-parse --short HEAD`.
 ## Release history
 
 Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was introduced; see
-`CHANGELOG.md` for what each one contains.
+`CHANGELOG.md` for what each one contains. Since then each release is tagged when it is cut
+(`v0.8.0`: record activity, one-row filters, views sidebar, sessions without expiry).

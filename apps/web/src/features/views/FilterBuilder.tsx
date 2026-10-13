@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState, type DragEvent, type ReactNode } from "react";
 import type { FieldDto, FilterAst } from "../../lib/api.ts";
 import { ValueEditor } from "./field-value.tsx";
 import {
@@ -187,6 +188,7 @@ export function FilterGroupEditor({
   onRemove,
   depth = 0,
   disabled = false,
+  actions,
 }: {
   baseId: string;
   fields: FieldDto[];
@@ -195,8 +197,62 @@ export function FilterGroupEditor({
   onRemove?: () => void;
   depth?: number;
   disabled?: boolean;
+  /** Extra controls on the right of the add-condition row (top level only). */
+  actions?: ReactNode;
 }) {
   const filterFields = fieldsWithRecordId(fields);
+  const [dragArmed, setDragArmed] = useState<number | null>(null);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
+  const move = (from: number, to: number) => {
+    if (from === to) return;
+    const children = [...group.children];
+    const [item] = children.splice(from, 1);
+    children.splice(to, 0, item!);
+    onChange({ ...group, children });
+  };
+  const dragProps = (i: number) =>
+    disabled
+      ? {}
+      : {
+          draggable: dragArmed === i,
+          onDragStart: (e: DragEvent) => {
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", String(i));
+            setDragFrom(i);
+          },
+          onDragOver: (e: DragEvent) => {
+            if (dragFrom === null) return;
+            e.preventDefault();
+            setDragOver(i);
+          },
+          onDrop: (e: DragEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (dragFrom !== null) move(dragFrom, i);
+            setDragFrom(null);
+            setDragOver(null);
+            setDragArmed(null);
+          },
+          onDragEnd: () => {
+            setDragFrom(null);
+            setDragOver(null);
+            setDragArmed(null);
+          },
+        };
+  const rowClass = (i: number) => (dragOver === i && dragFrom !== null && dragFrom !== i ? `${styles.condRow} ${styles.condRowDrop}` : styles.condRow);
+  const handle = (i: number) =>
+    disabled ? null : (
+      <span
+        className={styles.condHandle}
+        title="Drag to reorder"
+        aria-label="Drag to reorder"
+        onMouseDown={() => setDragArmed(i)}
+        onMouseUp={() => setDragArmed(null)}
+      >
+        ⠿
+      </span>
+    );
   const setChild = (i: number, child: FilterAst | null) => {
     const children = [...group.children];
     if (child === null) children.splice(i, 1);
@@ -219,17 +275,19 @@ export function FilterGroupEditor({
     <div className={depth > 0 ? styles.filterGroupNested : styles.filterGroup}>
       {depth > 0 ? (
         <div className={styles.filterGroupHead}>
-          <span className={styles.muted}>Condition group</span>
+          <span className={styles.muted}>
+            {group.children.length > 1 ? (group.kind === "and" ? "All of the following are true…" : "Any of the following are true…") : "Condition group"}
+          </span>
           {onRemove && !disabled ? (
-            <button type="button" className={styles.iconBtn} aria-label="Remove group" onClick={onRemove}>
-              ✕
+            <button type="button" className={styles.condIconBtn} aria-label="Remove group" title="Remove group" onClick={onRemove}>
+              🗑
             </button>
           ) : null}
         </div>
       ) : null}
       {group.children.length === 0 ? (
         <p className={styles.muted}>
-          {depth === 0 ? "No filter conditions are applied to this view." : "Empty group"}
+          {depth === 0 ? "No filter conditions are applied to this view." : "Empty group. Add a condition to it."}
         </p>
       ) : null}
       {group.children.map((child, i) => {
@@ -252,27 +310,31 @@ export function FilterGroupEditor({
           );
         if (child.kind !== "condition") {
           return (
-            <div key={i} className={styles.condRow}>
+            <div key={i} className={rowClass(i)} {...dragProps(i)}>
               {conj}
-              <FilterGroupEditor
-                baseId={baseId}
-                fields={filterFields}
-                group={child as FilterGroup}
-                depth={depth + 1}
-                disabled={disabled}
-                onChange={(g) => setChild(i, g)}
-                onRemove={() => setChild(i, null)}
-              />
+              <div className={styles.condGroupCell}>
+                <FilterGroupEditor
+                  baseId={baseId}
+                  fields={filterFields}
+                  group={child as FilterGroup}
+                  depth={depth + 1}
+                  disabled={disabled}
+                  onChange={(g) => setChild(i, g)}
+                  onRemove={() => setChild(i, null)}
+                />
+                {handle(i)}
+              </div>
             </div>
           );
         }
         const field = filterFields.find((f) => f.id === child.fieldId);
         const ops = field ? operatorsForFieldType(field.type) : [];
         return (
-          <div key={i} className={styles.condRow} data-testid="filter-condition">
+          <div key={i} className={rowClass(i)} data-testid="filter-condition" {...dragProps(i)}>
             {conj}
+            <div className={styles.condBox}>
             <select
-              className={styles.select}
+              className={styles.condField}
               disabled={disabled}
               aria-label="Field"
               value={child.fieldId}
@@ -291,7 +353,7 @@ export function FilterGroupEditor({
               ))}
             </select>
             <select
-              className={styles.select}
+              className={styles.condOp}
               disabled={disabled}
               aria-label="Operator"
               value={child.op}
@@ -312,38 +374,108 @@ export function FilterGroupEditor({
                 </option>
               ))}
             </select>
-            <ConditionValue
-              baseId={baseId}
-              field={field}
-              cond={child}
-              disabled={disabled}
-              onChange={(value) => setChild(i, { ...child, value })}
-            />
+            <div className={styles.condValueCell}>
+              <ConditionValue
+                baseId={baseId}
+                field={field}
+                cond={child}
+                disabled={disabled}
+                onChange={(value) => setChild(i, { ...child, value })}
+              />
+            </div>
             {!disabled ? (
               <button
                 type="button"
-                className={styles.iconBtn}
+                className={styles.condIconBtn}
                 aria-label="Remove condition"
+                title="Remove condition"
                 onClick={() => setChild(i, null)}
               >
-                ✕
+                🗑
               </button>
             ) : null}
+            {handle(i)}
+            </div>
           </div>
         );
       })}
-      {!disabled ? (
-        <div className={styles.panelActions}>
-          <button type="button" className={styles.linkBtn} onClick={addCondition}>
-            + Add condition
-          </button>
-          {depth < MAX_DEPTH - 1 ? (
-            <button type="button" className={styles.linkBtn} onClick={addGroup}>
-              + Add condition group
-            </button>
+      {!disabled || actions ? (
+        <div className={styles.filterActions}>
+          {!disabled ? (
+            <>
+              <button type="button" className={styles.linkBtn} onClick={addCondition}>
+                + Add condition
+              </button>
+              {depth < MAX_DEPTH - 1 ? (
+                <button type="button" className={styles.linkBtnMuted} onClick={addGroup}>
+                  + Add condition group
+                </button>
+              ) : null}
+            </>
           ) : null}
+          {actions ? <span className={styles.filterActionsEnd}>{actions}</span> : null}
         </div>
       ) : null}
     </div>
+  );
+}
+
+/** "Copy from another view": replace this view's filter with another view's. */
+export function CopyFilterFrom({
+  views,
+  currentViewId,
+  onCopy,
+}: {
+  views: { id: string; name: string; config?: Record<string, unknown> }[];
+  currentViewId: string | undefined;
+  onCopy: (filter: FilterAst | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
+  const others = views.filter((v) => v.id !== currentViewId);
+  if (!others.length) return null;
+  const countOf = (f: unknown): number => {
+    const ast = f as FilterAst | null | undefined;
+    if (!ast) return 0;
+    if (ast.kind === "condition") return 1;
+    return ((ast as FilterGroup).children ?? []).reduce((n, c) => n + countOf(c), 0);
+  };
+  return (
+    <span className={styles.copyFrom} ref={ref}>
+      <button type="button" className={styles.linkBtnMuted} onClick={() => setOpen(!open)} aria-expanded={open}>
+        Copy from another view
+      </button>
+      {open ? (
+        <div className={styles.copyMenu} role="menu">
+          {others.map((v) => {
+            const n = countOf(v.config?.["filter"]);
+            return (
+              <button
+                key={v.id}
+                type="button"
+                role="menuitem"
+                className={styles.copyItem}
+                disabled={n === 0}
+                onClick={() => {
+                  onCopy((v.config?.["filter"] as FilterAst | null | undefined) ?? null);
+                  setOpen(false);
+                }}
+              >
+                <span>{v.name}</span>
+                <span className={styles.muted}>{n ? `${n} condition${n === 1 ? "" : "s"}` : "no filter"}</span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </span>
   );
 }

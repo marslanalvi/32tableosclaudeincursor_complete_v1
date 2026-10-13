@@ -72,7 +72,17 @@ export class SlackClient {
     return { teamId: String(r.team_id ?? ""), team: String(r.team ?? "Slack"), botUser: r.user ?? null, url: r.url ?? null };
   }
 
-  async channels(): Promise<SlackChannel[]> {
+  /** Public and private channels; `privateListed` is false when the app lacks groups:read (it's optional). */
+  async channels(): Promise<{ channels: SlackChannel[]; privateListed: boolean }> {
+    try {
+      return { channels: await this.listChannels("public_channel,private_channel"), privateListed: true };
+    } catch (err) {
+      if (!(err instanceof SlackError) || err.code !== "missing_scope") throw err;
+      return { channels: await this.listChannels("public_channel"), privateListed: false };
+    }
+  }
+
+  private async listChannels(types: string): Promise<SlackChannel[]> {
     const out: SlackChannel[] = [];
     let cursor: string | undefined;
     do {
@@ -81,7 +91,7 @@ export class SlackClient {
         channels?: { id: string; name: string; is_private?: boolean; is_member?: boolean }[];
         response_metadata?: { next_cursor?: string };
       }>("conversations.list", {
-        types: "public_channel,private_channel",
+        types,
         exclude_archived: true,
         limit: 200,
         ...(cursor ? { cursor } : {}),

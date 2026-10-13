@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ViewDto } from "../../lib/api.ts";
 import { viewsApi, type ViewVisibility, type ViewWire } from "../../lib/api-areas/views.ts";
 import { toast } from "../../app/toast.tsx";
+import { useMe } from "../auth/use-auth.ts";
 import { useBaseRole } from "../grid/field-services.tsx";
 import { VIEW_CREATE_OPTIONS, type ViewKind } from "./view-types.ts";
 import { patchViewInCaches, setViewsInCaches } from "./view-utils.ts";
@@ -32,22 +33,19 @@ export function defaultViewName(label: string, views: { name: string }[]): strin
   }
 }
 
-const CREATE_OPEN_KEY = "tableos.views.createOpen";
+const SECTIONS_KEY = "tableos.views.sections";
 
-function readCreateOpen(): boolean {
+function readSections(): Record<Section, boolean> {
   try {
-    return localStorage.getItem(CREATE_OPEN_KEY) !== "0";
+    const v = JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? "null") as Partial<Record<Section, boolean>> | null;
+    return { favorites: v?.favorites ?? true, personal: v?.personal ?? true, collaborative: v?.collaborative ?? true };
   } catch {
-    return true;
+    return { favorites: true, personal: true, collaborative: true };
   }
 }
 
-function writeCreateOpen(open: boolean): void {
-  try {
-    localStorage.setItem(CREATE_OPEN_KEY, open ? "1" : "0");
-  } catch {
-    /* storage unavailable */
-  }
+function initialOf(name: string | undefined): string {
+  return (name?.trim()[0] ?? "?").toUpperCase();
 }
 
 type Section = "favorites" | "personal" | "collaborative";
@@ -91,9 +89,13 @@ export function ViewsSidebar({
   const canCreateShared = role === undefined || role === "owner" || role === "creator" || role === "editor";
   const canCreatePersonal = role !== "viewer";
 
+  const me = useMe();
+  const myName = me.data?.name || me.data?.email || "";
   const [query, setQuery] = useState("");
-  const [createOpen, setCreateOpen] = useState(() => readCreateOpen());
+  const [createOpen, setCreateOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const focusCreateRef = useRef(false);
+  const topRef = useRef<HTMLDivElement | null>(null);
   const [newVisibility, setNewVisibility] = useState<NewVisibility>("collaborative");
   const [creating, setCreating] = useState<ViewKind | null>(null);
   const [menuViewId, setMenuViewId] = useState<string | null>(null);
@@ -101,11 +103,17 @@ export function ViewsSidebar({
   const [renameText, setRenameText] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
-  const [sectionsOpen, setSectionsOpen] = useState<Record<Section, boolean>>({
-    favorites: true,
-    personal: true,
-    collaborative: true,
-  });
+  const [sectionsOpen, setSectionsOpenState] = useState<Record<Section, boolean>>(readSections);
+  const setSectionsOpen = (fn: (s: Record<Section, boolean>) => Record<Section, boolean>) =>
+    setSectionsOpenState((s) => {
+      const next = fn(s);
+      try {
+        localStorage.setItem(SECTIONS_KEY, JSON.stringify(next));
+      } catch {
+        /* storage unavailable */
+      }
+      return next;
+    });
   const [drag, setDrag] = useState<{ id: string; over: string | null } | null>(null);
   const createBtnRef = useRef<HTMLButtonElement | null>(null);
   const createMenuRef = useRef<HTMLDivElement | null>(null);
@@ -132,6 +140,28 @@ export function ViewsSidebar({
       document.removeEventListener("keydown", onKey);
     };
   }, [menuViewId]);
+
+  // Close the "Create new…" and settings popovers on outside click / Escape.
+  useEffect(() => {
+    if (!createOpen && !settingsOpen) return;
+    function onDown(e: MouseEvent) {
+      if (topRef.current && !topRef.current.contains(e.target as Node)) {
+        setCreateOpen(false);
+        setSettingsOpen(false);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setCreateOpen(false);
+      setSettingsOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [createOpen, settingsOpen]);
 
   useEffect(() => {
     if (!createOpen || !focusCreateRef.current) return;
@@ -259,7 +289,7 @@ export function ViewsSidebar({
     if (open && !createOpen) setNewVisibility(canCreateShared ? "collaborative" : "personal");
     focusCreateRef.current = focus;
     setCreateOpen(open);
-    writeCreateOpen(open);
+    if (open) setSettingsOpen(false);
     if (open && createOpen && focus) {
       createMenuRef.current?.querySelector<HTMLButtonElement>("[role=menuitem]:not(:disabled)")?.focus();
     }
@@ -278,6 +308,7 @@ export function ViewsSidebar({
     try {
       const res = (await onCreateView(type, visibility, name)) as { view?: ViewWire } | undefined;
       const created = res?.view;
+      setCreateOpen(false);
       if (created) {
         const section: Section = created.visibility === "personal" ? "personal" : "collaborative";
         setSectionsOpen((s) => ({ ...s, [section]: true }));
@@ -370,6 +401,11 @@ export function ViewsSidebar({
             {view.visibility === "locked" ? (
               <span className={styles.lockIcon} title="Locked view" aria-label="Locked">
                 🔒
+              </span>
+            ) : null}
+            {view.visibility === "personal" ? (
+              <span className={styles.ownerBadge} title={`Personal view${myName ? ` · ${myName}` : ""}`} aria-label="Personal view">
+                {initialOf(myName)}
               </span>
             ) : null}
           </button>
@@ -500,14 +536,22 @@ export function ViewsSidebar({
           type="button"
           className={styles.sectionHead}
           aria-expanded={sectionsOpen[id]}
+          title={sectionsOpen[id] ? `Collapse ${title}` : `Expand ${title}`}
           onClick={() => setSectionsOpen((s) => ({ ...s, [id]: !s[id] }))}
         >
-          <span className={styles.chev} data-open={sectionsOpen[id] ? "true" : "false"} aria-hidden>
-            ▸
-          </span>
-          {icon ? <span className={styles.star}>{icon}</span> : null}
-          {title}
-          <span className={styles.sectionCount}>{list.length}</span>
+          {icon ? (
+            <span className={styles.star} aria-hidden>
+              {icon}
+            </span>
+          ) : (
+            <span className={styles.chev} data-open={sectionsOpen[id] ? "true" : "false"} aria-hidden>
+              <svg viewBox="0 0 16 16">
+                <path d="M4 6l4 4 4-4" />
+              </svg>
+            </span>
+          )}
+          <span className={styles.sectionTitle}>{title}</span>
+          {!sectionsOpen[id] && list.length ? <span className={styles.sectionCount}>{list.length}</span> : null}
         </button>
         {sectionsOpen[id]
           ? list.length
@@ -520,47 +564,81 @@ export function ViewsSidebar({
 
   return (
     <aside className={styles.sidebar} aria-label="Views">
-      <div className={styles.findRow}>
-        <input
-          className={styles.findInput}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Find a view"
-          aria-label="Find a view"
-        />
-        <button
-          type="button"
-          className={styles.newViewBtn}
-          aria-label="Create a new view"
-          title={canCreatePersonal ? "Create a new view" : "Viewers can't create views"}
-          disabled={!canCreatePersonal}
-          onClick={() => setCreateSection(true)}
-        >
-          +
-        </button>
-      </div>
-
-      <div className={styles.lists}>
-        {favorites.length || !query ? renderSection("favorites", "My favorites", favorites, "★") : null}
-        {renderSection("personal", "My personal views", personal, "")}
-        {renderSection("collaborative", "Collaborative views", collaborative, "")}
-      </div>
-      <div className={styles.createWrap}>
+      <div className={styles.top} ref={topRef}>
         <button
           ref={createBtnRef}
           type="button"
-          className={styles.createBtn}
+          className={styles.createNewBtn}
           aria-expanded={createOpen}
           aria-controls="views-create-section"
+          aria-label="Create a new view"
           disabled={!canCreatePersonal}
           title={canCreatePersonal ? "Create a view" : "Viewers can't create views"}
           onClick={openCreate}
         >
-          <span>Create…</span>
-          <span aria-hidden>{createOpen ? "▾" : "▴"}</span>
+          <span className={styles.createNewPlus} aria-hidden>
+            +
+          </span>
+          Create new…
         </button>
+        <div className={styles.findRow}>
+          <span className={styles.findIcon} aria-hidden>
+            <svg viewBox="0 0 16 16">
+              <circle cx="7" cy="7" r="4.5" />
+              <path d="M10.5 10.5L14 14" />
+            </svg>
+          </span>
+          <input
+            className={styles.findInput}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Find a view"
+            aria-label="Find a view"
+          />
+          <button
+            type="button"
+            className={styles.gearBtn}
+            aria-label="View list settings"
+            aria-haspopup="menu"
+            aria-expanded={settingsOpen}
+            title="View list settings"
+            onClick={() => {
+              setSettingsOpen(!settingsOpen);
+              setCreateOpen(false);
+            }}
+          >
+            <svg viewBox="0 0 16 16" aria-hidden>
+              <circle cx="8" cy="8" r="2.2" />
+              <path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" />
+            </svg>
+          </button>
+        </div>
+        {settingsOpen ? (
+          <div className={styles.settingsMenu} role="menu" aria-label="View list settings">
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setSectionsOpen(() => ({ favorites: true, personal: true, collaborative: true }));
+                setSettingsOpen(false);
+              }}
+            >
+              Expand all sections
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setSectionsOpen(() => ({ favorites: false, personal: false, collaborative: false }));
+                setSettingsOpen(false);
+              }}
+            >
+              Collapse all sections
+            </button>
+          </div>
+        ) : null}
         {createOpen && canCreatePersonal ? (
-          <div id="views-create-section" className={styles.createInline}>
+          <div id="views-create-section" className={styles.createPopover}>
             <div ref={createMenuRef}>
               <div className={styles.createHead}>
                 <div className={styles.segmented} role="radiogroup" aria-label="Who can see the new view">
@@ -625,6 +703,13 @@ export function ViewsSidebar({
             </div>
           </div>
         ) : null}
+      </div>
+
+      <div className={styles.lists}>
+        {favorites.length || !query ? renderSection("favorites", "My favorites", favorites, "★") : null}
+        {personal.length || !query ? renderSection("personal", "My personal views", personal, "") : null}
+        {collaborative.length || !query ? renderSection("collaborative", "Collaborative views", collaborative, "") : null}
+        {query && !filtered.length ? <p className={styles.emptyHint}>No views match “{query}”.</p> : null}
       </div>
     </aside>
   );

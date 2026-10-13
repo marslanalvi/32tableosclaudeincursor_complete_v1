@@ -3,8 +3,8 @@
 TableOS is an Airtable-style product: workspaces → bases → tables → fields / records / views, plus automations, interfaces, forms, sharing, import/export and realtime collaboration. This document records everything built and fixed so far, newest first, with how each piece was verified.
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
-* Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.7.0)
-* Current version: **0.7.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
+* Current version: **0.8.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -19,8 +19,61 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | Migrate | `$env:DATABASE_URL="postgres://tabula:tabula@localhost:5432/tabula_cc"; npx pnpm@9.15.0 db:migrate` |
 | Typecheck | `npx tsc -p apps/server/tsconfig.json --noEmit` and `npx tsc -p apps/web/tsconfig.app.json --noEmit` |
 | Unit tests | `npx pnpm@9.15.0 --filter "@tabula/filter" --filter "@tabula/formula" test` (and other packages' `test`) |
-| API checks | `node .data/verify-interfaces.mjs`, `node .data/verify-round.mjs`, `node .data/verify-access.mjs`, `node .data/verify-sync.mjs` |
+| API checks | `node .data/verify-interfaces.mjs`, `node .data/verify-round.mjs`, `node .data/verify-access.mjs`, `node .data/verify-sync.mjs`, `node .data/verify-r7.mjs` |
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
+
+---
+
+## Round 7 (v0.8.0): record activity, one-row filters, Airtable-style views sidebar, sessions without expiry, Slack fixes
+
+### 1. Record activity (Airtable's activity menu)
+* **Migration `0075_comment_threads.sql`:**
+  * `data.comments` gains `resolved_at`, `resolved_by`, `attachment_ids uuid[]` and `target_attachment_id`.
+  * `data.record_subscriptions` gains `level` (`all` | `mentions` | `off`).
+* **API (`modules/comments/routes.ts`):**
+  * Comments may carry up to 10 attachments of the base (an empty body is allowed only then), and can target one of the record's attachments.
+  * `POST /v1/bases/:baseId/comments/:commentId/resolve {resolved}` works on top-level threads.
+  * `GET/PUT …/records/:recordId/subscription {level}`. Without a row the level is `mentions`; commenting stores `all`.
+  * Notifications respect the level, and the collab worker only notifies `level = 'all'` subscribers about edits.
+* **Web:**
+  * `RecordActivity.tsx` has the "All activity ⌄" menu (All activity, Revision history, All comments, Record comments, Comments on attachments, Comments with attachments, Show resolved comments) and the 🔔 notify menu. Both choices are remembered in local storage.
+  * `RecordComments.tsx` merges history and comment threads into one timeline (oldest first), with a docked composer (📎 upload, paste/drop, "On <filename>" target), Resolve/Reopen, and an in-app delete confirmation.
+
+### 2. Filter builder
+* Each condition is one row: `Where`/conjunction | field | operator | value | 🗑 | ⠿ drag handle (`FilterBuilder.tsx`, `views.module.css`).
+* Nested groups get their own header and delete button.
+* Footer: + Add condition, + Add condition group, and **Copy from another view** (`CopyFilterFrom`).
+
+### 3. Sessions never expire
+* **Migration `0076_sessions_no_expiry.sql`:** adds `cookie_refreshed_at`, and extends live user sessions to 100 years (absolute and idle).
+* `createSession` writes 100-year expiries and sets a 400-day cookie.
+* `auth-hook.ts` stops sliding the 24-hour idle window and re-issues the cookie at most once a day (`setSessionCookie`).
+* Sign-out, password change, admin removal and revocation still end sessions. Automation service sessions stay at 15 minutes.
+
+### 4. Views sidebar and switcher
+* `ViewsSidebar.tsx`:
+  * a "+ Create new…" popover (Collaborative/Personal and the view types);
+  * 🔍 Find a view, with a ⚙ menu (expand or collapse all sections; the open/closed state is persisted in `tableos.views.sections`);
+  * ★ My favorites, then ⌄ My personal views and ⌄ Collaborative views (counts show only while a section is collapsed);
+  * owner-initial badges on personal views, and a grey active row.
+  * The bottom "Create…" panel is gone.
+* `ViewToolbar.tsx`: the switcher shows a 👤/👥 icon and a ⌄ chevron instead of the "Personal" badge.
+
+### 5. Confirmations and Slack
+* `askConfirm()` / `<ConfirmHost/>` (`app/ui.tsx`, mounted in the root route) replace every `window.confirm`:
+  * disconnecting accounts (`confirmDisconnect` is now async);
+  * deleting forms;
+  * disabling or regenerating share links;
+  * removing members;
+  * revoking API tokens.
+* `SlackClient.channels()` retries with public channels only when `conversations.list` returns `missing_scope` (no `groups:read`), and returns `privateListed`. The channel picker explains how to add private channels, and keeps the manual name/ID input when listing fails.
+
+### Verification
+* Server, web and public typecheck clean.
+* `verify-access`, `verify-sync`, `verify-round`, `verify-interfaces` and `r2-shell/r6-lockout.mjs` pass.
+* New `.data/verify-r7.mjs` passes: cookie max-age of 400 days, no-expiry session rows, resolve/reopen, empty comment rejected, subscribe-on-comment, default `mentions`, level `off` saved, invalid level rejected.
+* `.data/r7-slack-scope.ts` (mock Slack) passes: without `groups:read` the step lists public channels with `privateListed: false`; with it, both kinds of channel.
+* Screenshots (`r2-shell/r7-sidebar-look.mjs`, `r7-confirm-activity.mjs`): sidebar, create popover, one-row filter, in-app confirm and activity menu.
 
 ---
 

@@ -219,8 +219,21 @@ export const HELP_TOPICS: HelpTopic[] = [
           ones, and:
         </p>
         <ul>
-          <li><b>Comment</b> and @mention collaborators, who are notified.</li>
-          <li>See the <b>revision history</b>: who changed what and when.</li>
+          <li>
+            <b>Comment</b> and @mention collaborators, who are notified. Attach files with 📎 (or paste/drop them), or pick one of the record’s
+            attachments to comment on it.
+          </li>
+          <li>
+            <b>Resolve</b> a thread when it’s done; resolved threads are hidden until you turn on <b>Show resolved comments</b>.
+          </li>
+          <li>
+            See the <b>revision history</b>: who changed what and when. The <b>All activity ⌄</b> menu narrows the timeline to revision history
+            or a kind of comment (record comments, comments on attachments, comments with attachments).
+          </li>
+          <li>
+            The <b>🔔</b> menu sets what you’re notified about on this record: all comments, only @mentions and replies, or off. Commenting
+            subscribes you to all comments.
+          </li>
           <li>Use ⋯ to copy the record URL or ID, duplicate or delete it.</li>
           <li>Move between records with <K>↑</K>/<K>↓</K> (or <K>K</K>/<K>J</K>) and close with <K>Esc</K>.</li>
         </ul>
@@ -245,6 +258,12 @@ export const HELP_TOPICS: HelpTopic[] = [
           changes the data. The views list sits on the left of the table. Click <b>☰</b> (with the current view’s name) at the start of the
           toolbar to hide it and give the grid more room, and click it again to bring it back. TableOS remembers your choice.
         </p>
+        <p>
+          In the sidebar, <b>+ Create new…</b> adds a collaborative or personal view of any type. <b>Find a view</b> searches by name, and its ⚙
+          menu expands or collapses every section. Views are grouped into <b>★ My favorites</b>, <b>My personal views</b> (marked with your
+          initial) and <b>Collaborative views</b>; click a section’s name to fold it. The view switcher in the toolbar shows 👤 for a personal
+          view and 👥 for a collaborative one.
+        </p>
         <Table
           head={["View", "Best for"]}
           rows={[
@@ -261,7 +280,10 @@ export const HELP_TOPICS: HelpTopic[] = [
         <h2>The view toolbar</h2>
         <ul>
           <li><b>Hide fields</b>: choose which fields this view shows. New views hide the Record ID field.</li>
-          <li><b>Filter</b>: show only records that match conditions; combine them with “and” / “or” groups.</li>
+          <li>
+            <b>Filter</b>: show only records that match conditions (Where · field · operator · value on one row); combine them with “and” / “or”
+            groups, drag ⠿ to reorder, or <b>Copy from another view</b>.
+          </li>
           <li><b>Group</b>: group records by up to three fields, with summaries per group.</li>
           <li><b>Sort</b>: order by one or more fields.</li>
           <li><b>Color</b>: color rows by a select field or by conditions.</li>
@@ -723,7 +745,10 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
             <b>Two-factor authentication</b>: scan the QR code with an authenticator app, then enter a code each time you sign in. Keep the
             recovery codes somewhere safe.
           </li>
-          <li><b>Sessions</b>: see where you’re signed in and sign out of the others.</li>
+          <li>
+            <b>Sessions</b>: see where you’re signed in and sign out of the others. Sessions don’t expire: you stay signed in until you sign out,
+            change your password, or an admin removes you.
+          </li>
         </ul>
       </>
     ),

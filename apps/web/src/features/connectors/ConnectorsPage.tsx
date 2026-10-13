@@ -100,7 +100,7 @@ export function ConnectorsPage({ notice, onBack, onNoticeShown }: { notice: Conn
                           className={uiStyles.btnGhost}
                           disabled={disconnect.isPending}
                           onClick={() => {
-                            if (confirmDisconnect(c)) disconnect.mutate(c);
+                            void confirmDisconnect(c).then((ok) => ok && disconnect.mutate(c));
                           }}
                         >
                           Disconnect

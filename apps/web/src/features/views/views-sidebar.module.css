@@ -20,32 +20,80 @@
   min-height: 0;
 }
 
-.findRow {
-  display: flex;
-  gap: 6px;
-  padding: 12px 12px 8px;
+.top {
+  position: relative;
+  flex: none;
+  padding: 8px 8px 4px;
 }
 
-.newViewBtn {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--hairline);
+.createNewBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 0;
   border-radius: 6px;
-  background: #ffffff;
+  background: transparent;
   color: var(--ink);
-  font-size: 18px;
-  line-height: 1;
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
   cursor: pointer;
 }
 
-.newViewBtn:hover:not(:disabled) {
-  background: var(--soft);
+.createNewBtn:hover:not(:disabled),
+.createNewBtn[aria-expanded="true"] {
+  background: #f2f2f2;
 }
 
-.newViewBtn:disabled {
+.createNewBtn:disabled {
   color: #9297a0;
   cursor: not-allowed;
+}
+
+.createNewPlus {
+  width: 16px;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1;
+  text-align: center;
+}
+
+.findRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 4px 0 10px;
+  border-radius: 6px;
+}
+
+.findRow:focus-within {
+  box-shadow: inset 0 0 0 1px var(--info-border);
+}
+
+.findIcon svg,
+.gearBtn svg,
+.chev svg {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.findIcon {
+  flex: none;
+  width: 16px;
+  color: #6b7079;
+}
+
+.findIcon svg {
+  width: 15px;
+  height: 15px;
 }
 
 .findInput {
@@ -54,15 +102,94 @@
   width: 100%;
   box-sizing: border-box;
   height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 6px;
+  padding: 0 6px;
+  border: 0;
   font: inherit;
   color: var(--ink);
-  background: #ffffff;
+  background: transparent;
 }
 
-.findInput:focus,
+.findInput:focus {
+  outline: none;
+}
+
+.findInput::placeholder {
+  color: #6b7079;
+}
+
+.gearBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7079;
+  cursor: pointer;
+}
+
+.gearBtn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.gearBtn:hover,
+.gearBtn[aria-expanded="true"] {
+  background: #f2f2f2;
+  color: var(--ink);
+}
+
+.settingsMenu,
+.createPopover {
+  position: absolute;
+  z-index: 45;
+  left: 8px;
+  right: 8px;
+  background: #ffffff;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(24, 29, 38, 0.16);
+}
+
+.settingsMenu {
+  top: 80px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+
+.settingsMenu > button {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--body);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settingsMenu > button:hover {
+  background: var(--soft);
+}
+
+.createPopover {
+  top: 46px;
+  display: flex;
+  flex-direction: column;
+  max-height: min(70vh, 520px);
+  overflow: hidden;
+}
+
+.createPopover > div {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .renameInput:focus {
   outline: none;
   border-color: var(--info-border);
@@ -74,40 +201,67 @@
   overflow-y: auto;
   padding: 0 8px 8px;
   min-height: 0;
+  scrollbar-width: thin;
 }
 
 .section {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .sectionHead {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   width: 100%;
+  height: 36px;
   border: 0;
+  border-radius: 6px;
   background: transparent;
-  padding: 6px 4px;
+  padding: 0 10px;
   font: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
   cursor: pointer;
   text-align: left;
 }
 
+.sectionHead:hover {
+  background: #f7f7f7;
+}
+
+.sectionTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chev {
-  display: inline-block;
-  font-size: 10px;
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  justify-content: center;
+  color: var(--muted);
   transition: transform 120ms ease;
+  transform: rotate(-90deg);
+}
+
+.chev svg {
+  width: 14px;
+  height: 14px;
 }
 
 .chev[data-open="true"] {
-  transform: rotate(90deg);
+  transform: none;
 }
 
 .star {
-  color: #d9a441;
+  width: 16px;
+  color: #f5b400;
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
 }
 
 .sectionCount {
@@ -118,7 +272,7 @@
 }
 
 .emptyHint {
-  margin: 2px 8px 6px 22px;
+  margin: 0 10px 6px 36px;
   font-size: 12px;
   color: #9297a0;
 }
@@ -128,21 +282,35 @@
   display: flex;
   align-items: center;
   border-radius: 6px;
-  min-height: 32px;
+  min-height: 36px;
 }
 
 .viewItem:hover {
-  background: var(--soft);
+  background: #f7f7f7;
 }
 
 .viewItemActive,
 .viewItemActive:hover {
-  background: #e8effb;
+  background: #ececec;
 }
 
 .viewItemActive .viewName {
   color: var(--ink);
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.ownerBadge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #1b61c9;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .viewItemFlash {
@@ -168,12 +336,12 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   border: 0;
   background: transparent;
-  padding: 6px 8px;
+  padding: 6px 4px 6px 10px;
   font: inherit;
-  color: var(--body);
+  color: var(--ink);
   text-align: left;
   cursor: pointer;
 }
@@ -330,60 +498,12 @@
   font-size: 13px;
 }
 
-.createWrap {
-  position: relative;
-  border-top: 1px solid var(--hairline);
-  padding: 8px;
+.createPopover .createHead {
+  padding: 10px 10px 6px;
 }
 
-.createBtn {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border: 0;
-  background: transparent;
-  border-radius: 6px;
-  padding: 8px 10px;
-  font: inherit;
-  font-weight: 500;
-  color: var(--ink);
-  cursor: pointer;
-}
-
-.createBtn:hover {
-  background: var(--soft);
-}
-
-.createBtn:disabled {
-  color: #9297a0;
-  cursor: not-allowed;
-}
-
-.createBtn:disabled:hover {
-  background: transparent;
-}
-
-.createInline {
-  display: flex;
-  flex-direction: column;
-  max-height: 45vh;
-  min-height: 0;
-}
-
-.createInline > div {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.createInline .createHead {
-  border-bottom: 0;
-  padding: 4px 2px 6px;
-}
-
-.createInline .createList {
-  padding: 0;
+.createPopover .createList {
+  padding: 4px;
 }
 
 /* Rendered in a portal (FloatingPanel), outside .sidebar: repeat its tokens. */

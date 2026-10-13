@@ -34,6 +34,7 @@ export async function handleCommentCreatedNotification(
       AND base_id = ${baseId}
       AND table_id = ${tableId}
       AND record_id = ${recordId}
+      AND level = 'all'
   `.execute(db);
 
   const mentions = await sql<{ principal_id: string }>`
