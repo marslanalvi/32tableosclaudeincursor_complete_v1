@@ -94,7 +94,7 @@ function PasswordGate({ token, onUnlocked }: { token: string; onUnlocked: () => 
               onUnlocked();
             } catch (err) {
               setError(
-                err instanceof ShareApiError && err.status === 401
+                err instanceof ShareApiError && err.status === 401 && !/attempt|locked/i.test(err.message)
                   ? "That password is incorrect."
                   : err instanceof Error
                     ? err.message

@@ -31,6 +31,7 @@ import { TabulaErrorCodes, createTabulaError } from "@tabula/types";
 import { internalErrorProblem, problemFromError } from "./errors.js";
 import { setAuditLogger } from "../modules/audit/write.js";
 import type { Env } from "@tabula/config";
+import { APP_COMMIT, APP_VERSION, STARTED_AT } from "../lib/version.js";
 
 /**
  * Origins allowed to make credentialed cross-origin calls: the web app, the
@@ -87,7 +88,7 @@ export async function buildFastify(ctx: AppContext) {
     },
     credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    exposedHeaders: ["idempotent-replayed", "x-request-id", "retry-after"],
+    exposedHeaders: ["idempotent-replayed", "x-request-id", "retry-after", "x-tableos-version"],
   });
 
   await app.register(cookie, {
@@ -142,7 +143,13 @@ export async function buildFastify(ctx: AppContext) {
     sendProblem(reply, request, problem ?? internalErrorProblem());
   });
 
-  app.get("/health", async () => ({ ok: true }));
+  app.addHook("onSend", async (_request, reply) => {
+    void reply.header("x-tableos-version", APP_VERSION);
+  });
+
+  app.get("/health", async () => ({ ok: true, version: APP_VERSION }));
+
+  app.get("/v1/version", async () => ({ name: "TableOS", version: APP_VERSION, commit: APP_COMMIT, startedAt: STARTED_AT }));
 
   app.get("/v1/openapi.json", async (_request, reply) => {
     void reply.send(buildOpenApiDocument(ctx.env.API_URL));

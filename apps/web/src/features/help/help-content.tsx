@@ -1,5 +1,7 @@
 import { createContext, useContext, type ReactNode } from "react";
 import { FIELD_TYPES } from "@tabula/field-ui";
+import { APP_COMMIT, APP_VERSION } from "../../lib/version.ts";
+import { RELEASES } from "./releases.ts";
 import s from "./help.module.css";
 
 export interface HelpTopic {
@@ -126,6 +128,16 @@ export const HELP_TOPICS: HelpTopic[] = [
             ["View", <code>viw_…</code>, "The URL while the view is open"],
           ]}
         />
+        <h3>IDs in the address bar</h3>
+        <p>
+          The URL always shows where you are, so you can copy it, bookmark it or send it to a teammate and they land in the same place:
+        </p>
+        <Pre>{`/bases/bas_…/tbl_…/viw_…            a table, in a view
+/bases/bas_…/tbl_…/viw_…/rec_…      with a record open`}</Pre>
+        <p>
+          Opening a record adds its <code>rec_…</code> ID; closing it removes it. The browser’s back button steps back through tables, views and
+          records. Older links that only had the base ID still work and open the base’s first table.
+        </p>
         <h3>The Record ID field</h3>
         <p>
           New tables include a <b>Record ID</b> field that shows each record’s <code>rec_…</code> ID. It is hidden in new views by default; show it
@@ -230,7 +242,8 @@ export const HELP_TOPICS: HelpTopic[] = [
       <>
         <p>
           A view is a saved way of looking at a table. Every table can have many views; changing a view (filters, sorting, hidden fields) never
-          changes the data. Open the views list from the left of the toolbar.
+          changes the data. The views list sits on the left of the table. Click <b>☰</b> (with the current view’s name) at the start of the
+          toolbar to hide it and give the grid more room, and click it again to bring it back. TableOS remembers your choice.
         </p>
         <Table
           head={["View", "Best for"]}
@@ -446,6 +459,13 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
           <li>Check the preview: TableOS suggests a field type for each column. Change types or skip columns as needed.</li>
           <li>Import. Large files are imported in the background.</li>
         </ol>
+        <h3>Importing into an existing table</h3>
+        <p>
+          Each column in the file is matched to a field with the same name. Columns with no matching field are set to <b>+ New field</b>, so
+          nothing is dropped by accident. Use <b>Import all</b> to bring in every column (matching fields where they exist, new fields otherwise)
+          or <b>Don’t import any</b> to clear the list and pick just the columns you want. New number fields keep as many decimal places as the
+          file uses.
+        </p>
         <h2>Export</h2>
         <p>
           Use <b>Download</b> from the view menu to export the records visible in the current view, in view order, as CSV, Excel (.xlsx) or JSON.
@@ -478,13 +498,38 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
     id: "interfaces",
     group: "Collaboration",
     title: "Interfaces",
-    summary: "Build simple app-like pages on top of your data.",
-    keywords: "interface page dashboard app designer elements",
+    summary: "Build dashboards and app-like pages on top of your data: charts, numbers, lists and date filters.",
+    keywords: "interface page dashboard app designer elements chart bar line area pie donut metric number date filter range trend day week month quarter year",
     body: () => (
       <>
         <p>
           Interfaces are pages built from your base’s data, such as dashboards, record lists and detail pages, for people who don’t need the full grid.
           Open <b>Interfaces</b> from the top of a base to create or edit one, then add elements and connect each to a table or view.
+        </p>
+        <h2>Charts</h2>
+        <Table
+          head={["Chart", "Good for"]}
+          rows={[
+            ["Bar", "Comparing groups, or totals per day/week/month."],
+            ["Horizontal bar", "Long category names, ranked from biggest to smallest."],
+            ["Line / Area", "Trends over time."],
+            ["Pie / Donut", "Shares of a whole. Small slices are combined into “Other”."],
+          ]}
+        />
+        <ul>
+          <li>
+            <b>X axis</b>: the field to group by. When it is a date, choose <b>Group dates by</b> day, week (starting Monday), month, quarter or year.
+            Periods with no records are shown as zero so gaps are visible.
+          </li>
+          <li><b>Values</b>: count records, or sum, average, minimum or maximum a number field. Add up to four values to compare them on one chart.</li>
+          <li><b>Sort</b> by label (oldest to newest for dates) or by value, and limit how many groups or periods are shown.</li>
+          <li>Hover a bar or point to see its exact numbers. Turn value labels and the legend on or off in the chart’s settings.</li>
+        </ul>
+        <h2>Date filters</h2>
+        <p>
+          Add a <b>Date filter</b> element to let viewers choose a period: all time, today, the last 7, 30 or 90 days, this or last month, this year,
+          or a custom from–to range. Every chart, number and list on the page that uses the same table follows the filter. Dates are read in each
+          viewer’s own time zone.
         </p>
         <p>
           People with the <b>Interface only</b> role on a base can use its interfaces but can’t open the tables directly. See{" "}
@@ -547,7 +592,10 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
           without signing in. Options:
         </p>
         <ul>
-          <li><b>Password protection</b>: visitors must enter a password.</li>
+          <li>
+            <b>Password protection</b>: visitors must enter a password. After 5 wrong tries the link is locked for that visitor for 15 minutes, and
+            the owner is alerted (see <To topic="sign-in-security">Sign-in security</To>).
+          </li>
           <li><b>Expiration date</b>: the link stops working afterwards.</li>
           <li><b>Allow copying data</b>: lets visitors copy or download records.</li>
         </ul>
@@ -677,6 +725,38 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
           </li>
           <li><b>Sessions</b>: see where you’re signed in and sign out of the others.</li>
         </ul>
+      </>
+    ),
+  },
+  {
+    id: "sign-in-security",
+    group: "Admin & security",
+    title: "Sign-in security: wrong passwords",
+    summary: "Five wrong passwords lock an account or a shared link for 15 minutes, and the owner is alerted.",
+    keywords: "wrong password attempts lockout locked account brute force security alert owner ip address warning share password",
+    body: () => (
+      <>
+        <p>
+          TableOS limits how many times a wrong password can be tried. This applies to members’ accounts and to password-protected shared links.
+        </p>
+        <Table
+          head={["Attempt", "What the person sees"]}
+          rows={[
+            ["1st and 2nd wrong password", "The usual “incorrect password” message. No warning yet."],
+            ["3rd and 4th", "A warning with the number of attempts left, e.g. “Warning: 2 attempts left before this account is locked for 15 minutes.”"],
+            ["5th", "The account (or link) is locked for 15 minutes, with a countdown. The sign-in button is disabled until it ends."],
+          ]}
+        />
+        <h2>Owner alerts</h2>
+        <p>
+          Every wrong password sends the organization owner an in-app notification and an email straight away, with the email address that was
+          tried, the IP address, the browser, the time and the attempt number (for example “Wrong password 3 of 5”). Another alert is sent when the
+          account or link is locked. Signing in with the right password resets the count.
+        </p>
+        <Note>
+          The owner’s own account is not locked by this policy, so an owner can’t be locked out of their organization. Owner sign-ins are still
+          protected by the general rate limit (10 tries per 15 minutes from one IP) and by <To topic="account">two-factor authentication</To>.
+        </Note>
       </>
     ),
   },
@@ -814,9 +894,15 @@ const { records, nextCursor } = await res.json();`}</Pre>
             ["403", "The token lacks the needed type (read/write/delete), can’t use this base, or the table is synced (read-only)."],
             ["404", "The base, table or record doesn’t exist, or the token can’t see it."],
             ["409", "The record changed since you read it (when you send a version)."],
+            ["423", "The account or shared link is locked after too many wrong passwords; see the retry-after header."],
             ["429", "Too many requests; wait and retry."],
           ]}
         />
+        <h2>Version</h2>
+        <p>
+          <code>GET /v1/version</code> (no token needed) returns the running TableOS version and build, and every response carries an{" "}
+          <code>x-tableos-version</code> header. See <To topic="releases">Release notes</To>.
+        </p>
         <Note>
           A token acts with the owner’s permissions, limited further by its token types and bases. Changes made through the API show up in record
           history as made via the API.
@@ -852,6 +938,43 @@ const { records, nextCursor } = await res.json();`}</Pre>
           ["1–9", "Set a rating cell"],
         ]}
       />
+    ),
+  },
+
+  /* ---------------------------------------------------------------- About */
+  {
+    id: "releases",
+    group: "About",
+    title: "Release notes",
+    summary: "What changed in each version of TableOS.",
+    keywords: "release notes changelog version what's new updates history",
+    body: () => (
+      <>
+        <p>
+          You are using <b>TableOS v{APP_VERSION}</b>
+          {APP_COMMIT ? (
+            <>
+              {" "}
+              (build <code>{APP_COMMIT}</code>)
+            </>
+          ) : null}
+          . Versions follow <a href="https://semver.org" target="_blank" rel="noreferrer">semantic versioning</a>: the middle number goes up
+          with new features and the last number with fixes.
+        </p>
+        {RELEASES.map((r) => (
+          <div key={r.version}>
+            <h2>
+              v{r.version} <span className={s.releaseDate}>· {r.date}</span>
+            </h2>
+            <p>{r.title}</p>
+            <ul>
+              {r.items.map((it) => (
+                <li key={it}>{it}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </>
     ),
   },
 ];

@@ -57,6 +57,26 @@
   color: var(--tabula-color-text-muted);
   padding: 6px 8px;
 }
+.version {
+  display: block;
+  margin: var(--tabula-space-4) 8px 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--tabula-color-text-muted);
+  cursor: pointer;
+}
+.releaseDate {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--tabula-color-text-muted);
+}
+.version:hover {
+  color: var(--tabula-color-text);
+  text-decoration: underline;
+}
 
 .article {
   padding: var(--tabula-space-6) var(--tabula-space-7, 40px) var(--tabula-space-7, 48px);

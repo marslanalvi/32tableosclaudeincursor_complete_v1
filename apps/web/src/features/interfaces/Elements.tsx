@@ -5,8 +5,9 @@ import { Dialog } from "../../app/ui.tsx";
 import { ApiProblemError, type FieldDto, type TableDto } from "../../lib/api.ts";
 import {
   interfacesApi,
-  type ChartPoint,
   type CollectionConfig,
+  type DatePreset,
+  type DateRange,
   type ElementField,
   type ElementRecord,
   type InterfaceElement,
@@ -16,7 +17,14 @@ import { viewRecordsApi } from "../../lib/api-areas/views.ts";
 import { CellValueDisplay, ValueEditor } from "../views/field-value.tsx";
 import { FormPreview } from "../views/FormView.tsx";
 import { isEditableField } from "../views/view-utils.ts";
+import { ChartElement } from "./Charts.tsx";
 import styles from "./interfaces.module.css";
+
+export interface DateFilterState {
+  preset: DatePreset;
+  from?: string | null;
+  to?: string | null;
+}
 
 export interface RenderCtx {
   baseId: string;
@@ -31,6 +39,9 @@ export interface RenderCtx {
   elements: InterfaceElement[];
   selections: Record<string, string>;
   select: (elementId: string, recordId: string | null) => void;
+  /** Date filter element id → chosen range; absent means the element's default preset. */
+  dateFilters: Record<string, DateFilterState>;
+  setDateFilter: (elementId: string, state: DateFilterState) => void;
   navigate: (pageId: string) => void;
   editing: boolean;
   canWrite: boolean;
@@ -41,7 +52,7 @@ export function errorText(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong";
 }
 
-function tableOf(ctx: RenderCtx, tableId: string | undefined): TableDto | undefined {
+export function tableOf(ctx: RenderCtx, tableId: string | undefined): TableDto | undefined {
   return ctx.tables.find((t) => t.id === tableId);
 }
 
@@ -52,7 +63,7 @@ function resolveFields(table: TableDto | undefined, fields: ElementField[]): Arr
     .filter((x): x is { ef: ElementField; field: FieldDto } => Boolean(x.field));
 }
 
-function Problem({ children }: { children: ReactNode }) {
+export function Problem({ children }: { children: ReactNode }) {
   return <div className={styles.elementProblem}>{children}</div>;
 }
 
@@ -76,7 +87,117 @@ export function ElementView({ el, ctx }: { el: InterfaceElement; ctx: RenderCtx 
       return <FormElement el={el} ctx={ctx} />;
     case "button":
       return <ButtonElement el={el} ctx={ctx} />;
+    case "date_filter":
+      return <DateFilterElement el={el} ctx={ctx} />;
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Date filters */
+
+function localDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export const DATE_PRESET_LABEL: Record<DatePreset, string> = {
+  all: "All time",
+  today: "Today",
+  last_7: "Last 7 days",
+  last_30: "Last 30 days",
+  last_90: "Last 90 days",
+  this_month: "This month",
+  last_month: "Last month",
+  this_year: "This year",
+  custom: "Custom range",
+};
+
+/** Inclusive bounds of a preset, in the viewer's calendar. */
+export function presetRange(preset: DatePreset, now = new Date()): DateRange {
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const back = (days: number) => ({ from: localDay(new Date(y, m, now.getDate() - days)), to: localDay(now) });
+  switch (preset) {
+    case "today":
+      return back(0);
+    case "last_7":
+      return back(6);
+    case "last_30":
+      return back(29);
+    case "last_90":
+      return back(89);
+    case "this_month":
+      return { from: localDay(new Date(y, m, 1)), to: localDay(new Date(y, m + 1, 0)) };
+    case "last_month":
+      return { from: localDay(new Date(y, m - 1, 1)), to: localDay(new Date(y, m, 0)) };
+    case "this_year":
+      return { from: `${y}-01-01`, to: `${y}-12-31` };
+    default:
+      return {};
+  }
+}
+
+function filterStateOf(el: Extract<InterfaceElement, { type: "date_filter" }>, ctx: RenderCtx): DateFilterState {
+  return ctx.dateFilters[el.id] ?? { preset: el.config.defaultPreset };
+}
+
+/** Ranges from this page's date filters on `tableId`, or undefined when none narrows anything. */
+export function rangesFor(ctx: RenderCtx, tableId: string): Record<string, DateRange> | undefined {
+  const out: Record<string, DateRange> = {};
+  for (const e of ctx.elements) {
+    if (e.type !== "date_filter" || e.config.tableId !== tableId) continue;
+    const st = filterStateOf(e, ctx);
+    const r = st.preset === "custom" ? { from: st.from || null, to: st.to || null } : presetRange(st.preset);
+    if (r.from || r.to) out[e.id] = r;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+function DateFilterElement({ el, ctx }: { el: Extract<InterfaceElement, { type: "date_filter" }>; ctx: RenderCtx }) {
+  const table = tableOf(ctx, el.config.tableId);
+  const field = table?.fields.find((f) => f.id === el.config.fieldId);
+  if (!table) return <Problem>This filter's table was deleted.</Problem>;
+  if (!field) return <Problem>Pick a date field for this filter.</Problem>;
+  const st = filterStateOf(el, ctx);
+  const range = st.preset === "custom" ? { from: st.from, to: st.to } : presetRange(st.preset);
+  const set = (patch: Partial<DateFilterState>) => ctx.setDateFilter(el.id, { ...st, ...patch });
+  const presets = (Object.keys(DATE_PRESET_LABEL) as DatePreset[]).filter((p) => p !== "custom");
+  return (
+    <div className={styles.dateFilter} role="group" aria-label={`Filter by ${field.name}`}>
+      {el.title ? null : <span className={styles.dateFilterLabel}>{field.name}</span>}
+      <div className={styles.dateFilterChips}>
+        {presets.map((p) => (
+          <button
+            key={p}
+            type="button"
+            className={`${styles.dateChip} ${st.preset === p ? styles.dateChipOn : ""}`}
+            aria-pressed={st.preset === p}
+            onClick={() => set({ preset: p })}
+          >
+            {DATE_PRESET_LABEL[p]}
+          </button>
+        ))}
+      </div>
+      <label className={styles.dateFilterRange}>
+        <span className={styles.srOnly}>From</span>
+        <input
+          type="date"
+          value={range.from ?? ""}
+          max={range.to ?? undefined}
+          onChange={(e) => set({ preset: "custom", from: e.target.value || null, to: range.to ?? null })}
+        />
+      </label>
+      <span className={styles.muted}>to</span>
+      <label className={styles.dateFilterRange}>
+        <span className={styles.srOnly}>To</span>
+        <input
+          type="date"
+          value={range.to ?? ""}
+          min={range.from ?? undefined}
+          onChange={(e) => set({ preset: "custom", to: e.target.value || null, from: range.from ?? null })}
+        />
+      </label>
+    </div>
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -136,16 +257,21 @@ export function TextBlock({ body }: { body: string }) {
 /* ------------------------------------------------------------------ */
 /* Aggregates */
 
-function useAggregate(el: InterfaceElement, ctx: RenderCtx, tableId: string) {
+export function useAggregate(el: InterfaceElement, ctx: RenderCtx, tableId: string) {
+  const dateRanges = rangesFor(ctx, tableId);
   return useQuery({
-    queryKey: ["records", ctx.baseId, tableId, "itf-agg", ctx.interfaceId, ctx.pageId, el.id, ctx.draft, ctx.token],
-    queryFn: () => interfacesApi.aggregateElement(ctx.baseId, ctx.interfaceId, ctx.pageId, el.id, { draft: ctx.draft }),
+    queryKey: ["records", ctx.baseId, tableId, "itf-agg", ctx.interfaceId, ctx.pageId, el.id, ctx.draft, ctx.token, dateRanges],
+    queryFn: () =>
+      interfacesApi.aggregateElement(ctx.baseId, ctx.interfaceId, ctx.pageId, el.id, {
+        draft: ctx.draft,
+        ...(dateRanges ? { context: { dateRanges } } : {}),
+      }),
     placeholderData: keepPreviousData,
     staleTime: 15_000,
   });
 }
 
-function formatNumber(v: unknown, format?: { style: string; precision?: number; currencyCode?: string }): string {
+export function formatNumber(v: unknown, format?: { style: string; precision?: number; currencyCode?: string }): string {
   const n = typeof v === "number" ? v : Number(v);
   if (v === null || v === undefined || Number.isNaN(n)) return "—";
   const precision = format?.precision ?? (Number.isInteger(n) ? 0 : 2);
@@ -171,126 +297,16 @@ function MetricElement({ el, ctx }: { el: Extract<InterfaceElement, { type: "met
   return (
     <div className={styles.metric}>
       <div className={styles.metricValue} aria-live="polite">
-        {q.isLoading ? "…" : q.isError ? "—" : formatNumber(q.data?.value, el.config.format)}
+        {q.isLoading
+          ? "…"
+          : q.isError
+            ? "—"
+            : formatNumber(
+                q.data?.value ?? (q.data?.count === 0 && el.config.measure.agg !== "avg" && el.config.measure.agg !== "min" && el.config.measure.agg !== "max" ? 0 : null),
+                el.config.format,
+              )}
       </div>
       <div className={styles.metricCaption}>{q.isError ? errorText(q.error) : caption}</div>
-    </div>
-  );
-}
-
-const CHART_COLORS = ["#166ee1", "#f7a300", "#1aa365", "#e2405f", "#8e4fc9", "#2bb7c6", "#c96b1a", "#5a6576"];
-
-function pointLabel(field: FieldDto | undefined, p: ChartPoint): string {
-  if (p.label === null || p.label === undefined || p.label === "") return "(Empty)";
-  if (!field) return String(p.label);
-  const text = cellValueToText(field, p.label);
-  return text || String(p.label);
-}
-
-function ChartElement({ el, ctx }: { el: Extract<InterfaceElement, { type: "chart" }>; ctx: RenderCtx }) {
-  const q = useAggregate(el, ctx, el.config.source.tableId);
-  const table = tableOf(ctx, el.config.source.tableId);
-  const xField = table?.fields.find((f) => f.id === el.config.x.fieldId);
-  if (!table) return <Problem>This chart's table was deleted.</Problem>;
-  if (!xField) return <Problem>Pick a field to group the chart by.</Problem>;
-  if (q.isLoading) return <div className={styles.chartEmpty}>Loading…</div>;
-  if (q.isError) return <Problem>{errorText(q.error)}</Problem>;
-  const points = (q.data?.points ?? []).map((p) => ({ label: pointLabel(xField, p), value: Number(p.values[0] ?? 0) || 0 }));
-  if (points.length === 0) return <div className={styles.chartEmpty}>No data to chart</div>;
-  return (
-    <div className={styles.chart}>
-      {el.config.kind === "pie" || el.config.kind === "donut" ? (
-        <PieChart points={points} donut={el.config.kind === "donut"} />
-      ) : (
-        <XYChart points={points} line={el.config.kind === "line"} />
-      )}
-      {q.data?.truncated ? <div className={styles.muted}>Showing the first {points.length} groups</div> : null}
-    </div>
-  );
-}
-
-function XYChart({ points, line }: { points: Array<{ label: string; value: number }>; line: boolean }) {
-  const W = 560;
-  const H = 220;
-  const pad = { l: 40, r: 12, t: 12, b: 44 };
-  const max = Math.max(1, ...points.map((p) => p.value));
-  const slot = (W - pad.l - pad.r) / points.length;
-  const yOf = (v: number) => pad.t + (H - pad.t - pad.b) * (1 - v / max);
-  const ticks = [0, 0.5, 1].map((f) => Math.round(max * f * 100) / 100);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className={styles.chartSvg} role="img" aria-label={points.map((p) => `${p.label}: ${p.value}`).join(", ")}>
-      {ticks.map((t) => (
-        <g key={t}>
-          <line x1={pad.l} x2={W - pad.r} y1={yOf(t)} y2={yOf(t)} className={styles.chartGrid} />
-          <text x={pad.l - 6} y={yOf(t) + 4} textAnchor="end" className={styles.chartTick}>
-            {t}
-          </text>
-        </g>
-      ))}
-      {line ? (
-        <polyline
-          fill="none"
-          stroke={CHART_COLORS[0]}
-          strokeWidth={2}
-          points={points.map((p, i) => `${pad.l + slot * (i + 0.5)},${yOf(p.value)}`).join(" ")}
-        />
-      ) : null}
-      {points.map((p, i) => {
-        const cx = pad.l + slot * (i + 0.5);
-        const bw = Math.max(4, Math.min(48, slot * 0.6));
-        return (
-          <g key={i}>
-            <title>{`${p.label}: ${p.value}`}</title>
-            {line ? (
-              <circle cx={cx} cy={yOf(p.value)} r={3.5} fill={CHART_COLORS[0]} />
-            ) : (
-              <rect x={cx - bw / 2} y={yOf(p.value)} width={bw} height={Math.max(0, H - pad.b - yOf(p.value))} rx={3} fill={CHART_COLORS[0]} />
-            )}
-            <text x={cx} y={H - pad.b + 16} textAnchor="middle" className={styles.chartTick}>
-              {p.label.length > 12 ? `${p.label.slice(0, 11)}…` : p.label}
-            </text>
-          </g>
-        );
-      })}
-    </svg>
-  );
-}
-
-function PieChart({ points, donut }: { points: Array<{ label: string; value: number }>; donut: boolean }) {
-  const total = points.reduce((s, p) => s + p.value, 0) || 1;
-  const R = 80;
-  const r = donut ? 46 : 0;
-  let a0 = -Math.PI / 2;
-  const arc = (a: number, rad: number) => `${100 + rad * Math.cos(a)},${100 + rad * Math.sin(a)}`;
-  return (
-    <div className={styles.pie}>
-      <svg viewBox="0 0 200 200" className={styles.pieSvg} role="img" aria-label={points.map((p) => `${p.label}: ${p.value}`).join(", ")}>
-        {points.map((p, i) => {
-          const frac = p.value / total;
-          const a1 = a0 + frac * Math.PI * 2;
-          const large = frac > 0.5 ? 1 : 0;
-          const d =
-            frac >= 0.9999
-              ? `M ${arc(-Math.PI / 2, R)} A ${R} ${R} 0 1 1 ${arc(-Math.PI / 2 - 0.0001, R)} Z`
-              : `M ${arc(a0, R)} A ${R} ${R} 0 ${large} 1 ${arc(a1, R)} L ${r ? arc(a1, r) : "100,100"} ${r ? `A ${r} ${r} 0 ${large} 0 ${arc(a0, r)}` : ""} Z`;
-          a0 = a1;
-          return (
-            <path key={i} d={d} fill={CHART_COLORS[i % CHART_COLORS.length]}>
-              <title>{`${p.label}: ${p.value}`}</title>
-            </path>
-          );
-        })}
-        {donut ? <circle cx={100} cy={100} r={r} fill="var(--tabula-color-bg)" /> : null}
-      </svg>
-      <ul className={styles.legend}>
-        {points.map((p, i) => (
-          <li key={i}>
-            <span className={styles.legendSwatch} style={{ background: CHART_COLORS[i % CHART_COLORS.length] }} />
-            <span className={styles.legendLabel}>{p.label}</span>
-            <span className={styles.legendValue}>{p.value}</span>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }
@@ -320,12 +336,14 @@ function CollectionElement({
     return () => clearTimeout(t);
   }, [search]);
 
+  const dateRanges = rangesFor(ctx, cfg.dataSource.tableId);
   const q = useInfiniteQuery({
-    queryKey: ["records", ctx.baseId, cfg.dataSource.tableId, "itf", ctx.interfaceId, ctx.pageId, el.id, ctx.draft, ctx.token, debounced],
+    queryKey: ["records", ctx.baseId, cfg.dataSource.tableId, "itf", ctx.interfaceId, ctx.pageId, el.id, ctx.draft, ctx.token, debounced, dateRanges],
     queryFn: ({ pageParam }) =>
       interfacesApi.queryElement(ctx.baseId, ctx.interfaceId, ctx.pageId, el.id, {
         draft: ctx.draft,
         pageSize: el.type === "gallery" ? 24 : 50,
+        ...(dateRanges ? { context: { dateRanges } } : {}),
         ...(debounced ? { search: debounced } : {}),
         ...(pageParam ? { cursor: pageParam } : {}),
       }),

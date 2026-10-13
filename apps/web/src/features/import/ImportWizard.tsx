@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiProblemError, type BaseDetail } from "../../lib/api.ts";
 import { fieldsApi } from "../../lib/api-areas/fields.ts";
 import { importRows } from "../../lib/api-areas/collab.ts";
@@ -38,6 +38,17 @@ interface ColumnMap {
   target: string; // field id | NEW_FIELD | SKIP
   newName: string;
   newType: DetectedType;
+}
+
+/** Most decimal places used in a numeric column (0–8), so 0.0079 doesn't display as 0. */
+function decimalsIn(rows: string[][], col: number): number {
+  let max = 0;
+  for (const r of rows) {
+    const m = /\.(\d+)\s*$/.exec((r[col] ?? "").trim().replace(/e[+-]?\d+$/i, ""));
+    if (m) max = Math.max(max, m[1]!.replace(/0+$/, "").length);
+    if (max >= 8) return 8;
+  }
+  return max;
 }
 
 function errorText(err: unknown): string {
@@ -103,25 +114,38 @@ export function ImportWizard({
   const sheet = useMemo(() => (grid ? toSheet(grid, hasHeader) : null), [grid, hasHeader]);
   const destTable = tables.find((t) => t.id === destTableId);
 
+  /** A column goes into the existing field with the same name, otherwise into a new field. */
+  const defaultTarget = useCallback(
+    (header: string) => {
+      const fields = dest === "existing" ? (destTable?.fields ?? []) : [];
+      const match = fields.find(
+        (f) => f.name.trim().toLowerCase() === header.trim().toLowerCase() && WRITABLE_TYPES.has(f.type),
+      );
+      return match ? match.id : NEW_FIELD;
+    },
+    [dest, destTable],
+  );
+
   // (Re)build the default mapping whenever the source or destination changes.
   useEffect(() => {
     if (!sheet) return;
-    const fields = dest === "existing" ? (destTable?.fields ?? []) : [];
     setMapping(
       sheet.headers.map((header, i) => {
-        const sample = sheet.rows.slice(0, 200).map((r) => r[i] ?? "");
-        const detected = detectType(sample);
-        const match = fields.find(
-          (f) => f.name.trim().toLowerCase() === header.trim().toLowerCase() && WRITABLE_TYPES.has(f.type),
-        );
-        return {
-          target: match ? match.id : dest === "existing" ? SKIP : NEW_FIELD,
-          newName: header,
-          newType: detected,
-        };
+        // Look at the whole column (evenly sampled when huge): one odd value late in the file
+        // would otherwise fail its entire row against a stricter type.
+        const step = Math.max(1, Math.ceil(sheet.rows.length / 5000));
+        const sample: string[] = [];
+        for (let r = 0; r < sheet.rows.length; r += step) sample.push(sheet.rows[r]?.[i] ?? "");
+        return { target: defaultTarget(header), newName: header, newType: detectType(sample) };
       }),
     );
-  }, [sheet, dest, destTable]);
+  }, [sheet, defaultTarget]);
+
+  const importAll = () =>
+    setMapping((old) =>
+      old.map((m, i) => (m.target === SKIP ? { ...m, target: defaultTarget(sheet?.headers[i] ?? m.newName) } : m)),
+    );
+  const skipAll = () => setMapping((old) => old.map((m) => ({ ...m, target: SKIP })));
 
   async function loadFile(file: File) {
     setError(null);
@@ -204,13 +228,15 @@ export function ImportWizard({
       }
       // 2) New fields.
       const typeOf = new Map(fields.map((f) => [f.id, f.type]));
-      for (const m of effective) {
+      for (const [col, m] of effective.entries()) {
         if (m.target !== NEW_FIELD) continue;
-        const f = await fieldsApi.create(baseId, targetTableId, {
-          name: m.newName.trim(),
-          type: m.newType,
-          ...(m.newType === "single_select" || m.newType === "multi_select" ? { config: { options: [] } } : {}),
-        });
+        const config =
+          m.newType === "single_select" || m.newType === "multi_select"
+            ? { config: { options: [] } }
+            : m.newType === "number"
+              ? { config: { precision: decimalsIn(sheet.rows, col) } }
+              : {};
+        const f = await fieldsApi.create(baseId, targetTableId, { name: m.newName.trim(), type: m.newType, ...config });
         m.target = f.id;
         typeOf.set(f.id, f.type);
       }
@@ -429,10 +455,27 @@ export function ImportWizard({
                 <input type="checkbox" checked={hasHeader} onChange={(e) => setHasHeader(e.target.checked)} />
                 First row contains field names
               </label>
-              <p className={s.hint}>
-                {fileName} · {sheet.rows.length.toLocaleString()} row{sheet.rows.length === 1 ? "" : "s"} ·{" "}
-                {sheet.headers.length} column{sheet.headers.length === 1 ? "" : "s"}
-              </p>
+              <div className={s.row} style={{ justifyContent: "space-between", flexWrap: "wrap" }}>
+                <p className={s.hint} style={{ margin: 0 }}>
+                  {fileName} · {sheet.rows.length.toLocaleString()} row{sheet.rows.length === 1 ? "" : "s"} ·{" "}
+                  {sheet.headers.length} column{sheet.headers.length === 1 ? "" : "s"}
+                </p>
+                <span className={s.row} style={{ gap: 8 }}>
+                  <button
+                    type="button"
+                    className={s.btnSecondary}
+                    style={{ minHeight: 30, padding: "4px 12px" }}
+                    disabled={mappedCount === sheet.headers.length}
+                    onClick={importAll}
+                    title="Map every column: to the field with the same name, or to a new field"
+                  >
+                    Import all
+                  </button>
+                  <button type="button" className={s.btnSecondary} style={{ minHeight: 30, padding: "4px 12px" }} disabled={mappedCount === 0} onClick={skipAll}>
+                    Don’t import any
+                  </button>
+                </span>
+              </div>
               {duplicateNames ? (
                 <p className={s.error}>New field names must be unique and must not match existing fields.</p>
               ) : null}

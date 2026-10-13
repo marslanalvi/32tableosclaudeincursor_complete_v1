@@ -594,10 +594,14 @@ export function ViewToolbar({
   views,
   onSelectView,
   onCreateView,
+  viewsSidebarOpen,
+  onToggleViewsSidebar,
 }: {
   baseId: string;
   table: TableDto;
   view: ViewDto | undefined;
+  viewsSidebarOpen?: boolean;
+  onToggleViewsSidebar?: () => void;
   kind: ViewKind;
   config: ViewConfig;
   update: (patch: Partial<ViewConfig>) => void;
@@ -648,6 +652,20 @@ export function ViewToolbar({
     <div className={styles.toolbarShell}>
       <div className={styles.toolbar} role="toolbar" aria-label="View toolbar">
         <div className={styles.viewTitle}>
+          {onToggleViewsSidebar ? (
+            <button
+              type="button"
+              className={`${styles.sidebarToggle} ${viewsSidebarOpen ? styles.sidebarToggleOn : ""}`}
+              onClick={onToggleViewsSidebar}
+              aria-label={viewsSidebarOpen ? "Hide views sidebar" : "Show views sidebar"}
+              aria-pressed={viewsSidebarOpen}
+              title={viewsSidebarOpen ? "Hide views" : "Show views"}
+            >
+              <svg viewBox="0 0 16 16" aria-hidden>
+                <path d="M2 4h12M2 8h12M2 12h12" />
+              </svg>
+            </button>
+          ) : null}
           {onCreateView || onSelectView ? (
             <DropdownMenu
               trigger={({ open: menuOpen, toggle }) => (

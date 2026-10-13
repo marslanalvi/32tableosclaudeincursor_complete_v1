@@ -130,8 +130,32 @@ const elementQueryBody = z.object({
   search: z.string().max(500).optional(),
   pageSize: z.number().int().min(1).max(500).optional(),
   cursor: z.string().nullish(),
-  context: z.object({ selections: z.record(z.string(), z.string()).optional() }).optional(),
+  context: z
+    .object({
+      selections: z.record(z.string(), z.string()).optional(),
+      /** Date filter element id → inclusive `YYYY-MM-DD` bounds. */
+      dateRanges: z
+        .record(z.string(), z.object({ from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish(), to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullish() }))
+        .optional(),
+    })
+    .optional(),
 });
+
+type ElementQueryBody = z.infer<typeof elementQueryBody>;
+
+/** The page's date filters that target `tableId`, as one AND-able filter. */
+function dateRangeFilter(page: PageLayout, tableId: string, body: ElementQueryBody): FilterAstJson | null {
+  const ranges = body.context?.dateRanges;
+  if (!ranges) return null;
+  const children: FilterAstJson[] = [];
+  for (const e of page.elements) {
+    if (e.type !== "date_filter" || e.config.tableId !== tableId) continue;
+    const r = ranges[e.id];
+    if (r?.from) children.push({ kind: "condition", fieldId: e.config.fieldId, op: "isOnOrAfter", value: r.from });
+    if (r?.to) children.push({ kind: "condition", fieldId: e.config.fieldId, op: "isOnOrBefore", value: r.to });
+  }
+  return children.length ? { kind: "and", children } : null;
+}
 
 /* ───────────────────────── helpers ───────────────────────── */
 
@@ -637,7 +661,7 @@ export async function registerInterfaceRoutes(app: FastifyInstance, ctx: AppCont
           ctx.db,
           tableUuid(src.tableId),
           {
-            filter: src.filter ?? undefined,
+            filter: and(src.filter ?? null, dateRangeFilter(page, src.tableId, body)) ?? undefined,
             viewId: src.baseViewId ?? undefined,
             sort: src.sorts,
             search: el.config.searchable ? body.search : undefined,
@@ -690,7 +714,7 @@ export async function registerInterfaceRoutes(app: FastifyInstance, ctx: AppCont
       if (!s) return;
       if (!authorize(s.snapshot, "record.read")) throw new ApiError(403, "FORBIDDEN", "You can't read records in this base");
       const body = elementQueryBody.parse(request.body ?? {});
-      const { el } = await resolveElement(s, request, body.draft === true);
+      const { el, page } = await resolveElement(s, request, body.draft === true);
       const user = await loadUserQueryContext(ctx.db, s.userId);
       if (el.type !== "metric" && el.type !== "chart") {
         throw new ApiError(422, "VALIDATION_FAILED", `Element type ${el.type} has no aggregates`);
@@ -702,9 +726,9 @@ export async function registerInterfaceRoutes(app: FastifyInstance, ctx: AppCont
         ctx.db,
         tableUuid(src.tableId),
         {
-          filter: src.filter ?? undefined,
+          filter: and(src.filter ?? null, dateRangeFilter(page, src.tableId, body)) ?? undefined,
           viewId: src.baseViewId ?? undefined,
-          groupBy: el.type === "chart" ? [{ fieldId: el.config.x.fieldId }] : [],
+          groupBy: el.type === "chart" ? [{ fieldId: el.config.x.fieldId, bucket: el.config.x.bucket }] : [],
           aggregates,
         },
         { user },
@@ -725,8 +749,16 @@ export async function registerInterfaceRoutes(app: FastifyInstance, ctx: AppCont
       const sort = el.config.x.sort;
       if (sort === "value_desc") points.sort((a, b) => Number(b.values[0] ?? 0) - Number(a.values[0] ?? 0));
       if (sort === "value_asc") points.sort((a, b) => Number(a.values[0] ?? 0) - Number(b.values[0] ?? 0));
-      const truncated = points.length > el.config.x.limit;
-      points = points.slice(0, el.config.x.limit);
+      const limit = el.config.x.limit;
+      let truncated: boolean;
+      if (el.config.x.bucket && sort === "label") {
+        const dated = points.filter((p) => p.label !== null && p.label !== undefined);
+        truncated = dated.length > limit;
+        points = [...dated.slice(-limit), ...points.filter((p) => p.label === null || p.label === undefined)];
+      } else {
+        truncated = points.length > limit;
+        points = points.slice(0, limit);
+      }
       void reply.send({ points, truncated, measures: measures.map((m) => ({ agg: m.agg, fieldId: m.fieldId ?? null, label: m.label ?? null })) });
     }),
   );

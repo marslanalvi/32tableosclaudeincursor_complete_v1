@@ -50,27 +50,6 @@ function orderedIds(qc: ReturnType<typeof useQueryClient>, baseId: string, table
   return [];
 }
 
-/** Sync `?record=rec_…` with the URL (deep links). */
-export function useRecordParam(): [string | null, (id: string | null) => void] {
-  const read = () => new URLSearchParams(window.location.search).get("record");
-  const [value, setValue] = useState<string | null>(read);
-  useEffect(() => {
-    const onPop = () => setValue(read());
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
-  const set = useCallback((id: string | null) => {
-    const url = new URL(window.location.href);
-    if (id) url.searchParams.set("record", id);
-    else url.searchParams.delete("record");
-    const had = new URLSearchParams(window.location.search).has("record");
-    if (id && !had) window.history.pushState(window.history.state, "", url);
-    else window.history.replaceState(window.history.state, "", url);
-    setValue(id);
-  }, []);
-  return [value, set];
-}
-
 export interface RecordDrawerProps {
   baseId: string;
   tableId: string;

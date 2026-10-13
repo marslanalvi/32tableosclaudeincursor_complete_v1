@@ -2,6 +2,7 @@ import { Link, useRouter, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiProblemError, type AuthUser, type BaseSummary, type ViewDto } from "../lib/api.ts";
+import { readBaseLocation, writeBaseLocation } from "../lib/base-url.ts";
 import { forgetBaseStructure, loadBaseStructure, saveBaseStructure } from "../lib/base-structure-cache.ts";
 import { authQueryKey } from "../features/auth/use-auth.ts";
 import { hiddenTableIdsOf, shellApi } from "../lib/api-areas/shell.ts";
@@ -37,9 +38,12 @@ import styles from "./base.module.css";
 
 type BaseTab = "data" | "automations" | "interfaces" | "forms";
 
+const VIEWS_SIDEBAR_KEY = "tableos:views-sidebar";
+
 function readSearchFlag(name: string): boolean {
   try {
-    return new URL(window.location.href).searchParams.get(name) === "1";
+    const v = new URL(window.location.href).searchParams.get(name);
+    return v === "1" || v === '"1"';
   } catch {
     return false;
   }
@@ -161,8 +165,25 @@ export function BasePage({ baseId }: { baseId: string }) {
   const { role } = useBaseRole(baseId);
   const [baseTab, setBaseTab] = useState<BaseTab>("data");
   const [automationTarget, setAutomationTarget] = useState<{ automationId: string; actionId?: string } | null>(null);
-  const [activeTableId, setActiveTableId] = useState<string | null>(null);
-  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [viewsSidebarOpen, setViewsSidebarOpen] = useState(() => {
+    try {
+      return localStorage.getItem(VIEWS_SIDEBAR_KEY) !== "closed";
+    } catch {
+      return true;
+    }
+  });
+  const toggleViewsSidebar = useCallback(() => {
+    setViewsSidebarOpen((open) => {
+      try {
+        localStorage.setItem(VIEWS_SIDEBAR_KEY, open ? "closed" : "open");
+      } catch {
+        /* private mode */
+      }
+      return !open;
+    });
+  }, []);
+  const [activeTableId, setActiveTableId] = useState<string | null>(() => readBaseLocation().tableId);
+  const [activeViewId, setActiveViewId] = useState<string | null>(() => readBaseLocation().viewId);
   const [shareOpen, setShareOpen] = useState(false);
   const [importTableId, setImportTableId] = useState<string | null>(null);
   const [exportTableId, setExportTableId] = useState<string | null>(null);
@@ -255,6 +276,30 @@ export function BasePage({ baseId }: { baseId: string }) {
 
   const activeView = views.find((v) => v.id === activeViewId) ?? views[0];
 
+  // Keep /bases/bas_…/tbl_…/viw_… in the address bar; switching table or view adds a history entry.
+  const settledViewId = activeViewId && views.some((v) => v.id === activeViewId) ? activeViewId : null;
+  useEffect(() => {
+    if (!resolvedTableId || (views.length && !settledViewId)) return;
+    const cur = readBaseLocation();
+    if (cur.baseId !== baseId) return;
+    const userMove =
+      Boolean(cur.tableId) &&
+      (cur.tableId !== resolvedTableId || (views.some((v) => v.id === cur.viewId) && cur.viewId !== settledViewId));
+    writeBaseLocation({ tableId: resolvedTableId, viewId: settledViewId }, userMove ? "push" : "replace");
+  }, [baseId, resolvedTableId, settledViewId, views.length]);
+
+  // Back / forward between tables and views.
+  useEffect(() => {
+    const onPop = () => {
+      const loc = readBaseLocation();
+      if (loc.baseId !== baseId) return;
+      if (loc.tableId) setActiveTableId(loc.tableId);
+      setActiveViewId(loc.viewId);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [baseId]);
+
   const createViewMutation = useMutation({
     mutationFn: (args: {
       type: ViewKind;
@@ -315,7 +360,7 @@ export function BasePage({ baseId }: { baseId: string }) {
       toast.success(`Created “${res.name}”`, {
         action: {
           label: "Open",
-          onClick: () => void router.navigate({ to: "/bases/$baseId", params: { baseId: res.id } }),
+          onClick: () => void router.navigate({ to: "/bases/$baseId/$", params: { baseId: res.id, _splat: "" } }),
         },
       });
     },
@@ -506,7 +551,7 @@ export function BasePage({ baseId }: { baseId: string }) {
             <div className={styles.workspace}>
               {activeTable ? (
                 <>
-                  <ViewsSidebar
+                  {viewsSidebarOpen ? <ViewsSidebar
                     views={views}
                     activeViewId={activeView?.id ?? null}
                     onSelectView={setActiveViewId}
@@ -515,11 +560,13 @@ export function BasePage({ baseId }: { baseId: string }) {
                     }
                     onToggleFavorite={(view) => favoriteMutation.mutate(view)}
                     onJumpToOriginal={(view) => setActiveViewId(view.id)}
-                  />
+                  /> : null}
                   <div className={styles.content}>
                     <TableGridPage
                       baseId={baseId}
                       table={activeTable}
+                      viewsSidebarOpen={viewsSidebarOpen}
+                      onToggleViewsSidebar={toggleViewsSidebar}
                       {...(activeView ? { activeView } : {})}
                       onOpenShare={() => setShareOpen(true)}
                       views={views}

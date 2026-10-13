@@ -25,6 +25,7 @@ import { api, type FilterAst, type TableDto, type ViewDto } from "../lib/api.ts"
 import type { ViewConfig } from "../lib/api-areas/views.ts";
 import styles from "../features/grid/grid.module.css";
 import viewStyles from "../features/views/views.module.css";
+import { useRecordParam } from "../lib/base-url.ts";
 
 /* ------------------------------------------------------------------ */
 /* C's components (CONTRACTS §8) are mounted when present; until then the
@@ -82,34 +83,6 @@ const LazyRecordDrawer = drawerLoader
     })
   : null;
 
-/* ------------------------------------------------------------------ */
-/* `?record=rec_…` URL param for the record drawer. */
-
-function readRecordParam(): string | null {
-  return new URLSearchParams(window.location.search).get("record");
-}
-
-function useRecordParam(): [string | null, (id: string | null) => void] {
-  const [recordId, setState] = useState<string | null>(readRecordParam);
-  useEffect(() => {
-    const onPop = () => setState(readRecordParam());
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
-  const set = useCallback((id: string | null) => {
-    const url = new URL(window.location.href);
-    if (id) url.searchParams.set("record", id);
-    else url.searchParams.delete("record");
-    if (url.href !== window.location.href) {
-      window.history[id && !readRecordParam() ? "pushState" : "replaceState"](window.history.state, "", url);
-    }
-    setState(id);
-  }, []);
-  return [recordId, set];
-}
-
-/* ------------------------------------------------------------------ */
-
 export function TableGridPage({
   baseId,
   table,
@@ -120,10 +93,14 @@ export function TableGridPage({
   views,
   onSelectView,
   onCreateView,
+  viewsSidebarOpen,
+  onToggleViewsSidebar,
 }: {
   baseId: string;
   table: TableDto;
   activeView?: ViewDto;
+  viewsSidebarOpen?: boolean;
+  onToggleViewsSidebar?: () => void;
   manageFieldsSignal?: number;
   onOpenShare?: () => void;
   views?: ViewDto[];
@@ -199,6 +176,7 @@ export function TableGridPage({
         {...(views ? { views } : {})}
         {...(onSelectView ? { onSelectView } : {})}
         {...(onCreateView ? { onCreateView } : {})}
+        {...(onToggleViewsSidebar ? { onToggleViewsSidebar, viewsSidebarOpen: viewsSidebarOpen ?? true } : {})}
         {...(count !== undefined && viewKind !== "grid" ? { recordCount: count } : {})}
       />
 

@@ -14,7 +14,7 @@ import {
 } from "../../lib/api-areas/interfaces.ts";
 import { useBaseDetail, useBaseRole } from "../grid/field-services.tsx";
 import { ELEMENT_LABEL, ELEMENT_PALETTE, TEMPLATES, makeElement, packLayout, templateLayout, type TemplateId } from "./element-defaults.ts";
-import { ElementView, errorText, type RenderCtx } from "./Elements.tsx";
+import { ElementView, errorText, type DateFilterState, type RenderCtx } from "./Elements.tsx";
 import { Inspector } from "./Inspector.tsx";
 import styles from "./interfaces.module.css";
 
@@ -399,7 +399,11 @@ function InterfaceWorkspace({
 
   /* ---- runtime context ---- */
   const [selections, setSelections] = useState<Record<string, string>>({});
-  useEffect(() => setSelections({}), [pageId]);
+  const [dateFilters, setDateFilters] = useState<Record<string, DateFilterState>>({});
+  useEffect(() => {
+    setSelections({});
+    setDateFilters({});
+  }, [pageId]);
   const ctx: RenderCtx = useMemo(
     () => ({
       baseId,
@@ -418,11 +422,13 @@ function InterfaceWorkspace({
           else delete next[elementId];
           return next;
         }),
+      dateFilters,
+      setDateFilter: (elementId, state) => setDateFilters((s) => ({ ...s, [elementId]: state })),
       navigate: (id) => setPageId(id),
       editing: effectiveMode === "edit",
       canWrite,
     }),
-    [baseId, itf.id, pageId, draft, token, tables, serverPages, elements, selections, effectiveMode, canWrite],
+    [baseId, itf.id, pageId, draft, token, tables, serverPages, elements, selections, dateFilters, effectiveMode, canWrite],
   );
 
   /* ---- interface-level actions ---- */

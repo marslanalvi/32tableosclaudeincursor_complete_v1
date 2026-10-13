@@ -1,5 +1,6 @@
 import { RealtimeClient, type RealtimePresenceState } from "@tabula/realtime-client";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { readBaseLocation } from "../../lib/base-url.ts";
 import {
   createContext,
   useCallback,
@@ -196,10 +197,10 @@ export function BaseSessionProvider({
     realtime.subscribeBase(baseId);
     void realtime.connect();
 
-    // Track the open record (`?record=` is managed by the table page).
+    // Track the open record (the URL's rec_ segment is managed by the table page).
     let lastRecord: string | null = null;
     const recordPoll = setInterval(() => {
-      const rec = new URL(window.location.href).searchParams.get("record");
+      const rec = readBaseLocation().recordId;
       if (rec !== lastRecord) {
         lastRecord = rec;
         presenceRef.current = { ...presenceRef.current, recordId: rec };

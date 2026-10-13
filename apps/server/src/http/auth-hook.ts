@@ -28,6 +28,7 @@ declare module "fastify" {
 
 const PUBLIC_PREFIXES = [
   "/health",
+  "/v1/version",
   "/v1/openapi.json",
   "/v1/auth/signup",
   "/v1/auth/login",
@@ -48,6 +49,18 @@ export function isPublicRoute(url: string, method?: string): boolean {
     return true;
   }
   return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(`${p}?`));
+}
+
+/** IANA zone from the `X-Time-Zone` header, if it is one this runtime knows. */
+function browserTimeZone(request: FastifyRequest): string | null {
+  const h = request.headers["x-time-zone"];
+  if (typeof h !== "string" || h.length > 64 || !/^[A-Za-z0-9_+\-/]+$/.test(h)) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: h });
+    return h;
+  } catch {
+    return null;
+  }
 }
 
 function bearerToken(request: FastifyRequest): string | null {
@@ -121,8 +134,9 @@ export async function authHook(
       email: string;
       display_name: string;
       auth_method: string;
+      time_zone: string | null;
     }>`
-      SELECT s.id AS session_id, u.id AS user_id, u.email, u.display_name, s.auth_method
+      SELECT s.id AS session_id, u.id AS user_id, u.email, u.display_name, s.auth_method, u.time_zone
       FROM core.sessions s
       INNER JOIN core.users u ON u.id = s.user_id
       WHERE s.token_hash = ${tokenHash}
@@ -152,6 +166,12 @@ export async function authHook(
       displayName: row.display_name,
       sessionId: row.session_id,
     };
+
+    // Date filters, "today" and chart day buckets use the viewer's own calendar.
+    const tz = browserTimeZone(request);
+    if (tz && tz !== row.time_zone && row.auth_method !== "automation") {
+      await sql`UPDATE core.users SET time_zone = ${tz} WHERE id = ${row.user_id}`.execute(ctx.db);
+    }
 
     // Automation runs use cookie-less service sessions and act for the automation owner.
     if (deviceKey && row.auth_method !== "automation") {

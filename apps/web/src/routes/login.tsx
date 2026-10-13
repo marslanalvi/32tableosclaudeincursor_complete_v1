@@ -1,6 +1,7 @@
 import { Link, useSearch } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Input, Label } from "@tabula/ui";
+import { ApiProblemError } from "../lib/api.ts";
 import {
   authErrorMessage,
   useLogin,
@@ -21,6 +22,10 @@ export function AuthTopNav() {
   );
 }
 
+function formatCountdown(sec: number): string {
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+}
+
 export function LoginPage() {
   const search = useSearch({ strict: false }) as { next?: string };
   const next = search.next;
@@ -33,6 +38,22 @@ export function LoginPage() {
     login.data && "mfaRequired" in login.data && login.data.mfaRequired
       ? login.data.mfaToken
       : null;
+  const problem = login.error instanceof ApiProblemError ? login.error.problem : null;
+  const meta = (problem?.meta ?? {}) as { attemptsRemaining?: number; retryAfterSec?: number };
+  const attemptsLeft = typeof meta.attemptsRemaining === "number" ? meta.attemptsRemaining : null;
+  const lock = problem?.status === 423;
+  const lockUntil = useMemo(
+    () => (lock ? Date.now() + (Number(meta.retryAfterSec) || 900) * 1000 : 0),
+    [login.error], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!lockUntil) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [lockUntil]);
+  const lockLeft = lockUntil ? Math.max(0, Math.ceil((lockUntil - now) / 1000)) : 0;
 
   return (
     <div className={authStyles.shell}>
@@ -113,12 +134,17 @@ export function LoginPage() {
                 />
               </div>
               {login.isError ? (
-                <p className={authStyles.error} role="alert">
-                  {authErrorMessage(login.error, "login")}
+                <p
+                  className={`${authStyles.error} ${lock || attemptsLeft !== null ? authStyles.errorWarn : ""}`}
+                  role="alert"
+                >
+                  {lock && lockLeft > 0
+                    ? `Too many wrong passwords. This account is locked. Try again in ${formatCountdown(lockLeft)}.`
+                    : authErrorMessage(login.error, "login")}
                 </p>
               ) : null}
-              <Button type="submit" className={authStyles.submit} disabled={login.isPending}>
-                {login.isPending ? "Signing in…" : "Sign in"}
+              <Button type="submit" className={authStyles.submit} disabled={login.isPending || lockLeft > 0}>
+                {login.isPending ? "Signing in…" : lockLeft > 0 ? `Locked · ${formatCountdown(lockLeft)}` : "Sign in"}
               </Button>
             </form>
           )}

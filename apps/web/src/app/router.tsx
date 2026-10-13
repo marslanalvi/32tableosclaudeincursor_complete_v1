@@ -113,9 +113,10 @@ const homeRoute = createRoute({
   component: HomePage,
 });
 
+/** `/bases/bas_…[/tbl_…[/viw_…[/rec_…]]]`: the base page reads the rest of the path itself. */
 const baseRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/bases/$baseId",
+  path: "/bases/$baseId/$",
   beforeLoad: async () => {
     const me = await ensureAuth();
     return { me };
@@ -261,7 +262,7 @@ const inviteRoute = createRoute({
       <AcceptInvite
         token={token}
         onDone={({ baseId }) => {
-          if (baseId) void navigate({ to: "/bases/$baseId", params: { baseId } });
+          if (baseId) void navigate({ to: "/bases/$baseId/$", params: { baseId, _splat: "" } });
           else void navigate({ to: "/" });
         }}
         onSignIn={() =>

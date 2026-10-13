@@ -12,7 +12,8 @@ export type ElementType =
   | "gallery"
   | "record_detail"
   | "form"
-  | "button";
+  | "button"
+  | "date_filter";
 
 export type AggFn = "count" | "sum" | "avg" | "min" | "max" | "count_unique";
 export type PageKind = "dashboard" | "record_list" | "record_detail" | "form" | "overview" | "blank";
@@ -54,10 +55,29 @@ export interface MetricConfig {
   format?: { style: "number" | "currency" | "percent"; precision?: number; currencyCode?: string };
 }
 
+export type ChartKind = "bar" | "hbar" | "line" | "area" | "pie" | "donut";
+export type DateBucket = "day" | "week" | "month" | "quarter" | "year";
+export type DatePreset = "all" | "today" | "last_7" | "last_30" | "last_90" | "this_month" | "last_month" | "this_year" | "custom";
+export interface DateRange {
+  from?: string | null;
+  to?: string | null;
+}
+
+export interface DateFilterConfig {
+  tableId: string;
+  fieldId: string;
+  defaultPreset: DatePreset;
+}
+
+export interface ElementQueryContext {
+  selections?: Record<string, string>;
+  dateRanges?: Record<string, DateRange>;
+}
+
 export interface ChartConfig {
   source: DataSource;
-  kind: "bar" | "line" | "pie" | "donut";
-  x: { fieldId: string; sort: "label" | "value_desc" | "value_asc"; limit: number };
+  kind: ChartKind;
+  x: { fieldId: string; bucket?: DateBucket; sort: "label" | "value_desc" | "value_asc"; limit: number };
   measures: Measure[];
   options?: { showValues?: boolean; showLegend?: boolean };
 }
@@ -104,7 +124,8 @@ export type InterfaceElement =
   | ElementBase<"gallery", CollectionConfig>
   | ElementBase<"record_detail", RecordDetailConfig>
   | ElementBase<"form", FormElementConfig>
-  | ElementBase<"button", ButtonConfig>;
+  | ElementBase<"button", ButtonConfig>
+  | ElementBase<"date_filter", DateFilterConfig>;
 
 export interface PageLayout {
   sections: Array<{ id: string; title?: string }>;
@@ -215,14 +236,14 @@ export const interfacesApi = {
     itf: string,
     pag: string,
     elm: string,
-    body: { draft?: boolean; search?: string; pageSize?: number; cursor?: string | null; context?: { selections?: Record<string, string> } },
+    body: { draft?: boolean; search?: string; pageSize?: number; cursor?: string | null; context?: ElementQueryContext },
   ) {
     return request<{ records: ElementRecord[]; nextCursor: string | null; totalCount?: number }>(
       `${root(baseId)}/${itf}/pages/${pag}/elements/${elm}/query`,
       { method: "POST", json: body },
     );
   },
-  aggregateElement(baseId: string, itf: string, pag: string, elm: string, body: { draft?: boolean }) {
+  aggregateElement(baseId: string, itf: string, pag: string, elm: string, body: { draft?: boolean; context?: ElementQueryContext }) {
     return request<{ value?: number | string | null; count?: number; points?: ChartPoint[]; truncated?: boolean }>(
       `${root(baseId)}/${itf}/pages/${pag}/elements/${elm}/aggregate`,
       { method: "POST", json: body },

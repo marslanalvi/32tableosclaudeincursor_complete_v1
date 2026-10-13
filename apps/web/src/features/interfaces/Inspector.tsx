@@ -2,15 +2,31 @@ import { useEffect, useState } from "react";
 import type { FieldDto, FilterAst, TableDto } from "../../lib/api.ts";
 import type {
   AggFn,
+  ChartConfig,
+  ChartKind,
   DataSource,
+  DateBucket,
+  DatePreset,
   ElementField,
   InterfaceElement,
   InterfacePage,
+  Measure,
 } from "../../lib/api-areas/interfaces.ts";
 import { FilterGroupEditor } from "../views/FilterBuilder.tsx";
 import { cleanFilter, countConditions, isEditableField, toRootGroup, type FilterGroup } from "../views/view-utils.ts";
-import { ELEMENT_LABEL, groupableFields, isNumericField, makeElement, starterFields } from "./element-defaults.ts";
+import { BUCKET_LABEL } from "./Charts.tsx";
+import { dateFields, ELEMENT_LABEL, groupableFields, isDateField, isNumericField, makeElement, starterFields } from "./element-defaults.ts";
+import { DATE_PRESET_LABEL } from "./Elements.tsx";
 import styles from "./interfaces.module.css";
+
+const CHART_KINDS: Array<{ kind: ChartKind; label: string }> = [
+  { kind: "bar", label: "Bar (vertical)" },
+  { kind: "hbar", label: "Bar (horizontal)" },
+  { kind: "line", label: "Line" },
+  { kind: "area", label: "Area" },
+  { kind: "pie", label: "Pie" },
+  { kind: "donut", label: "Donut" },
+];
 
 const WIDTHS = [
   { w: 3, label: "Quarter" },
@@ -387,29 +403,42 @@ export function Inspector({
       {el.type === "chart" ? (
         (() => {
           const t = tables.find((x) => x.id === el.config.source.tableId);
-          const m = el.config.measures[0] ?? { agg: "count" as AggFn };
+          const xField = t?.fields.find((f) => f.id === el.config.x.fieldId);
+          const dated = xField ? isDateField(xField) : false;
+          const cfg = el.config;
+          const measureValue = (m: Measure) => (m.agg === "count" ? "count" : `${m.agg}:${m.fieldId ?? ""}`);
+          const parseMeasure = (v: string): Measure => {
+            const [agg, fieldId] = v.split(":") as [AggFn, string | undefined];
+            return agg === "count" ? { agg } : { agg, fieldId: fieldId ?? null };
+          };
+          const setMeasures = (measures: Measure[]) => setConfig({ ...cfg, measures });
           return (
             <>
-              <SourceSection baseId={baseId} el={el} tables={tables} source={el.config.source} onTable={retable} onSource={(source) => setConfig({ ...el.config, source })} />
+              <SourceSection baseId={baseId} el={el} tables={tables} source={cfg.source} onTable={retable} onSource={(source) => setConfig({ ...cfg, source })} />
               <Row label="Chart type" htmlFor="insp-kind">
-                <select
-                  id="insp-kind"
-                  className={styles.input}
-                  value={el.config.kind}
-                  onChange={(e) => setConfig({ ...el.config, kind: e.target.value })}
-                >
-                  <option value="bar">Bar</option>
-                  <option value="line">Line</option>
-                  <option value="pie">Pie</option>
-                  <option value="donut">Donut</option>
+                <select id="insp-kind" className={styles.input} value={cfg.kind} onChange={(e) => setConfig({ ...cfg, kind: e.target.value as ChartKind })}>
+                  {CHART_KINDS.map((k) => (
+                    <option key={k.kind} value={k.kind}>
+                      {k.label}
+                    </option>
+                  ))}
                 </select>
               </Row>
-              <Row label="Group by" htmlFor="insp-x">
+              <Row label={cfg.kind === "pie" || cfg.kind === "donut" ? "Slices" : "X axis"} htmlFor="insp-x">
                 <select
                   id="insp-x"
                   className={styles.input}
-                  value={el.config.x.fieldId}
-                  onChange={(e) => setConfig({ ...el.config, x: { ...el.config.x, fieldId: e.target.value } })}
+                  value={cfg.x.fieldId}
+                  onChange={(e) => {
+                    const f = t?.fields.find((x) => x.id === e.target.value);
+                    const toDate = f ? isDateField(f) : false;
+                    const { bucket: _drop, ...rest } = cfg.x;
+                    setConfig({
+                      ...cfg,
+                      x: toDate ? { ...rest, fieldId: e.target.value, bucket: cfg.x.bucket ?? "day", sort: "label", limit: Math.max(rest.limit, 90) } : { ...rest, fieldId: e.target.value },
+                      ...(toDate && (cfg.kind === "pie" || cfg.kind === "donut") ? { kind: "line" } : {}),
+                    });
+                  }}
                 >
                   {(t ? groupableFields(t) : []).map((f) => (
                     <option key={f.id} value={f.id}>
@@ -418,38 +447,168 @@ export function Inspector({
                   ))}
                 </select>
               </Row>
-              <Row label="Value" htmlFor="insp-cagg">
-                <select
-                  id="insp-cagg"
-                  className={styles.input}
-                  value={m.agg === "count" ? "count" : `${m.agg}:${m.fieldId ?? ""}`}
-                  onChange={(e) => {
-                    const [agg, fieldId] = e.target.value.split(":") as [AggFn, string | undefined];
-                    setConfig({ ...el.config, measures: [agg === "count" ? { agg } : { agg, fieldId: fieldId ?? null }] });
-                  }}
-                >
-                  <option value="count">Count of records</option>
-                  {numericOf(t).flatMap((f) =>
-                    (["sum", "avg"] as const).map((agg) => (
-                      <option key={`${agg}:${f.id}`} value={`${agg}:${f.id}`}>
-                        {agg === "sum" ? "Sum" : "Average"} of {f.name}
+              {dated ? (
+                <Row label="Group dates by" htmlFor="insp-bucket">
+                  <select
+                    id="insp-bucket"
+                    className={styles.input}
+                    value={cfg.x.bucket ?? ""}
+                    onChange={(e) => {
+                      const { bucket: _drop, ...rest } = cfg.x;
+                      setConfig({ ...cfg, x: e.target.value ? { ...rest, bucket: e.target.value as DateBucket } : rest });
+                    }}
+                  >
+                    <option value="">Exact value</option>
+                    {(Object.keys(BUCKET_LABEL) as DateBucket[]).map((b) => (
+                      <option key={b} value={b}>
+                        {BUCKET_LABEL[b]}
                       </option>
-                    )),
-                  )}
-                </select>
-              </Row>
+                    ))}
+                  </select>
+                </Row>
+              ) : null}
+              <div className={styles.inspRow}>
+                <span className={styles.inspLabel}>Values</span>
+                {cfg.measures.map((m, i) => (
+                  <div key={i} className={styles.measureRow}>
+                    <select
+                      aria-label={`Value ${i + 1}`}
+                      className={styles.input}
+                      value={measureValue(m)}
+                      onChange={(e) => setMeasures(cfg.measures.map((x, j) => (j === i ? parseMeasure(e.target.value) : x)))}
+                    >
+                      <option value="count">Count of records</option>
+                      {numericOf(t).flatMap((f) =>
+                        (["sum", "avg", "min", "max"] as const).map((agg) => (
+                          <option key={`${agg}:${f.id}`} value={`${agg}:${f.id}`}>
+                            {AGGS.find((a) => a.agg === agg)!.label} of {f.name}
+                          </option>
+                        )),
+                      )}
+                    </select>
+                    {cfg.measures.length > 1 ? (
+                      <button
+                        type="button"
+                        className={styles.miniBtn}
+                        aria-label={`Remove value ${i + 1}`}
+                        onClick={() => setMeasures(cfg.measures.filter((_, j) => j !== i))}
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+                {cfg.measures.length < 4 && cfg.kind !== "pie" && cfg.kind !== "donut" ? (
+                  <button
+                    type="button"
+                    className={styles.linkBtn}
+                    onClick={() => {
+                      const f = numericOf(t).find((x) => !cfg.measures.some((m) => m.fieldId === x.id));
+                      setMeasures([...cfg.measures, f ? { agg: "sum", fieldId: f.id } : { agg: "count" }]);
+                    }}
+                  >
+                    + Add value
+                  </button>
+                ) : null}
+              </div>
               <Row label="Sort" htmlFor="insp-sort">
                 <select
                   id="insp-sort"
                   className={styles.input}
-                  value={el.config.x.sort}
-                  onChange={(e) => setConfig({ ...el.config, x: { ...el.config.x, sort: e.target.value } })}
+                  value={cfg.x.sort}
+                  onChange={(e) => setConfig({ ...cfg, x: { ...cfg.x, sort: e.target.value as ChartConfig["x"]["sort"] } })}
                 >
-                  <option value="label">By label</option>
+                  <option value="label">{dated ? "Oldest to newest" : "By label"}</option>
                   <option value="value_desc">Largest first</option>
                   <option value="value_asc">Smallest first</option>
                 </select>
               </Row>
+              <Row label={dated && cfg.x.bucket ? "Most periods" : "Most groups"} htmlFor="insp-limit">
+                <input
+                  id="insp-limit"
+                  type="number"
+                  min={1}
+                  max={400}
+                  className={styles.input}
+                  value={cfg.x.limit}
+                  onChange={(e) => setConfig({ ...cfg, x: { ...cfg.x, limit: Math.min(400, Math.max(1, Math.trunc(Number(e.target.value) || 1))) } })}
+                />
+              </Row>
+              <div className={styles.inspChecks}>
+                <Check
+                  label="Show values on the chart"
+                  checked={cfg.options?.showValues ?? false}
+                  onChange={(showValues) => setConfig({ ...cfg, options: { ...cfg.options, showValues } })}
+                />
+                {cfg.kind !== "pie" && cfg.kind !== "donut" ? (
+                  <Check
+                    label="Show legend"
+                    checked={cfg.options?.showLegend ?? cfg.measures.length > 1}
+                    onChange={(showLegend) => setConfig({ ...cfg, options: { ...cfg.options, showLegend } })}
+                  />
+                ) : null}
+              </div>
+            </>
+          );
+        })()
+      ) : null}
+
+      {el.type === "date_filter" ? (
+        (() => {
+          const t = tables.find((x) => x.id === el.config.tableId);
+          const fields = t ? dateFields(t) : [];
+          return (
+            <>
+              <Row label="Table" htmlFor="insp-dtable">
+                <select
+                  id="insp-dtable"
+                  className={styles.input}
+                  value={el.config.tableId}
+                  onChange={(e) => {
+                    const nt = tables.find((x) => x.id === e.target.value);
+                    if (nt) retable(nt);
+                  }}
+                >
+                  {!t ? <option value={el.config.tableId}>(deleted table)</option> : null}
+                  {tables.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+              <Row label="Date field" htmlFor="insp-dfield">
+                <select
+                  id="insp-dfield"
+                  className={styles.input}
+                  value={el.config.fieldId}
+                  onChange={(e) => setConfig({ ...el.config, fieldId: e.target.value })}
+                >
+                  {fields.length === 0 ? <option value="">No date fields in this table</option> : null}
+                  {fields.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              </Row>
+              <Row label="Starts at" htmlFor="insp-dpreset">
+                <select
+                  id="insp-dpreset"
+                  className={styles.input}
+                  value={el.config.defaultPreset}
+                  onChange={(e) => setConfig({ ...el.config, defaultPreset: e.target.value as DatePreset })}
+                >
+                  {(Object.keys(DATE_PRESET_LABEL) as DatePreset[])
+                    .filter((p) => p !== "custom")
+                    .map((p) => (
+                      <option key={p} value={p}>
+                        {DATE_PRESET_LABEL[p]}
+                      </option>
+                    ))}
+                </select>
+              </Row>
+              <p className={styles.inspHint}>Numbers, charts and lists on this page that use {t?.name ?? "this table"} follow the chosen range.</p>
             </>
           );
         })()

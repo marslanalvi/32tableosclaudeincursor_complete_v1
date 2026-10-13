@@ -88,6 +88,10 @@
   font-size: var(--tabula-font-size-sm);
   margin: 0;
 }
+.errorWarn {
+  border: 1px solid var(--tabula-color-danger);
+  font-weight: 500;
+}
 
 .hint {
   font-size: var(--tabula-font-size-xs);

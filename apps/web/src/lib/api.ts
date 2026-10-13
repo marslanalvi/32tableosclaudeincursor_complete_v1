@@ -81,12 +81,21 @@ function isTransientNetworkError(err: unknown): boolean {
   return /failed to fetch|networkerror|load failed|network request failed/i.test(err.message);
 }
 
+const BROWSER_TIME_ZONE = (() => {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {
+    return "";
+  }
+})();
+
 /** Shared fetch wrapper. Area modules in `lib/api/*.ts` reuse this. */
 export async function request<T>(
   path: string,
   init?: RequestInit & { json?: unknown; clientOpId?: string },
 ): Promise<T> {
   const headers = new Headers(init?.headers);
+  if (BROWSER_TIME_ZONE) headers.set("X-Time-Zone", BROWSER_TIME_ZONE);
   const method = (init?.method ?? "GET").toUpperCase();
   // Every mutation carries a client op id (echoed back on realtime change
   // frames as `clientMutationId`) and, for data-plane routes, the same value

@@ -12,7 +12,8 @@ import { isEditableField } from "../views/view-utils.ts";
 
 export const ELEMENT_PALETTE: Array<{ type: ElementType; label: string; icon: string; hint: string }> = [
   { type: "metric", label: "Number", icon: "#", hint: "A single count, sum or average" },
-  { type: "chart", label: "Chart", icon: "▥", hint: "Bar, line, pie or donut" },
+  { type: "chart", label: "Chart", icon: "▥", hint: "Bar, line, area, pie or donut" },
+  { type: "date_filter", label: "Date filter", icon: "◷", hint: "Narrow the page to a date range" },
   { type: "table", label: "Grid", icon: "▦", hint: "Records in rows and columns" },
   { type: "record_list", label: "List", icon: "☰", hint: "A compact list of records" },
   { type: "gallery", label: "Gallery", icon: "▤", hint: "Records as cards" },
@@ -27,15 +28,48 @@ export const ELEMENT_LABEL: Record<ElementType, string> = Object.fromEntries(
   ELEMENT_PALETTE.map((p) => [p.type, p.label]),
 ) as Record<ElementType, string>;
 
-const GROUPABLE = new Set(["single_select", "multi_select", "checkbox", "user", "created_by", "last_modified_by", "date", "single_line_text", "rating"]);
+const GROUPABLE = new Set([
+  "single_select",
+  "multi_select",
+  "checkbox",
+  "collaborator",
+  "created_by",
+  "modified_by",
+  "date",
+  "datetime",
+  "created_time",
+  "modified_time",
+  "text",
+  "email",
+  "phone",
+  "url",
+  "number",
+  "currency",
+  "percent",
+  "rating",
+  "link",
+]);
 const NUMERIC = new Set(["number", "currency", "percent", "rating", "duration", "count", "autonumber"]);
+const DATES = new Set(["date", "datetime", "created_time", "modified_time"]);
+
+function resultType(f: FieldDto): string | undefined {
+  return (f.config as { resultType?: string } | null)?.resultType;
+}
 
 export function isNumericField(f: FieldDto): boolean {
-  return NUMERIC.has(f.type) || (["formula", "rollup", "lookup"].includes(f.type) && (f.config as { resultType?: string })?.resultType === "number");
+  return NUMERIC.has(f.type) || (["formula", "rollup", "lookup"].includes(f.type) && resultType(f) === "number");
+}
+
+export function isDateField(f: FieldDto): boolean {
+  return DATES.has(f.type) || (["formula", "rollup", "lookup"].includes(f.type) && (resultType(f) === "date" || resultType(f) === "datetime"));
 }
 
 export function groupableFields(table: TableDto): FieldDto[] {
-  return table.fields.filter((f) => GROUPABLE.has(f.type));
+  return table.fields.filter((f) => GROUPABLE.has(f.type) || isDateField(f));
+}
+
+export function dateFields(table: TableDto): FieldDto[] {
+  return table.fields.filter(isDateField);
 }
 
 function primary(table: TableDto): FieldDto | undefined {
@@ -85,15 +119,26 @@ export function makeElement(type: ElementType, table: TableDto | undefined, exis
     case "metric":
       return { id, type, title: `Total ${table.name}`, layout: layout(3), config: { source: { tableId: table.id }, measure: { agg: "count" } } };
     case "chart": {
-      const x = groupableFields(table)[0] ?? primary(table);
+      const x = groupableFields(table).find((f) => !isDateField(f)) ?? groupableFields(table)[0] ?? primary(table);
       if (!x) return null;
       return {
         id,
         type,
         title: `${table.name} by ${x.name}`,
         layout: layout(6),
-        config: { source: { tableId: table.id }, kind: "bar", x: { fieldId: x.id, sort: "label", limit: 20 }, measures: [{ agg: "count" }] },
+        config: {
+          source: { tableId: table.id },
+          kind: "bar",
+          x: { fieldId: x.id, sort: "label", limit: 20 },
+          measures: [{ agg: "count" }],
+          options: { showValues: true },
+        },
       };
+    }
+    case "date_filter": {
+      const f = dateFields(table)[0];
+      if (!f) return null;
+      return { id, type, title: f.name, layout: layout(12), config: { tableId: table.id, fieldId: f.id, defaultPreset: "all" } };
     }
     case "table":
       return { id, type, title: table.name, layout: layout(12), config: collection(table, 6) };

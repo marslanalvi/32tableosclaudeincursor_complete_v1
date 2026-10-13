@@ -1,6 +1,7 @@
 import { useRouter } from "@tanstack/react-router";
 import { useMe, useLogout } from "../auth/use-auth.ts";
 import { Avatar, DropdownMenu, uiStyles } from "../../app/ui.tsx";
+import { APP_VERSION } from "../../lib/version.ts";
 
 /** Avatar button with account info and Log out (used in home + base headers). */
 export function AccountMenu() {
@@ -66,6 +67,14 @@ export function AccountMenu() {
           icon: "?",
           onSelect: () => {
             void router.navigate({ to: "/help/$topic", params: { topic: "getting-started" } });
+          },
+        },
+        {
+          key: "releases",
+          label: `What’s new · v${APP_VERSION}`,
+          icon: "★",
+          onSelect: () => {
+            void router.navigate({ to: "/help/$topic", params: { topic: "releases" } });
           },
         },
         {

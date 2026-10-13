@@ -453,6 +453,38 @@ textarea.input {
   font-size: 14px;
 }
 
+.sidebarToggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7079;
+  cursor: pointer;
+}
+
+.sidebarToggle svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+}
+
+.sidebarToggle:hover {
+  background: #f1f3f5;
+  color: var(--ink);
+}
+
+.sidebarToggleOn {
+  color: var(--ink);
+}
+
 .viewSwitcherBtn {
   display: flex;
   align-items: center;

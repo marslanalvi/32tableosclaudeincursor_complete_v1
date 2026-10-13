@@ -30,8 +30,23 @@ export interface GroupQueryInput {
   filter?: unknown;
   search?: string | undefined;
   viewId?: string | undefined;
-  groupBy?: { fieldId: string; direction?: "asc" | "desc" | undefined }[] | undefined;
+  groupBy?: { fieldId: string; direction?: "asc" | "desc" | undefined; bucket?: DateBucket | undefined }[] | undefined;
   aggregates?: GroupAggregateSpec[] | undefined;
+}
+
+export const DATE_BUCKETS = ["day", "week", "month", "quarter", "year"] as const;
+export type DateBucket = (typeof DATE_BUCKETS)[number];
+
+/** Group key for a date bucket: the bucket's first day as `YYYY-MM-DD` (datetimes in the user's zone). */
+function bucketKeyFor(f: SqlFieldInfo, bucket: DateBucket, a: string, p: SqlParams, timeZone: string): { key: string; sort: { expr: string } } {
+  if (!DATE_BUCKETS.includes(bucket)) throw new FilterError(`Unknown date bucket ${String(bucket)}`, "INVALID_GROUP", f.id);
+  const kind = kindOf(f);
+  let day: string;
+  if (kind === "date") day = `(${dateExpr(f, a)})::date`;
+  else if (kind === "datetime") day = `((${tsExpr(f, a)}) AT TIME ZONE ${p.add(timeZone, "text")})`;
+  else throw new FilterError("Only date fields can be grouped by day, week, month, quarter or year", "INVALID_GROUP", f.id);
+  const text = `to_char(date_trunc('${bucket}', ${day}), 'YYYY-MM-DD')`;
+  return { key: `to_jsonb(${text})`, sort: { expr: text } };
 }
 
 export interface GroupResult {
@@ -109,7 +124,8 @@ export async function executeGroupQuery(
   const levels = (input.groupBy ?? []).map((g) => {
     const f = ctx.fields.get(g.fieldId);
     if (!f) throw new FilterError(`Unknown group field: ${g.fieldId}`, "UNKNOWN_GROUP_FIELD", g.fieldId);
-    return { f, dir: g.direction === "desc" ? "DESC" : "ASC", ...groupKeyFor(f, a, p) };
+    const keys = g.bucket ? bucketKeyFor(f, g.bucket, a, p, opts.user?.timeZone ?? "UTC") : groupKeyFor(f, a, p);
+    return { f, dir: g.direction === "desc" ? "DESC" : "ASC", bucketed: Boolean(g.bucket), ...keys };
   });
 
   const aggSpecs = input.aggregates && input.aggregates.length ? input.aggregates : [{ op: "count" as const }];
@@ -163,6 +179,7 @@ export async function executeGroupQuery(
       const v = r[`g${i}`] ?? null;
       if (v === null) return null;
       const kind = kindOf(l.f);
+      if (l.bucketed) return v;
       if (kind === "collaborator") return (v as string[]).map((x) => users.get(x) ?? { id: x, name: "", email: "" });
       if (kind === "user") return users.get(String(v)) ?? null;
       if (kind === "link") return (v as string[]).map((x) => ({ id: UUID_RE.test(x) ? pid("rec", x) : x, name: linkNames.get(x) ?? "" }));

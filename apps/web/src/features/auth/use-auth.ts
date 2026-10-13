@@ -82,7 +82,8 @@ export function useLogout() {
 export function authErrorMessage(error: unknown, mode: "login" | "signup" = "login"): string {
   if (error instanceof ApiProblemError) {
     const p = error.problem;
-    if (p.status === 401) return "Incorrect email or password.";
+    if (p.status === 423) return p.detail ?? "This account is locked. Try again later.";
+    if (p.status === 401) return /attempt|locked/i.test(p.detail ?? "") ? p.detail! : "Incorrect email or password.";
     if (p.status === 429) return "Too many attempts. Please wait a minute and try again.";
     if (p.status === 409 || /exists|taken|already/i.test(p.detail ?? "")) {
       return mode === "signup"

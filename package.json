@@ -1,11 +1,13 @@
 {
   "name": "tabula",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "turbo run build",
     "dev": "turbo run dev --parallel --filter=@tabula/server --filter=@tabula/web --filter=@tabula/public",
     "dogfood": "node scripts/dogfood.mjs",
+    "version:set": "node scripts/version.mjs",
     "dev:api": "pnpm --filter @tabula/server dev",
     "dev:realtime": "pnpm --filter @tabula/server dev:realtime",
     "dev:worker": "pnpm --filter @tabula/server dev:worker",

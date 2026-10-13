@@ -48,6 +48,31 @@ import {
   type ShareLinkRow,
 } from "./service.js";
 import { createShareToken } from "./tokens.js";
+import { AuthRateLimiter } from "../auth/rate-limit.js";
+import {
+  alertOwners,
+  attemptMeta,
+  isOrgOwner,
+  lockedMessage,
+  PasswordLockout,
+  sessionVisitor,
+  wrongPasswordMessage,
+} from "../auth/lockout.js";
+import { sendProblem } from "../../http/errors.js";
+import { createTabulaError, TabulaErrorCodes } from "@tabula/types";
+
+function sharePasswordProblem(request: FastifyRequest, reply: FastifyReply, status: 401 | 423, detail: string, meta?: Record<string, unknown>): void {
+  sendProblem(
+    reply,
+    request,
+    createTabulaError(TabulaErrorCodes.UNAUTHENTICATED, {
+      status,
+      title: status === 423 ? "Link locked" : "Incorrect password",
+      detail,
+      meta: { reason: status === 423 ? "password_locked" : "password_incorrect", ...meta },
+    }),
+  );
+}
 
 const createShareBody = z.object({
   targetType: z.enum(["view", "form", "base"]),
@@ -87,6 +112,60 @@ export async function registerShareRoutes(
   ctx: AppContext,
 ): Promise<void> {
   const limits = new LimitsService(ctx.db);
+  const lockout = new PasswordLockout(new AuthRateLimiter(ctx.redis));
+
+  async function shareLabel(link: ShareLinkRow): Promise<string> {
+    const r = await sql<{ base: string | null; view: string | null }>`
+      SELECT (SELECT name FROM data.bases WHERE id = ${link.base_id}) AS base,
+             (SELECT name FROM data.views WHERE id = ${link.target_id}) AS view
+    `.execute(ctx.db);
+    const kind = link.target_type === "form" ? "Form" : link.target_type === "base" ? "Base" : "View";
+    const name = link.target_type === "base" ? r.rows[0]?.base : r.rows[0]?.view;
+    return `${kind} “${name ?? "untitled"}” in ${r.rows[0]?.base ?? "a base"}`;
+  }
+
+  /**
+   * Wrong-password policy for a share (per visitor IP). Returns true when the
+   * password is right; otherwise the 401/423 response has been sent.
+   */
+  async function checkSharePassword(request: FastifyRequest, reply: FastifyReply, res: ResolvedShare, password: string): Promise<boolean> {
+    const visitor = await sessionVisitor(ctx.db, request);
+    const exempt = visitor ? await isOrgOwner(ctx.db, visitor.id, res.orgId) : false;
+    const key = `share:${res.link.id}:${request.ip}`;
+    const what = "this link";
+    if (!exempt) {
+      const lockedFor = await lockout.lockedFor(key);
+      if (lockedFor > 0) {
+        void reply.header("retry-after", String(lockedFor));
+        sharePasswordProblem(request, reply, 423, lockedMessage(lockedFor, what), { locked: true, retryAfterSec: lockedFor });
+        return false;
+      }
+    }
+    if (res.link.password_hash && (await verifyPassword(password, res.link.password_hash))) {
+      if (!exempt) await lockout.clear(key);
+      return true;
+    }
+    if (exempt) {
+      passwordRequired(request, reply, true);
+      return false;
+    }
+    const outcome = await lockout.fail(key);
+    void shareLabel(res.link).then((label) =>
+      alertOwners(ctx.db, {
+        kind: "share",
+        orgIds: [res.orgId],
+        email: visitor?.email ?? null,
+        ip: request.ip ?? null,
+        userAgent: (request.headers["user-agent"] as string | undefined) ?? null,
+        outcome,
+        shareLabel: label,
+        link: `/bases/${pid("bas", res.link.base_id)}`,
+      }),
+    );
+    if (outcome.locked) void reply.header("retry-after", String(outcome.retryAfterSec));
+    sharePasswordProblem(request, reply, outcome.locked ? 423 : 401, wrongPasswordMessage("The password is incorrect.", outcome, what), attemptMeta(outcome));
+    return false;
+  }
 
   // ─────────────────────────── Admin (session) ───────────────────────────
 
@@ -387,9 +466,7 @@ export async function registerShareRoutes(
       if (checkUnlockToken(ctx, res.link, unlock)) return res;
       const password = header(request, "x-share-password");
       if (password && res.link.password_hash) {
-        if (await verifyPassword(password, res.link.password_hash)) return res;
-        passwordRequired(request, reply, true);
-        return null;
+        return (await checkSharePassword(request, reply, res, password)) ? res : null;
       }
       passwordRequired(request, reply, false);
       return null;
@@ -565,10 +642,7 @@ export async function registerShareRoutes(
           void reply.send({ unlockToken: t.token, expiresAt: t.expiresAt });
           return;
         }
-        if (!(await verifyPassword(body.password, res.link.password_hash))) {
-          passwordRequired(request, reply, true);
-          return;
-        }
+        if (!(await checkSharePassword(request, reply, res, body.password))) return;
         const t = issueUnlockToken(ctx, res.link);
         void reply.send({ unlockToken: t.token, expiresAt: t.expiresAt });
       } catch (err) {

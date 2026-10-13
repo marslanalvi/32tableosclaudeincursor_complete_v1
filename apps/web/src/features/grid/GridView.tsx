@@ -26,6 +26,7 @@ import {
 } from "@tabula/field-ui";
 import type { FilterAst, TableDto, ViewDto } from "../../lib/api.ts";
 import type { ViewConfig } from "../../lib/api-areas/views.ts";
+import { baseLocationPath, readBaseLocation } from "../../lib/base-url.ts";
 import {
   errorMessage,
   recordsApi,
@@ -114,9 +115,7 @@ const NON_PRIMARY_TYPES = new Set(["button", "link", "contact", "attachment", "c
 const NEXT_PAGE_SIZE = 500;
 
 function recordUrl(recordId: string): string {
-  const url = new URL(window.location.href);
-  url.searchParams.set("record", recordId);
-  return url.toString();
+  return `${window.location.origin}${baseLocationPath({ ...readBaseLocation(), recordId })}`;
 }
 
 async function copyText(text: string) {

@@ -49,6 +49,16 @@ import {
   findChallenge,
 } from "./challenges.js";
 import { AuthRateLimiter } from "./rate-limit.js";
+import {
+  alertOwners,
+  attemptMeta,
+  LOCK_MINUTES,
+  lockedMessage,
+  lockoutPolicy,
+  MAX_ATTEMPTS,
+  PasswordLockout,
+  wrongPasswordMessage,
+} from "./lockout.js";
 import { writeAuditEvent } from "../audit/write.js";
 import { createFreeSubscriptionInTx } from "../billing/subscription.js";
 import {
@@ -139,6 +149,7 @@ export async function registerAuthRoutes(
   ctx: AppContext,
 ): Promise<void> {
   const limiter = new AuthRateLimiter(ctx.redis);
+  const lockout = new PasswordLockout(limiter);
 
   app.post("/v1/auth/signup", async (request, reply) => {
     try {
@@ -271,6 +282,28 @@ export async function registerAuthRoutes(
       `.execute(ctx.db);
 
       const user = userRow.rows[0];
+      // Unknown emails follow the policy too, so the warnings don't reveal which accounts exist.
+      const policy = user ? await lockoutPolicy(ctx.db, user.id) : { applies: true, orgIds: [] };
+      const lockKey = `acct:${emailNormalized}`;
+      const meta = clientMeta(request);
+      if (policy.applies) {
+        const lockedFor = await lockout.lockedFor(lockKey);
+        if (lockedFor > 0) {
+          if (user && (await limiter.hit(`pwlock-alert:${lockKey}`, 1, LOCK_MINUTES * 60)).allowed) {
+            void alertOwners(ctx.db, {
+              kind: "sign_in",
+              orgIds: policy.orgIds,
+              email: user.email,
+              targetUserId: user.id,
+              ...meta,
+              outcome: { attempt: MAX_ATTEMPTS, remaining: 0, locked: true, retryAfterSec: lockedFor },
+            });
+          }
+          void reply.header("retry-after", String(lockedFor));
+          sendApiError(request, reply, 423, "ACCOUNT_LOCKED", lockedMessage(lockedFor), { locked: true, retryAfterSec: lockedFor });
+          return;
+        }
+      }
       if (!user || !user.password_hash || !(await verifyPassword(body.password, user.password_hash))) {
         await Promise.all([
           limiter.hit(accountKey, LOGIN_MAX_PER_ACCOUNT, LOGIN_WINDOW_SEC),
@@ -283,13 +316,39 @@ export async function registerAuthRoutes(
             action: "auth.login_failed",
             targetType: "user",
             targetId: user.id,
-            ...clientMeta(request),
+            ...meta,
           });
         }
-        sendApiError(request, reply, 401, "UNAUTHENTICATED", "Invalid email or password");
+        if (!policy.applies) {
+          sendApiError(request, reply, 401, "UNAUTHENTICATED", "Invalid email or password.");
+          return;
+        }
+        const outcome = await lockout.fail(lockKey);
+        if (user) {
+          void alertOwners(ctx.db, { kind: "sign_in", orgIds: policy.orgIds, email: user.email, targetUserId: user.id, ...meta, outcome });
+          if (outcome.locked) {
+            await writeAuditEvent(ctx.db, {
+              orgId: policy.orgIds[0] ?? null,
+              actorUserId: user.id,
+              action: "auth.account_locked",
+              targetType: "user",
+              targetId: user.id,
+              ...meta,
+            });
+          }
+        }
+        if (outcome.locked) void reply.header("retry-after", String(outcome.retryAfterSec));
+        sendApiError(
+          request,
+          reply,
+          outcome.locked ? 423 : 401,
+          outcome.locked ? "ACCOUNT_LOCKED" : "UNAUTHENTICATED",
+          wrongPasswordMessage("Invalid email or password.", outcome),
+          attemptMeta(outcome),
+        );
         return;
       }
-      await limiter.reset(accountKey);
+      await Promise.all([limiter.reset(accountKey), lockout.clear(lockKey)]);
 
       if (await userHasMfa(ctx.db, user.id)) {
         const mfaToken = await createChallenge(ctx.db, "mfa_login", {

@@ -62,8 +62,8 @@ function CreateBaseDialog({
       await queryClient.invalidateQueries({ queryKey: ["workspaces", workspaceId, "bases"] });
       onClose();
       void router.navigate({
-        to: "/bases/$baseId",
-        params: { baseId: base.id },
+        to: "/bases/$baseId/$",
+        params: { baseId: base.id, _splat: "" },
         search: mode === "import" ? { import: "1" } : {},
       });
     },
@@ -290,8 +290,8 @@ function BaseCard({
   return (
     <div className={styles.baseCard}>
       <Link
-        to="/bases/$baseId"
-        params={{ baseId: base.id }}
+        to="/bases/$baseId/$"
+        params={{ baseId: base.id, _splat: "" }}
         className={styles.baseCardLink}
         onPointerEnter={prefetch}
         onFocus={prefetch}
@@ -324,7 +324,7 @@ function BaseCard({
               label: "Open",
               icon: "↗",
               onSelect: () =>
-                void router.navigate({ to: "/bases/$baseId", params: { baseId: base.id } }),
+                void router.navigate({ to: "/bases/$baseId/$", params: { baseId: base.id, _splat: "" } }),
             },
             { key: "rename", label: "Rename", icon: "✎", onSelect: onRename },
             { key: "dup", label: "Duplicate", icon: "⧉", onSelect: onDuplicate },

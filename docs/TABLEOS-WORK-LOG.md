@@ -2,8 +2,9 @@
 
 TableOS is an Airtable-style product: workspaces → bases → tables → fields / records / views, plus automations, interfaces, forms, sharing, import/export and realtime collaboration. This document records everything built and fixed so far, newest first, with how each piece was verified.
 
-* Repo: <https://github.com/marslanalvi/tableosv1claudeincursor>
-* Branch for the latest work: `cursor/tableos-tabs-import-record-id`
+* Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
+* Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.7.0)
+* Current version: **0.7.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,7 +24,48 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 ---
 
-## Round 5 (this round): owner-controlled privileges, device approval, API tokens, cross-base data, table ids, Help centre
+## Round 6 (v0.7.0): import defaults, IDs in URLs, views sidebar, interface dashboards, wrong-password policy, versioning
+
+Built on top of the `Awais-Improvements` branch (v0.6.0: GCS attachments, Record ID primary, automation test improvements), then merged into `master`.
+
+### 1. Import into an existing table
+* Columns without a matching field now default to **+ New field** instead of "Don't import" (`ImportWizard.tsx`).
+* **Import all** (match existing fields, create the rest) and **Don't import any** buttons above the mapping list.
+* New number fields get `config.precision` from the file (`decimalsIn`, up to 8 places, `.` as the decimal separator), so values such as `-0.0079` no longer show as `-0`.
+
+### 2. Grid header border
+* The header row has its bottom border again (`grid-view.module.css`).
+
+### 3. IDs in every URL
+* `lib/base-url.ts` reads and writes `/bases/bas_…/tbl_…/viw_…[/rec_…]`; the router has a splat route `/bases/$baseId/$`.
+* Switching table or view, and opening a record, push a history entry (automatic redirects replace it), so Back steps through them. Closing a record removes `rec_…`. Old `/bases/bas_…` and `?table=…&record=…` links still resolve.
+
+### 4. Views sidebar collapse / expand
+* A ☰ button with the view name at the start of the view toolbar hides and shows the views sidebar, like Airtable. The state is saved in `localStorage`.
+
+### 5. Interfaces: charts, date buckets, date filter
+* **Server.** `group-query.ts` buckets date and datetime fields by day / week / month / quarter / year (`to_char(date_trunc(…))`, datetime in the user's time zone). `interfaces/model.ts` adds chart kinds `hbar` and `area`, `x.bucket`, `x.limit` up to 400 and the `date_filter` element, and validates that bucketed and filter fields are dates. `interfaces/routes.ts` accepts `context.dateRanges` (`YYYY-MM-DD`) and ANDs them into collection and aggregate queries. A bucketed chart sorted by label keeps the latest periods when it hits the limit.
+* **Web.** `Charts.tsx` (new) draws bar / line / area (several series, negative values, nice ticks, value labels, tooltips), horizontal bar and pie / donut (top 8 plus "Other", centre total). Empty periods across the selected range are filled with zero, and undated records are noted. The inspector has kind, x field, "Group dates by", up to four values (count / sum / avg / min / max), sort, limit, value labels and legend. The `DateFilterElement` has presets and a custom range.
+* **Time zone.** The browser sends `X-Time-Zone` and `auth-hook.ts` keeps `core.users.time_zone` in step, so "January" means January in the viewer's zone.
+* **Demo dashboard.** "SMS analytics" on the *Twilio SMS demo* base (Table 1, 2,982 records, Sep 2025 to Oct 2026) has Overview, Trends and Delivery issues pages. Built by `.data/r2-shell/r6-dash.mjs`, which probes every aggregate with and without a date range (20/20 OK). Screenshots come from `r6-dash-look.mjs` (`shots/dash-*.png`).
+
+### 6. Wrong-password policy (`modules/auth/lockout.ts`)
+* 5 attempts in 15 minutes. Attempts 1–2 return the normal 401. Attempts 3–4 add "Warning: N attempts left…" with `meta {attempt, remaining}`. Attempt 5 returns `423 ACCOUNT_LOCKED` with `retry-after` and a 15-minute lock. A correct password clears the count.
+* Applies to sign-in (including unknown emails, so accounts can't be probed) and to password-protected shares (keyed per share + IP, via both the `x-share-password` header and `/unlock`).
+* **Owner exempt:** users who own their organizations and are not a member of anyone else's org are not locked; the share owner, when signed in, is not locked on their own shares. The general limit (10 per 15 minutes per account + IP) still applies.
+* **Alerts:** every wrong password sends a system notification and an email to the owners of the orgs involved, with the email, IP, browser, time and attempt number. A lock is also audited as `auth.account_locked`.
+* The login page shows the warning in amber, then a live "Locked · m:ss" countdown. The public share page shows the same messages.
+* Verified by `.data/r2-shell/r6-lockout.mjs` (26/26) and `r6-login-look.mjs` (screenshots `login-warning.png`, `login-locked.png`).
+
+### 7. Versioning
+* One SemVer version for the root and all apps, set with `node scripts/version.mjs <x.y.z|major|minor|patch>`.
+* The server exposes `GET /v1/version` (public), `version` in `/health` and an `x-tableos-version` header. The web app gets `__APP_VERSION__` / `__APP_COMMIT__` from Vite and shows them in the Help sidebar, the account menu ("What's new") and **Help → Release notes**.
+* `CHANGELOG.md` covers v0.1.0–v0.7.0, and `docs/VERSIONING.md` describes the policy and release steps. Git tags `v0.1.0`–`v0.7.0` mark each round.
+* Help topics were updated: IDs in the address bar, the views sidebar toggle, import defaults, charts and date filters, share password attempts, the new "Sign-in security" topic and the API's 423 / version.
+
+---
+
+## Round 5 (commit `1a5e05d`): owner-controlled privileges, device approval, API tokens, cross-base data, table ids, Help centre
 
 ### 1. Privileges: only the owner manages access
 

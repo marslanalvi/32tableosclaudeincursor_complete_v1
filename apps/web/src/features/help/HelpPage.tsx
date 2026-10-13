@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { APP_COMMIT, APP_VERSION } from "../../lib/version.ts";
 import account from "../account/account.module.css";
 import { HELP_TOPICS, HelpNavContext } from "./help-content.tsx";
 import s from "./help.module.css";
@@ -63,6 +64,10 @@ export function HelpPage({ topic, onTopic, onBack }: { topic: string; onTopic: (
               </div>
             ))}
             {!visible.length ? <div className={s.empty}>No topics match “{q}”.</div> : null}
+            <button type="button" className={s.version} onClick={() => onTopic("releases")} title="Release notes">
+              TableOS v{APP_VERSION}
+              {APP_COMMIT ? ` · ${APP_COMMIT}` : ""}
+            </button>
           </nav>
           <article className={s.article}>
             <h1>{current.title}</h1>

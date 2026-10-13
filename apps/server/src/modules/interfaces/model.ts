@@ -18,6 +18,7 @@ export const ELEMENT_TYPES = [
   "record_detail",
   "form",
   "button",
+  "date_filter",
 ] as const;
 export type ElementType = (typeof ELEMENT_TYPES)[number];
 
@@ -78,11 +79,13 @@ const metricConfig = z.object({
 
 const chartConfig = z.object({
   source: dataSource,
-  kind: z.enum(["bar", "line", "pie", "donut"]),
+  kind: z.enum(["bar", "hbar", "line", "area", "pie", "donut"]),
   x: z.object({
     fieldId: id,
+    /** Date fields: group by the start of each day / week / month / quarter / year. */
+    bucket: z.enum(["day", "week", "month", "quarter", "year"]).optional(),
     sort: z.enum(["label", "value_desc", "value_asc"]).default("label"),
-    limit: z.number().int().min(1).max(100).default(20),
+    limit: z.number().int().min(1).max(400).default(20),
   }),
   measures: z.array(measure).min(1).max(4),
   options: z.object({ showValues: z.boolean().optional(), showLegend: z.boolean().optional() }).optional(),
@@ -128,6 +131,15 @@ const buttonConfig = z.object({
 
 const textConfig = z.object({ body: z.string().max(20_000).default("") });
 
+export const DATE_PRESETS = ["all", "today", "last_7", "last_30", "last_90", "this_month", "last_month", "this_year", "custom"] as const;
+
+/** A date range picker that narrows every element on the page that reads `tableId`. */
+const dateFilterConfig = z.object({
+  tableId: id,
+  fieldId: id,
+  defaultPreset: z.enum(DATE_PRESETS).default("all"),
+});
+
 const layout = z.object({
   sectionId: z.string().max(64).default("sec_main"),
   lg: z.object({
@@ -157,6 +169,7 @@ export const elementSchema = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("record_detail"), config: recordDetailConfig }),
   z.object({ ...base, type: z.literal("form"), config: formConfig }),
   z.object({ ...base, type: z.literal("button"), config: buttonConfig }),
+  z.object({ ...base, type: z.literal("date_filter"), config: dateFilterConfig }),
 ]);
 export type InterfaceElement = z.infer<typeof elementSchema>;
 
@@ -203,6 +216,8 @@ export function sourceOf(el: InterfaceElement): {
       return { tableId: el.config.dataSource.tableId };
     case "form":
       return { tableId: el.config.tableId };
+    case "date_filter":
+      return { tableId: el.config.tableId };
     default:
       return null;
   }
@@ -225,6 +240,8 @@ export function fieldIdsOf(el: InterfaceElement): string[] {
       return el.config.measure.fieldId ? [el.config.measure.fieldId] : [];
     case "chart":
       return [el.config.x.fieldId, ...el.config.measures.flatMap((m) => (m.fieldId ? [m.fieldId] : []))];
+    case "date_filter":
+      return [el.config.fieldId];
     default:
       return [];
   }
@@ -240,6 +257,8 @@ export interface Diagnostic {
   severity: "error" | "warning";
   message: string;
 }
+
+const DATE_FIELD_TYPES = new Set(["date", "datetime", "created_time", "modified_time", "formula", "rollup", "lookup"]);
 
 /** Publish-time validation (architecture 13 §13.2 step 3), reference checks only. */
 export function validatePages(
@@ -276,6 +295,11 @@ export function validatePages(
               out.push({ ...at, severity: "error", message: `“${label}”: ${m.agg} needs a field` });
             }
           }
+        }
+        const dateFieldId = el.type === "date_filter" ? el.config.fieldId : el.type === "chart" && el.config.x.bucket ? el.config.x.fieldId : null;
+        const dateField = dateFieldId ? t.fields.get(dateFieldId) : undefined;
+        if (dateField && !DATE_FIELD_TYPES.has(dateField.type)) {
+          out.push({ ...at, severity: "error", message: `“${label}”: ${dateField.name} isn't a date field` });
         }
         if ((el.type === "table" || el.type === "record_list" || el.type === "gallery" || el.type === "form") && el.config.fields.length === 0) {
           out.push({ ...at, severity: "warning", message: `“${label}” shows no fields` });
