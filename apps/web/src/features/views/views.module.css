@@ -649,6 +649,15 @@ textarea.input {
   margin-bottom: 2px;
 }
 
+.filterTitle {
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
 .panelActions {
   display: flex;
   gap: 16px;
@@ -811,43 +820,239 @@ textarea.input {
   align-items: center;
 }
 
+/* One condition per row, Airtable-style: "Where" | [field | operator | value | 🗑 | ⠿] */
 .condRow {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  border-radius: 6px;
 }
 
-.condRow > .select {
-  min-width: 120px;
+.condRowDrop {
+  box-shadow: 0 -2px 0 var(--info-border);
 }
 
 .conj {
-  width: 56px;
-  flex-shrink: 0;
-  font-size: 13px;
-  color: var(--muted);
-  padding-top: 7px;
+  font-size: 14px;
+  color: var(--body);
+  padding: 7px 0 0 4px;
 }
 
 .selectConj {
   composes: select;
-  width: 56px;
-  flex-shrink: 0;
-  padding: 0 4px;
+  width: 72px;
+  max-width: none;
+  padding: 0 4px 0 8px;
+}
+
+.condBox {
+  display: flex;
+  align-items: stretch;
+  min-height: 32px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--canvas);
+}
+
+.condBox:focus-within {
+  border-color: var(--info-border);
+}
+
+.condField,
+.condOp {
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 30px;
+  padding: 0 24px 0 10px;
+  border: 0;
+  border-right: 1px solid var(--hairline);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.condField {
+  width: 30%;
+  border-radius: 6px 0 0 6px;
+}
+
+.condOp {
+  width: 26%;
+}
+
+.condField:focus,
+.condOp:focus {
+  outline: none;
+  background: var(--soft);
+}
+
+.condValueCell {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  border-right: 1px solid var(--hairline);
+}
+
+.condValueCell .inputCompact,
+.condValueCell .select {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: 30px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.condValueCell .inputCompact:focus,
+.condValueCell .select:focus {
+  box-shadow: none;
+  background: var(--soft);
 }
 
 .condValue {
-  display: inline-flex;
+  display: flex;
+  flex: 1;
   align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  min-width: 140px;
-  max-width: 280px;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 2px;
+}
+
+.condValue > * {
+  min-width: 0;
 }
 
 .condValueEmpty {
-  min-width: 140px;
+  flex: 1;
+}
+
+.condIconBtn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  border: 0;
+  border-right: 1px solid var(--hairline);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.condIconBtn:hover {
+  background: var(--soft);
+  color: var(--coral);
+}
+
+.condHandle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  color: var(--subtle);
+  font-size: 14px;
+  cursor: grab;
+  user-select: none;
+}
+
+.condHandle:hover {
+  color: var(--ink);
+}
+
+.condGroupCell {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+}
+
+.condGroupCell > .condHandle {
+  height: 32px;
+}
+
+.filterGroupNested .filterGroupHead .condIconBtn {
+  width: 28px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+}
+
+.filterActions {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding-top: 6px;
+}
+
+.filterActionsEnd {
+  margin-left: auto;
+}
+
+.linkBtnMuted {
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.linkBtnMuted:hover {
+  color: var(--ink);
+}
+
+.copyFrom {
+  position: relative;
+}
+
+.copyMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  z-index: 5;
+  min-width: 240px;
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(24, 29, 38, 0.14);
+}
+
+.copyItem {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.copyItem:hover:not(:disabled) {
+  background: var(--soft);
+}
+
+.copyItem:disabled {
+  color: var(--subtle);
+  cursor: default;
 }
 
 /* Color rules */

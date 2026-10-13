@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { DropdownMenu } from "../../app/ui.tsx";
 import type { FieldDto, FilterAst, TableDto, ViewDto } from "../../lib/api.ts";
 import type { RowHeight, SortSpec, ViewConfig } from "../../lib/api-areas/views.ts";
-import { FilterGroupEditor } from "./FilterBuilder.tsx";
+import { CopyFilterFrom, FilterGroupEditor } from "./FilterBuilder.tsx";
 import { Popover } from "./Popover.tsx";
 import { VIEW_CREATE_OPTIONS, type ViewKind } from "./view-types.ts";
 import {
@@ -761,6 +761,7 @@ export function ViewToolbar({
               width={640}
             >
               <div className={styles.panelBody}>
+                <div className={styles.filterTitle}>Filter</div>
                 <div className={styles.panelTitle}>In this view, show records</div>
                 <FilterGroupEditor
                   baseId={baseId}
@@ -769,6 +770,11 @@ export function ViewToolbar({
                   disabled={disabled}
                   onChange={(g: FilterGroup) =>
                     update({ filter: g.children.length ? (g as FilterAst) : null })
+                  }
+                  actions={
+                    !disabled && views?.length ? (
+                      <CopyFilterFrom views={views} currentViewId={view?.id} onCopy={(filter) => update({ filter })} />
+                    ) : null
                   }
                 />
               </div>

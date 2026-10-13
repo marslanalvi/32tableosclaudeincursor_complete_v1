@@ -8,6 +8,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.9.0",
+    date: "2026-10-13",
+    title: "Field permissions, better search, and the new activity and filter menus.",
+    items: [
+      "Field header menu → Edit field permissions: choose who can edit a field’s values (Editors and up, Creators and up, Specific users, or Nobody). Everyone still sees the values.",
+      "Search now finds columns by name: matching headers are highlighted and the grid scrolls to them.",
+      "Fixed being sent back to the sign-in page while searching a large table.",
+      "Search waits until you stop typing, so big tables stay fast.",
+      "Record activity: filter by all activity, revision history or comments, and follow a record’s comments with the bell.",
+      "Filters: each condition fits on one row, with Add condition group and Copy from another view.",
+    ],
+  },
+  {
     version: "0.8.2",
     date: "2026-10-13",
     title: "Sign-in works again.",

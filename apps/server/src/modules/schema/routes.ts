@@ -25,6 +25,13 @@ import {
 } from "./field-ops.js";
 import { deleteTableInTx, duplicateTableInTx, reorderTablesInTx } from "./table-ops.js";
 import { loadFieldRow, loadTableFieldRows, loadTableRow, type Db } from "./table-schema.js";
+import { FIELD_EDIT_LEVELS } from "./field-permissions.js";
+
+const fieldPermissionBody = z.object({
+  level: z.enum(FIELD_EDIT_LEVELS),
+  /** `usr_…` ids; required (non-empty) for "specific". */
+  userIds: z.array(z.string()).max(500).optional(),
+});
 
 const tableBody = z.object({
   name: z.string().trim().min(1).max(200),
@@ -529,6 +536,59 @@ export async function registerSchemaRoutes(
             aggregateType: "field",
             aggregateId: fieldId,
             payload: { tableId: s.tableId, fieldId, converted: res.converted },
+          };
+        });
+        void reply.send({ field: await serializeField(ctx.db, s.baseId, s.tableId, fieldId) });
+      } catch (err) {
+        handleRouteError(request, reply, err);
+      }
+    },
+  );
+
+  app.put<{ Params: { baseId: string; tableId: string; fieldId: string } }>(
+    "/v1/bases/:baseId/tables/:tableId/fields/:fieldId/permissions",
+    async (request, reply) => {
+      try {
+        const s = await tableScope(request, reply, true);
+        if (!s) return;
+        const fieldId = parsePid(request.params.fieldId, "fld");
+        const body = fieldPermissionBody.parse(request.body ?? {});
+        const field = await loadFieldRow(ctx.db, s.tableId, fieldId);
+        if (!field) throw new ApiError(404, "FIELD_NOT_FOUND", "Field not found");
+        let userIds: string[] = [];
+        if (body.level === "specific") {
+          try {
+            userIds = [...new Set((body.userIds ?? []).map((u) => parsePid(u, "usr")))];
+          } catch {
+            throw new ApiError(422, "VALIDATION_FAILED", "userIds must be usr_… ids");
+          }
+          if (!userIds.length) throw new ApiError(422, "VALIDATION_FAILED", "Pick at least one person who can edit this field");
+        }
+        const value = body.level === "editors" ? null : JSON.stringify({ level: body.level, userIds });
+        await withBaseTx(ctx.db, txParams(s), async (_mctx, trx) => {
+          await sql`
+            UPDATE data.fields SET edit_permission = ${value}::jsonb, updated_at = now()
+            WHERE id = ${fieldId} AND table_id = ${s.tableId} AND deleted_at IS NULL
+          `.execute(trx);
+          return {
+            kind: "schema" as const,
+            ops: [{ op: "field.updated", tableId: s.tableId, fieldId, typeChanged: false }],
+            inverseOps: [
+              {
+                op: "field.updated",
+                tableId: s.tableId,
+                fieldId,
+                name: field.name,
+                type: field.type,
+                config: field.config,
+                description: field.description,
+              },
+            ],
+            tableIds: [s.tableId],
+            eventType: "field.updated",
+            aggregateType: "field",
+            aggregateId: fieldId,
+            payload: { tableId: s.tableId, fieldId, editPermission: body.level },
           };
         });
         void reply.send({ field: await serializeField(ctx.db, s.baseId, s.tableId, fieldId) });

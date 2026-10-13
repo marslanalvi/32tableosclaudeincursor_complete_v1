@@ -185,6 +185,8 @@ export interface FieldDto {
   isReadOnly?: boolean;
   /** Managed by a table sync; edit it in the source base. */
   isSynced?: boolean;
+  /** Who can edit values; absent = editors and up. */
+  editPermission?: { level: "editors" | "creators" | "specific" | "nobody"; userIds: string[] };
 }
 
 export interface TableSyncInfo {

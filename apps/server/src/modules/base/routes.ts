@@ -181,8 +181,9 @@ export async function registerBaseRoutes(
           order_key: string;
           description: string;
           is_computed: boolean;
+          edit_permission: unknown;
         }>`
-          SELECT id, table_id, name, type, slot, config, order_key, description, is_computed
+          SELECT id, table_id, name, type, slot, config, order_key, description, is_computed, edit_permission
           FROM data.fields
           WHERE base_id = ${baseId} AND deleted_at IS NULL
           ORDER BY order_key ASC, slot ASC
@@ -269,6 +270,7 @@ export async function registerBaseRoutes(
                   description: f.description ?? "",
                   isComputed: f.is_computed,
                   tableId: f.table_id,
+                  editPermission: f.edit_permission,
                 },
                 { primaryFieldId: table.primary_field_id, nameById: fieldNameById },
               );

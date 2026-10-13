@@ -1,0 +1,140 @@
+.lead {
+  margin: 0 0 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hairline, #e3e5e8);
+  color: #4c5260;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.question {
+  font-weight: 600;
+  color: var(--ink, #181d26);
+}
+
+.selectWrap {
+  position: relative;
+}
+
+.selectBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-width: 190px;
+  height: 46px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #f2f3f5;
+  color: var(--ink, #181d26);
+  font: inherit;
+  cursor: pointer;
+}
+
+.selectBtn:hover,
+.selectBtn[aria-expanded="true"] {
+  background: #e9ebee;
+}
+
+.chev {
+  color: #6b7079;
+}
+
+.menu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 262px;
+  padding: 10px;
+  background: #ffffff;
+  border: 1px solid var(--hairline, #e3e5e8);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(24, 29, 38, 0.16);
+}
+
+.option,
+.optionOn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.option:hover,
+.optionOn {
+  background: #f2f3f5;
+}
+
+.optionLabel {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink, #181d26);
+}
+
+.optionHint {
+  font-size: 12px;
+  line-height: 1.45;
+  color: #6b7079;
+}
+
+.people {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--hairline, #e3e5e8);
+  border-radius: 8px;
+  padding: 6px;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.person:hover {
+  background: #f7f7f8;
+}
+
+.personName {
+  font-weight: 500;
+  color: var(--ink, #181d26);
+}
+
+.role {
+  margin-left: auto;
+  font-size: 12px;
+  text-transform: capitalize;
+  color: #6b7079;
+}
+
+.muted {
+  font-size: 12px;
+  color: #6b7079;
+}
+
+.error {
+  margin: 12px 0 0;
+  color: #aa2d00;
+  font-size: 13px;
+}

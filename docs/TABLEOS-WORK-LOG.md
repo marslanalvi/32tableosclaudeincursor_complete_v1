@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.8.2**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.9.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -19,8 +19,30 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | Migrate | `$env:DATABASE_URL="postgres://tabula:tabula@localhost:5432/tabula_cc"; npx pnpm@9.15.0 db:migrate` |
 | Typecheck | `npx tsc -p apps/server/tsconfig.json --noEmit` and `npx tsc -p apps/web/tsconfig.app.json --noEmit` |
 | Unit tests | `npx pnpm@9.15.0 --filter "@tabula/filter" --filter "@tabula/formula" test` (and other packages' `test`) |
-| API checks | `node .data/verify-interfaces.mjs`, `node .data/verify-round.mjs`, `node .data/verify-access.mjs`, `node .data/verify-sync.mjs`, `node .data/verify-r7.mjs` |
+| API checks | `node .data/verify-interfaces.mjs`, `node .data/verify-round.mjs`, `node .data/verify-access.mjs`, `node .data/verify-sync.mjs`, `node .data/verify-r7.mjs`, `node .data/verify-r9.mjs` |
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
+
+---
+
+## v0.9.0: field permissions, search by column name, no logout while searching
+
+* **Field permissions** (Airtable's "Field permissions"):
+  * Stored in `data.fields.edit_permission` (jsonb, migration 0077). `null` means Editors and up. The other levels are `creators`, `specific` (with `userIds`) and `nobody`.
+  * `apps/server/src/modules/schema/field-permissions.ts` holds the rules. `records/write.ts` checks them in `createRecordsInTx` / `updateRecordsInTx` for writes via `ui`, `api` and `import`, and fails with `403 FIELD_PERMISSION_DENIED`.
+  * Set with `PUT …/fields/:fieldId/permissions`, which needs schema rights.
+  * The field DTO, including `GET /v1/bases/:id`, carries `editPermission`.
+  * UI: field header menu → **Edit field permissions** (`FieldPermissionsDialog.tsx`). The grid and record drawer make restricted fields read-only for people who can't edit them.
+* **Search:**
+  * The toolbar search is debounced by 300 ms in `routes/table-grid.tsx`.
+  * `GridView` matches column names: it highlights the headers, scrolls to the first match, and shows a "Matching field" bar. A one-row probe query checks whether any cell matches. If none does, all records are shown.
+* **"Search sends me to login":**
+  * `http/auth-hook.ts` returned 401 when the session lookup itself failed (busy database or pool timeout), and the app treats 401 as signed out. It now returns `503 SERVICE_UNAVAILABLE`.
+  * `last_seen_at` is written at most once a minute, so parallel requests don't queue on the session row.
+* Also back from 0.8.0: the record activity menu and comment subscriptions, and the one-row filter builder.
+* **Verified:**
+  * `node .data/verify-r9.mjs`: 25 checks, covering permissions for an editor, the owner and a listed user, validation, and a burst of 20 searches and app calls on an 8,500-row table with no 401.
+  * `.data/r2-shell/r9-look.mjs`: browser check of search highlighting, the permissions dialog, specific users, the editor's read-only cell and the filter.
+  * All earlier verify scripts and the lockout test pass.
 
 ---
 

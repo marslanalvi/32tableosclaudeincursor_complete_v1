@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FieldUiServicesProvider,
   FieldValueEditor,
@@ -8,24 +8,13 @@ import {
   type FieldLike,
 } from "@tabula/field-ui";
 import { errorMessage, recordsApi, removeRecordsFromCaches, type RecordWire } from "../../lib/api-areas/records.ts";
-import { primaryFieldOf, recordTitle, useBaseDetail, useFieldServices } from "../grid/field-services.tsx";
-import { isEditableField } from "../grid/grid-utils.ts";
+import { primaryFieldOf, recordTitle, useBaseDetail, useBaseRole, useFieldServices } from "../grid/field-services.tsx";
+import { fieldPermissionAllows, isEditableField } from "../grid/grid-utils.ts";
 import { ConfirmDialog, Menu, type MenuEntry } from "../grid/Menu.tsx";
 import { Toaster, toastError, toastInfo } from "../grid/toast.tsx";
 import { noteRecordVersion, useRecordWrites } from "../grid/useRecordWrites.ts";
 import { RecordActivity } from "./RecordActivity.tsx";
 import styles from "./record-drawer-v2.module.css";
-
-// E owns RecordComments; mount it when the file exists (CONTRACTS §10).
-const commentModules = import.meta.glob("../comments/RecordComments.tsx");
-const commentsLoader = commentModules["../comments/RecordComments.tsx"];
-type CommentsProps = { baseId: string; tableId: string; recordId: string };
-const RecordComments = commentsLoader
-  ? lazy(async (): Promise<{ default: ComponentType<CommentsProps> }> => {
-      const mod = (await commentsLoader()) as { RecordComments?: ComponentType<CommentsProps> };
-      return { default: mod.RecordComments ?? (() => null) };
-    })
-  : null;
 
 /** Find a record in any cached records query (instant open from the grid). */
 function findCached(qc: ReturnType<typeof useQueryClient>, baseId: string, tableId: string, recordId: string): RecordWire | undefined {
@@ -67,6 +56,7 @@ export function RecordDrawer({ baseId, tableId, recordId, onClose, onNavigate, h
   const qc = useQueryClient();
   const base = useBaseDetail(baseId);
   const services = useFieldServices(baseId);
+  const access = useBaseRole(baseId).access;
   const table = base.data?.tables.find((t) => t.id === tableId);
   const fields = useMemo(() => ((table?.fields ?? []) as unknown as FieldLike[]), [table]);
   const [showHidden, setShowHidden] = useState(false);
@@ -121,7 +111,7 @@ export function RecordDrawer({ baseId, tableId, recordId, onClose, onNavigate, h
     if (!rec) return;
     try {
       const input: Record<string, unknown> = {};
-      for (const f of fields) if (isEditableField(f, true) && rec.fields[f.id] !== undefined) input[f.id] = toInputValue(f, rec.fields[f.id]);
+      for (const f of fields) if (isEditableField(f, true, access) && rec.fields[f.id] !== undefined) input[f.id] = toInputValue(f, rec.fields[f.id]);
       const copy = await recordsApi.duplicate(baseId, tableId, rec.id, input);
       void qc.invalidateQueries({ queryKey: ["records", baseId, tableId] });
       toastInfo("Record duplicated");
@@ -179,7 +169,7 @@ export function RecordDrawer({ baseId, tableId, recordId, onClose, onNavigate, h
         field={f}
         value={rec?.fields[f.id]}
         mode="form"
-        readOnly={!canEdit || Boolean((f as { isSynced?: boolean }).isSynced)}
+        readOnly={!canEdit || Boolean((f as { isSynced?: boolean }).isSynced) || !fieldPermissionAllows(f, access)}
         record={rec}
         fields={fields}
         error={rec?.errors?.[f.id]}
@@ -258,15 +248,6 @@ export function RecordDrawer({ baseId, tableId, recordId, onClose, onNavigate, h
                 recordId={recordId}
                 recordVersion={serverRec?.version}
                 fields={fields}
-                comments={
-                  RecordComments ? (
-                    <Suspense fallback={<div className={styles.sideBody}>Loading comments…</div>}>
-                      <RecordComments baseId={baseId} tableId={tableId} recordId={recordId} />
-                    </Suspense>
-                  ) : (
-                    <div className={styles.sideBody}>Comments are not available yet.</div>
-                  )
-                }
               />
             </aside>
           </div>
