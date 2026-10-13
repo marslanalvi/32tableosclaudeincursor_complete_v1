@@ -8,6 +8,30 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-13
+
+### Added
+- **Field permissions.** Field header menu → **Edit field permissions** limits who can edit a
+  field's values: Editors and up (default), Creators and up, Specific users, or Nobody. Everyone
+  with access still sees the values. The server enforces it for the app, the API and imports
+  (`403 FIELD_PERMISSION_DENIED`); automations and restores are not limited. New
+  `PUT /v1/bases/:baseId/tables/:tableId/fields/:fieldId/permissions` (needs schema rights).
+  Migration `0077_field_edit_permissions.sql`.
+- **Search finds columns by name.** Matching column headers are highlighted, the grid scrolls to
+  the first one, and a bar names them. If no cell contains the text, all records stay visible.
+- **Record activity menu** (from 0.8.0): All activity, Revision history only, Comments only, and
+  comment filters, plus a bell to follow a record's comments.
+- **One-row filter conditions** (from 0.8.0): Where | field | operator | value | delete | drag,
+  "Add condition group" and "Copy from another view".
+
+### Fixed
+- **Searching a large table sent you back to the sign-in page.** A busy or failing database
+  during the session check returned 401, which the app treats as signed out. It now returns
+  `503` and the app retries; you stay signed in.
+- The search box waits until you stop typing (300 ms) instead of querying the whole table on
+  every keystroke, and a session's "last seen" time is written at most once a minute instead of
+  on every request.
+
 ## [0.8.2] - 2026-10-13
 
 ### Fixed

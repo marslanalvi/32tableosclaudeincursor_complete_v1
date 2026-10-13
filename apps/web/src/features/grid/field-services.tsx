@@ -91,13 +91,16 @@ export function useBaseRole(baseId: string) {
         request<{ user?: { id: string } }>("/v1/auth/me"),
       ]);
       const mine = list.find((c) => c.id === me.user?.id);
-      return (mine?.role ?? "viewer") as BaseRole;
+      return { role: (mine?.role ?? "viewer") as BaseRole, userId: me.user?.id ?? null };
     },
     staleTime: 60_000,
   });
-  const role = q.data;
+  const role = q.data?.role;
   return {
     role,
+    userId: q.data?.userId ?? null,
+    /** For field permissions (`isEditableField(field, canEdit, access)`). */
+    access: role === undefined ? undefined : { role, userId: q.data?.userId ?? null },
     /** `undefined` until the role has loaded. */
     canEditRecords: role === undefined ? undefined : role === "owner" || role === "creator" || role === "editor",
     canEditSchema: role === undefined ? undefined : role === "owner" || role === "creator",

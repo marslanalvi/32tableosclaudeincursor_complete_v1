@@ -25,6 +25,8 @@ import { writeRecordLinksInTx } from "../links/record-links.js";
 import { deleteSidecars, shouldMaintainSidecar, upsertSidecars } from "../recordstore/sidecars.js";
 import type { SidecarFieldRow, SidecarTableMeta } from "../recordstore/sidecars.js";
 import { loadTableSchema, type FieldRowFull, type TableSchema } from "../schema/table-schema.js";
+import { canEditFieldValues, fieldPermissionDenied, parseEditPermission } from "../schema/field-permissions.js";
+import { compileForUser } from "../access/compile.js";
 import { noteSyncEdits } from "../sync/two-way.js";
 
 type DbTrx = Transaction<Database>;
@@ -54,6 +56,24 @@ function decodeFld(s: string): string | null {
     return parsePid(s, "fld");
   } catch {
     return null;
+  }
+}
+
+/** Writes made directly by a person; system replays (undo, restore, automations' own bookkeeping) are not limited. */
+const PERMISSION_CHECKED_VIA = new Set<WriteContext["via"]>(["ui", "api", "import", undefined]);
+
+/** Field permissions: reject values written into fields the acting user may not edit. */
+async function assertFieldPermissions(ctx: WriteContext, schema: TableSchema, prepared: PreparedFields[]): Promise<void> {
+  if (!PERMISSION_CHECKED_VIA.has(ctx.via)) return;
+  const touched = new Set<string>();
+  for (const p of prepared) for (const id of p.fieldIds) touched.add(id);
+  const restricted = [...touched]
+    .map((id) => schema.byId.get(id))
+    .filter((f): f is FieldRowFull => Boolean(f && parseEditPermission(f.editPermission)));
+  if (!restricted.length) return;
+  const role = ctx.userId ? (await compileForUser(ctx.trx as never, ctx.userId, ctx.baseId)).effectiveBaseRole : null;
+  for (const f of restricted) {
+    if (!canEditFieldValues(parseEditPermission(f.editPermission), role, ctx.userId)) throw fieldPermissionDenied(f.name, f.id);
   }
 }
 
@@ -435,6 +455,7 @@ export async function createRecordsInTx(
   }
 
   const prepared = items.map((item) => writer.prepare(item.fields ?? {}, opts));
+  await assertFieldPermissions(ctx, writer.schema, prepared);
   await writer.verifyRefs(trx, prepared);
   const configChangedFieldIds = await writer.persistConfigChanges(trx);
 
@@ -523,6 +544,7 @@ export async function updateRecordsInTx(
     throw new ApiError(422, "DUPLICATE_RECORD_ID", "The same record appears more than once in the request");
   }
   const prepared = items.map((item) => writer.prepare(item.fields ?? {}, opts));
+  await assertFieldPermissions(ctx, writer.schema, prepared);
   await writer.verifyRefs(trx, prepared);
 
   const existing = await sql<{ id: string; cells: Record<string, unknown>; version: string }>`

@@ -24,7 +24,7 @@ import {
   type EditDoneReason,
   type FieldLike,
 } from "@tabula/field-ui";
-import type { FilterAst, TableDto, ViewDto } from "../../lib/api.ts";
+import type { FieldDto, FilterAst, TableDto, ViewDto } from "../../lib/api.ts";
 import type { ViewConfig } from "../../lib/api-areas/views.ts";
 import { baseLocationPath, readBaseLocation } from "../../lib/base-url.ts";
 import {
@@ -40,6 +40,7 @@ import { initials } from "../../app/ui.tsx";
 import { usePresenceStore } from "../../stores/presence.ts";
 import { useOptionalBaseSession } from "../base/BaseSessionProvider.tsx";
 import { FieldDialog } from "../schema/FieldDialog.tsx";
+import { FieldPermissionsDialog } from "../schema/FieldPermissionsDialog.tsx";
 import { useFieldActions } from "../schema/field-actions.ts";
 import { useBaseRole, useFieldServices } from "./field-services.tsx";
 import {
@@ -168,6 +169,8 @@ export function GridView(props: GridViewProps) {
   // Synced tables mirror another base: their own extra fields stay editable, rows can't be added or removed.
   const canAddRemove = canEditRecords && !props.table.sync;
   const canEditSchema = props.canEditSchema ?? baseRole.canEditSchema ?? false;
+  const fieldAccessRef = useRef(baseRole.access);
+  fieldAccessRef.current = baseRole.access;
   const qc = useQueryClient();
   const services = useFieldServices(baseId);
   const fieldActions = useFieldActions(baseId, table.id);
@@ -219,7 +222,22 @@ export function GridView(props: GridViewProps) {
     for (const s of sorts ?? []) if (s.fieldId && !out.some((o) => o.field === s.fieldId)) out.push({ field: s.fieldId, direction: s.direction });
     return out;
   }, [groups, sorts]);
-  const term = search.trim();
+  const searchTerm = search.trim();
+  // Search also finds columns by name. When no cell contains the text but a column name does,
+  // keep every row and point at the column instead of showing an empty grid.
+  const fieldMatchIds = useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    return q ? columns.filter((f) => f.name.toLowerCase().includes(q)).map((f) => f.id) : [];
+  }, [searchTerm, columns]);
+  const contentProbe = useQuery({
+    queryKey: ["records", baseId, table.id, "grid-probe", view.id, filter ?? null, searchTerm],
+    enabled: fieldMatchIds.length > 0,
+    queryFn: ({ signal }) =>
+      recordsApi.query(baseId, table.id, { filter: filter ?? null, sort: [], search: searchTerm, pageSize: 1, cursor: null }, signal),
+    staleTime: 10_000,
+  });
+  const onlyFieldMatch = fieldMatchIds.length > 0 && contentProbe.data !== undefined && (contentProbe.data.records?.length ?? 0) === 0;
+  const term = onlyFieldMatch ? "" : searchTerm;
   const queryKey = useMemo(
     () => ["records", baseId, table.id, "grid", view.id, filter ?? null, effSort, term],
     [baseId, table.id, view.id, filter, effSort, term],
@@ -532,6 +550,19 @@ export function GridView(props: GridViewProps) {
     [itemIndexByNav, offsets, rowH, colLayout],
   );
 
+  const firstFieldMatch = fieldMatchIds[0];
+  useEffect(() => {
+    const el = scrollerRef.current;
+    const col = firstFieldMatch ? colLayout.find((c) => c.field.id === firstFieldMatch) : undefined;
+    if (!el || !col || col.frozen) return;
+    const frozenW = colLayout.filter((c) => c.frozen).reduce((s, c) => s + c.w, ROWNUM_W);
+    if (col.x - frozenW < el.scrollLeft || col.x + col.w > el.scrollLeft + el.clientWidth) {
+      el.scrollLeft = Math.max(0, col.x - frozenW - 40);
+    }
+    // Only when the matched column changes, not on every resize.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firstFieldMatch]);
+
   const select = useCallback(
     (cell: Cell, extend = false) => {
       setActive(cell);
@@ -567,7 +598,7 @@ export function GridView(props: GridViewProps) {
   const startEdit = useCallback(
     (cell: Cell, initialText?: string) => {
       const f = fieldById(cell.f);
-      if (!f || !isEditableField(f, canEditRecords)) return false;
+      if (!f || !isEditableField(f, canEditRecords, fieldAccessRef.current)) return false;
       if (f.type === "checkbox") return false;
       setActive(cell);
       setAnchor(cell);
@@ -587,7 +618,7 @@ export function GridView(props: GridViewProps) {
     (cell: Cell) => {
       const f = fieldById(cell.f);
       const rec = records.find((r) => r.id === cell.r);
-      if (!f || !rec || f.type !== "checkbox" || !isEditableField(f, canEditRecords)) return;
+      if (!f || !rec || f.type !== "checkbox" || !isEditableField(f, canEditRecords, fieldAccessRef.current)) return;
       void writes.writeRecord(rec.id, { [f.id]: rec.fields[f.id] === true ? null : true });
     },
     [fieldById, records, canEditRecords, writes],
@@ -623,7 +654,7 @@ export function GridView(props: GridViewProps) {
   const clearRange = useCallback(() => {
     const byRec = new Map<string, Record<string, unknown>>();
     for (const { rec, field } of rangeCells()) {
-      if (!isEditableField(field, canEditRecords) || isEmptyValue(rec.fields[field.id])) continue;
+      if (!isEditableField(field, canEditRecords, fieldAccessRef.current) || isEmptyValue(rec.fields[field.id])) continue;
       const cur = byRec.get(rec.id) ?? {};
       cur[field.id] = null;
       byRec.set(rec.id, cur);
@@ -710,7 +741,7 @@ export function GridView(props: GridViewProps) {
         const rawPatch: Record<string, unknown> = {};
         for (let j = 0; j < w; j++) {
           const f = columns[c0 + j];
-          if (!f || !isEditableField(f, true)) continue;
+          if (!f || !isEditableField(f, true, fieldAccessRef.current)) continue;
           const t = cellText(i, j);
           const v = parseTextToValue(f, t);
           if (v === undefined) {
@@ -821,7 +852,7 @@ export function GridView(props: GridViewProps) {
           requestAnimationFrame(() => {
             setActive({ r: rec.id, f: firstCol.id });
             setAnchor({ r: rec.id, f: firstCol.id });
-            if (isEditableField(firstCol, canEditRecords) && firstCol.type !== "checkbox") setEditing({ r: rec.id, f: firstCol.id });
+            if (isEditableField(firstCol, canEditRecords, fieldAccessRef.current) && firstCol.type !== "checkbox") setEditing({ r: rec.id, f: firstCol.id });
           });
         }
       } catch (e) {
@@ -867,7 +898,7 @@ export function GridView(props: GridViewProps) {
           const input: Record<string, unknown> = {};
           if (src) {
             for (const f of allFields) {
-              if (!isEditableField(f, true) || src.fields[f.id] === undefined) continue;
+              if (!isEditableField(f, true, fieldAccessRef.current) || src.fields[f.id] === undefined) continue;
               input[f.id] = toInputValue(f, src.fields[f.id]);
             }
           }
@@ -888,6 +919,7 @@ export function GridView(props: GridViewProps) {
   // ------------------------------------------------------------------ menus
   const [menu, setMenu] = useState<null | { x: number; y: number; items: MenuEntry[] }>(null);
   const [fieldDialog, setFieldDialog] = useState<null | { field?: FieldWire; insert?: { at: string; side: "left" | "right" } }>(null);
+  const [permissionsField, setPermissionsField] = useState<FieldDto | null>(null);
 
   const canReorderRows = canEditRecords && effSort.length === 0 && !term;
 
@@ -929,6 +961,13 @@ export function GridView(props: GridViewProps) {
       };
       const items: MenuEntry[] = [
         { key: "edit", icon: "✎", label: "Edit field", disabled: !canEditSchema, onSelect: () => setFieldDialog({ field: field as FieldWire }) },
+        {
+          key: "perms",
+          icon: "🔒",
+          label: "Edit field permissions",
+          disabled: !canEditSchema || Boolean(field.isComputed),
+          onSelect: () => setPermissionsField(field as unknown as FieldDto),
+        },
         { key: "dup", icon: "⧉", label: "Duplicate field", disabled: !canEditSchema, onSelect: () => void fieldActions.duplicate(field as FieldWire, true).catch(() => undefined) },
         { key: "left", icon: "←", label: "Insert left", disabled: !canEditSchema || isPrimary, onSelect: () => setFieldDialog({ insert: { at: field.id, side: "left" } }) },
         { key: "right", icon: "→", label: "Insert right", disabled: !canEditSchema, onSelect: () => setFieldDialog({ insert: { at: field.id, side: "right" } }) },
@@ -1177,7 +1216,7 @@ export function GridView(props: GridViewProps) {
     setFillTo(null);
     if (field?.type === "checkbox" && target.closest("[data-tfu-checkbox]")) toggleCheckbox(cell);
     const star = target.closest<HTMLElement>("[data-tfu-rating]");
-    if (field?.type === "rating" && star && isEditableField(field, canEditRecords)) {
+    if (field?.type === "rating" && star && isEditableField(field, canEditRecords, fieldAccessRef.current)) {
       const n = Number(star.dataset["tfuRating"]);
       const cur = lookupMap.get(cell.r)?.fields[field.id];
       void writes.writeRecord(cell.r, { [field.id]: cur === n ? null : n });
@@ -1215,7 +1254,7 @@ export function GridView(props: GridViewProps) {
           const fields: Record<string, unknown> = {};
           for (let c = range.left; c <= range.right; c++) {
             const f = columns[c]!;
-            if (!isEditableField(f, canEditRecords)) continue;
+            if (!isEditableField(f, canEditRecords, fieldAccessRef.current)) continue;
             fields[f.id] = src.fields[f.id] ?? null;
           }
           if (Object.keys(fields).length) updates.push({ id: dest.id, fields });
@@ -1301,7 +1340,7 @@ export function GridView(props: GridViewProps) {
     }
     if (key.length === 1 && !mod && !e.altKey && field) {
       const textual = !["single_select", "multi_select", "collaborator", "link", "attachment", "rating", "checkbox"].includes(field.type);
-      if (field.type === "rating" && /^[0-9]$/.test(key) && isEditableField(field, canEditRecords)) {
+      if (field.type === "rating" && /^[0-9]$/.test(key) && isEditableField(field, canEditRecords, fieldAccessRef.current)) {
         e.preventDefault();
         void writes.writeRecord(active.r, { [field.id]: Number(key) || null });
         return;
@@ -1525,6 +1564,13 @@ export function GridView(props: GridViewProps) {
   return (
     <FieldUiServicesProvider value={services}>
       <div className={styles.root}>
+        {fieldMatchIds.length > 0 ? (
+          <div className={styles.searchHint} role="status">
+            {fieldMatchIds.length === 1 ? "Matching field:" : `${fieldMatchIds.length} matching fields:`}{" "}
+            <b>{fieldMatchIds.map((id) => columns.find((f) => f.id === id)?.name).join(", ")}</b>
+            {onlyFieldMatch ? <span>· no cell contains “{searchTerm}”, showing all records</span> : null}
+          </div>
+        ) : null}
         <div
           ref={scrollerRef}
           className={styles.scroller}
@@ -1559,7 +1605,7 @@ export function GridView(props: GridViewProps) {
                   <div
                     key={f.id}
                     role="columnheader"
-                    className={`${styles.hcell} ${c.idx === lastFrozenIdx ? styles.frozenEdge : ""} ${colSelected ? styles.hcellSelected : ""} ${colDrag?.id === f.id ? styles.hcellDragging : ""}`}
+                    className={`${styles.hcell} ${c.idx === lastFrozenIdx ? styles.frozenEdge : ""} ${colSelected ? styles.hcellSelected : ""} ${colDrag?.id === f.id ? styles.hcellDragging : ""} ${fieldMatchIds.includes(f.id) ? styles.hcellSearchMatch : ""}`}
                     style={style}
                     title={f.description ? `${f.name} — ${f.description}` : f.name}
                     onMouseDown={(e) => beginHeaderDrag(e, f)}
@@ -1750,6 +1796,9 @@ export function GridView(props: GridViewProps) {
               c.run();
             }}
           />
+        ) : null}
+        {permissionsField ? (
+          <FieldPermissionsDialog baseId={baseId} tableId={table.id} field={permissionsField} onClose={() => setPermissionsField(null)} />
         ) : null}
         {fieldDialog ? (
           <FieldDialog

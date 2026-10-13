@@ -18,6 +18,8 @@ export interface FieldRowFull {
   isComputed: boolean;
   orderKey: string;
   indexState: string;
+  /** data.fields.edit_permission (null = editors and up). */
+  editPermission?: unknown;
 }
 
 interface RawFieldRow {
@@ -31,6 +33,7 @@ interface RawFieldRow {
   is_computed: boolean;
   order_key: string;
   index_state: string;
+  edit_permission?: unknown;
 }
 
 function mapField(r: RawFieldRow): FieldRowFull {
@@ -45,11 +48,12 @@ function mapField(r: RawFieldRow): FieldRowFull {
     isComputed: r.is_computed,
     orderKey: r.order_key,
     indexState: r.index_state ?? "none",
+    editPermission: r.edit_permission ?? null,
   };
 }
 
 const FIELD_COLUMNS = sql.raw(
-  "id, table_id, slot, name, type, config, description, is_computed, order_key, index_state",
+  "id, table_id, slot, name, type, config, description, is_computed, order_key, index_state, edit_permission",
 );
 
 export async function loadTableFieldRows(db: Db, tableId: string): Promise<FieldRowFull[]> {
@@ -64,7 +68,7 @@ export async function loadTableFieldRows(db: Db, tableId: string): Promise<Field
 export async function loadBaseFieldRows(db: Db, baseId: string): Promise<FieldRowFull[]> {
   const r = await sql<RawFieldRow>`
     SELECT f.id, f.table_id, f.slot, f.name, f.type, f.config, f.description, f.is_computed,
-           f.order_key, f.index_state
+           f.order_key, f.index_state, f.edit_permission
     FROM data.fields f
     JOIN data.tables t ON t.id = f.table_id AND t.deleted_at IS NULL
     WHERE f.base_id = ${baseId} AND f.deleted_at IS NULL

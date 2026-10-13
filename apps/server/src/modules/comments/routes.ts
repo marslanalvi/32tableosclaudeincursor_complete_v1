@@ -12,12 +12,22 @@ import { assertCan } from "../access/assert.js";
 import { compileForUser } from "../access/compile.js";
 import { handleWave4Error } from "../wave4/problems.js";
 import { createNotifications, recordLink, recordTitle, type NewNotification } from "../notifications/create.js";
+import { attachmentIdsFromCell, hydrateAttachments } from "../attachments/service.js";
 import { parseMentions, plainTextBody } from "./mentions.js";
 
-const commentBody = z.object({
-  body: z.string().trim().min(1).max(10000),
-  parentId: z.string().nullish(),
-});
+const commentBody = z
+  .object({
+    body: z.string().trim().max(10000).default(""),
+    parentId: z.string().nullish(),
+    /** Files attached to the comment (uploaded first via /attachments/presign). */
+    attachmentIds: z.array(z.string()).max(10).default([]),
+    /** The record attachment this comment is about. */
+    targetAttachmentId: z.string().nullish(),
+  })
+  .refine((b) => b.body.length > 0 || b.attachmentIds.length > 0, { message: "Write a comment or attach a file", path: ["body"] });
+
+export const NOTIFY_LEVELS = ["all", "mentions", "off"] as const;
+export type NotifyLevel = (typeof NOTIFY_LEVELS)[number];
 
 interface CommentRow {
   id: string;
@@ -28,6 +38,11 @@ interface CommentRow {
   updated_at: Date | null;
   author_name: string | null;
   author_email: string | null;
+  resolved_at: Date | null;
+  resolved_by: string | null;
+  resolver_name: string | null;
+  attachment_ids: string[] | null;
+  target_attachment_id: string | null;
 }
 
 function initials(name: string): string {
@@ -94,6 +109,10 @@ export async function registerCommentsRoutes(
           WHERE m.comment_id = ANY(${ids}::uuid[]) AND m.principal_type = 'user'
         `.execute(ctx.db)
       : { rows: [] };
+    const files = await hydrateAttachments(
+      ctx.db,
+      rows.flatMap((r) => [...(r.attachment_ids ?? []), ...(r.target_attachment_id ? [r.target_attachment_id] : [])]),
+    );
 
     return rows.map((c) => {
       const byEmoji = new Map<string, { emoji: string; count: number; userIds: string[]; userNames: string[]; reactedByMe: boolean }>();
@@ -128,16 +147,52 @@ export async function registerCommentsRoutes(
         mentions: mentions.rows
           .filter((m) => m.comment_id === c.id)
           .map((m) => ({ id: pid("usr", m.principal_id), name: m.name || m.email || "", email: m.email ?? "" })),
+        resolved: c.resolved_at
+          ? {
+              at: c.resolved_at.toISOString(),
+              by: c.resolved_by ? { id: pid("usr", c.resolved_by), name: c.resolver_name ?? "" } : null,
+            }
+          : null,
+        attachments: (c.attachment_ids ?? []).map((id) => files.get(id)).filter((a): a is NonNullable<typeof a> => Boolean(a)),
+        target: c.target_attachment_id
+          ? {
+              attachmentId: pid("att", c.target_attachment_id),
+              filename: files.get(c.target_attachment_id)?.filename ?? "Deleted attachment",
+              attachment: files.get(c.target_attachment_id) ?? null,
+            }
+          : null,
       };
     });
   }
 
   const COMMENT_SELECT = sql`
     SELECT c.id, c.parent_id, c.body, c.created_by, c.created_at, c.updated_at,
-           u.display_name AS author_name, u.email AS author_email
+           u.display_name AS author_name, u.email AS author_email,
+           c.resolved_at, c.resolved_by, ru.display_name AS resolver_name,
+           c.attachment_ids, c.target_attachment_id
     FROM data.comments c
     LEFT JOIN core.users u ON u.id = c.created_by
+    LEFT JOIN core.users ru ON ru.id = c.resolved_by
   `;
+
+  /** Attachment ids (att_ or uuid) that exist in this base; anything else is a 422. */
+  async function baseAttachmentIds(baseId: string, values: string[]): Promise<string[] | null> {
+    const ids = attachmentIdsFromCell(values);
+    if (ids.length !== values.length) return null;
+    if (ids.length === 0) return [];
+    const found = await sql<{ id: string }>`
+      SELECT id FROM data.attachments WHERE base_id = ${baseId} AND id = ANY(${ids}::uuid[])
+    `.execute(ctx.db);
+    return found.rows.length === new Set(ids).size ? ids : null;
+  }
+
+  async function notifyLevels(baseId: string, tableId: string, recordId: string): Promise<Map<string, NotifyLevel>> {
+    const r = await sql<{ user_id: string; level: NotifyLevel }>`
+      SELECT user_id, level FROM data.record_subscriptions
+      WHERE base_id = ${baseId} AND table_id = ${tableId} AND record_id = ${recordId}
+    `.execute(ctx.db);
+    return new Map(r.rows.map((x) => [x.user_id, x.level]));
+  }
 
   app.get<{ Params: { baseId: string; tableId: string; recordId: string } }>(
     "/v1/bases/:baseId/tables/:tableId/records/:recordId/comments",
@@ -182,6 +237,13 @@ export async function registerCommentsRoutes(
           }
           parentAuthor = parent.rows[0].created_by;
         }
+        const attachmentIds = await baseAttachmentIds(baseId, body.attachmentIds);
+        const targetIds = body.targetAttachmentId ? await baseAttachmentIds(baseId, [body.targetAttachmentId]) : [];
+        if (!attachmentIds || !targetIds) {
+          validationProblem(request, reply, "Attachment not found in this base");
+          return;
+        }
+        const targetAttachmentId = targetIds[0] ?? null;
 
         // Only users in the base's organization can be mentioned.
         const parsed = parseMentions(body.body).filter((m) => m.principalType === "user");
@@ -198,10 +260,11 @@ export async function registerCommentsRoutes(
         await ctx.db.transaction().execute(async (trx) => {
           await sql`
             INSERT INTO data.comments (
-              id, workspace_id, base_id, table_id, record_id, parent_id, body, created_by
+              id, workspace_id, base_id, table_id, record_id, parent_id, body, created_by,
+              attachment_ids, target_attachment_id
             ) VALUES (
               ${commentId}, ${table.workspaceId}, ${baseId}, ${tableId}, ${recordId},
-              ${parentId}, ${body.body}, ${user.id}
+              ${parentId}, ${body.body}, ${user.id}, ${attachmentIds}::uuid[], ${targetAttachmentId}
             )
           `.execute(trx);
           await sql`
@@ -221,12 +284,15 @@ export async function registerCommentsRoutes(
         try {
           const title = await recordTitle(ctx.db, tableId, recordId);
           const actorName = user.displayName || user.email;
-          const text = plainTextBody(body.body);
+          const text = plainTextBody(body.body) || `Attached ${attachmentIds.length} file${attachmentIds.length === 1 ? "" : "s"}`;
           const link = recordLink(baseId, tableId, recordId, { comment: pid("cmt", commentId) });
+          const levels = await notifyLevels(baseId, tableId, recordId);
           const notified = new Set<string>([user.id]);
           const items: NewNotification[] = [];
           const add = (userId: string, category: NewNotification["category"], t: string) => {
             if (notified.has(userId)) return;
+            const level = levels.get(userId);
+            if (level === "off" || (category === "comment" && level !== "all")) return;
             notified.add(userId);
             items.push({
               userId,
@@ -246,11 +312,7 @@ export async function registerCommentsRoutes(
           };
           for (const id of mentionIds) add(id, "mention", `${actorName} mentioned you on “${title}”`);
           if (parentAuthor) add(parentAuthor, "reply", `${actorName} replied to your comment on “${title}”`);
-          const subs = await sql<{ user_id: string }>`
-            SELECT user_id FROM data.record_subscriptions
-            WHERE base_id = ${baseId} AND table_id = ${tableId} AND record_id = ${recordId}
-          `.execute(ctx.db);
-          for (const s of subs.rows) add(s.user_id, "comment", `${actorName} commented on “${title}”`);
+          for (const userId of levels.keys()) add(userId, "comment", `${actorName} commented on “${title}”`);
           await createNotifications(ctx.db, items);
         } catch (err) {
           request.log.warn({ err }, "comment notifications failed");
@@ -356,6 +418,71 @@ export async function registerCommentsRoutes(
           WHERE id = ${scope.commentId} OR parent_id = ${scope.commentId}
         `.execute(ctx.db);
         void reply.code(204).send();
+      } catch (err) {
+        handleWave4Error(request, reply, err);
+      }
+    },
+  );
+
+  // Resolve / reopen a thread (top-level comments only); anyone who can comment may do it.
+  app.post<{ Params: { baseId: string; commentId: string } }>(
+    "/v1/bases/:baseId/comments/:commentId/resolve",
+    async (request, reply) => {
+      try {
+        const scope = await commentScope(request, reply);
+        if (!scope) return;
+        assertCan(scope.snapshot, "record.comment");
+        const body = z.object({ resolved: z.boolean().default(true) }).parse(request.body ?? {});
+        const parent = await sql<{ parent_id: string | null }>`
+          SELECT parent_id FROM data.comments WHERE id = ${scope.commentId}
+        `.execute(ctx.db);
+        if (parent.rows[0]?.parent_id) {
+          validationProblem(request, reply, "Only a thread's first comment can be resolved");
+          return;
+        }
+        await sql`
+          UPDATE data.comments
+          SET resolved_at = ${body.resolved ? sql`now()` : null}, resolved_by = ${body.resolved ? scope.user.id : null}
+          WHERE id = ${scope.commentId}
+        `.execute(ctx.db);
+        const rows = await sql<CommentRow>`${COMMENT_SELECT} WHERE c.id = ${scope.commentId}`.execute(ctx.db);
+        const [comment] = await serializeComments(rows.rows, scope.user.id);
+        void reply.send({ comment });
+      } catch (err) {
+        handleWave4Error(request, reply, err);
+      }
+    },
+  );
+
+  // Which comments on this record notify me (the bell in the record's activity panel).
+  // Without a row you still get @mentions and replies, so the default reads as "mentions".
+  app.get<{ Params: { baseId: string; tableId: string; recordId: string } }>(
+    "/v1/bases/:baseId/tables/:tableId/records/:recordId/subscription",
+    async (request, reply) => {
+      try {
+        const scope = await recordScope(request, reply);
+        if (!scope) return;
+        const level = (await notifyLevels(scope.baseId, scope.tableId, scope.recordId)).get(scope.user.id) ?? "mentions";
+        void reply.send({ level });
+      } catch (err) {
+        handleWave4Error(request, reply, err);
+      }
+    },
+  );
+
+  app.put<{ Params: { baseId: string; tableId: string; recordId: string } }>(
+    "/v1/bases/:baseId/tables/:tableId/records/:recordId/subscription",
+    async (request, reply) => {
+      try {
+        const scope = await recordScope(request, reply);
+        if (!scope) return;
+        const { level } = z.object({ level: z.enum(NOTIFY_LEVELS) }).parse(request.body ?? {});
+        await sql`
+          INSERT INTO data.record_subscriptions (workspace_id, base_id, table_id, record_id, user_id, level)
+          VALUES (${scope.table.workspaceId}, ${scope.baseId}, ${scope.tableId}, ${scope.recordId}, ${scope.user.id}, ${level})
+          ON CONFLICT (workspace_id, base_id, table_id, record_id, user_id) DO UPDATE SET level = EXCLUDED.level
+        `.execute(ctx.db);
+        void reply.send({ level });
       } catch (err) {
         handleWave4Error(request, reply, err);
       }

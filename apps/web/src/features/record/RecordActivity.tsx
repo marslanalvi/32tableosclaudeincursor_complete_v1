@@ -1,7 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fieldTypeIcon, renderCellValue, type FieldLike } from "@tabula/field-ui";
-import { commentsApi, relativeTime, type CommentWire } from "../../lib/api-areas/collab.ts";
+import { DropdownMenu, type MenuItemSpec } from "../../app/ui.tsx";
+import { commentsApi, relativeTime, type NotifyLevel } from "../../lib/api-areas/collab.ts";
 import {
   errorMessage,
   recordsApi,
@@ -9,24 +10,58 @@ import {
   type HistoryEntryWire,
   type HistoryFieldWire,
 } from "../../lib/api-areas/records.ts";
+import { RecordComments, type CommentFilter, type TimelineItem } from "../comments/RecordComments.tsx";
 import styles from "./record-activity.module.css";
 
-export type ActivityFilter = "all" | "comments" | "history";
+/** Airtable's record activity menu. */
+export type ActivityFilter = "all" | "history" | "comments" | "record_comments" | "attachment_comments" | "with_attachments";
 
 const FILTER_KEY = "tabula.recordActivityFilter";
+const RESOLVED_KEY = "tabula.recordActivityResolved";
 const FILTER_LABELS: Record<ActivityFilter, string> = {
   all: "All activity",
-  comments: "Comments only",
-  history: "Revision history only",
+  history: "Revision history",
+  comments: "All comments",
+  record_comments: "Record comments",
+  attachment_comments: "Comments on attachments",
+  with_attachments: "Comments with attachments",
 };
-const MENTION_RE = /@\[([^\]\n]{1,200})\]\((usr_[A-Za-z0-9]+)\)/g;
+const COMMENTS_FOR: Record<ActivityFilter, CommentFilter> = {
+  all: "all",
+  history: "none",
+  comments: "all",
+  record_comments: "record",
+  attachment_comments: "on_attachments",
+  with_attachments: "with_attachments",
+};
+const NOTIFY_LABELS: Record<NotifyLevel, string> = {
+  all: "All comments",
+  mentions: "Only @mentions and replies",
+  off: "Off",
+};
 
 function readFilter(): ActivityFilter {
   try {
     const v = localStorage.getItem(FILTER_KEY);
-    return v === "comments" || v === "history" || v === "all" ? v : "all";
+    return v && v in FILTER_LABELS ? (v as ActivityFilter) : "all";
   } catch {
     return "all";
+  }
+}
+
+function readResolved(): boolean {
+  try {
+    return localStorage.getItem(RESOLVED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function store(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* private mode */
   }
 }
 
@@ -164,81 +199,47 @@ function HistoryItem({ entry, fields, metas }: { entry: HistoryEntryWire; fields
   );
 }
 
-function renderBody(body: string): ReactNode {
-  const parts: ReactNode[] = [];
-  let last = 0;
-  let i = 0;
-  for (const m of body.matchAll(MENTION_RE)) {
-    const start = m.index ?? 0;
-    if (start > last) parts.push(body.slice(last, start));
-    parts.push(
-      <span key={i++} className={styles.mention}>
-        @{m[1]}
-      </span>,
-    );
-    last = start + m[0].length;
-  }
-  if (last < body.length) parts.push(body.slice(last));
-  return parts;
-}
-
-function CommentItem({ comment }: { comment: CommentWire }) {
-  const name = comment.author?.name ?? comment.authorName ?? "Unknown";
-  return (
-    <li className={styles.item} data-testid="activity-comment">
-      <span className={`${styles.avatar} ${styles.avatarComment}`} aria-hidden>
-        {comment.author?.initials ?? initials(name)}
-      </span>
-      <div className={styles.main}>
-        <div className={styles.line}>
-          <span className={styles.who}>{name}</span> <span className={styles.verb}>{comment.parentId ? "replied" : "commented"}</span>
-          {comment.edited ? <span className={styles.verb}> (edited)</span> : null}
-        </div>
-        <Time iso={comment.createdAt} />
-        <div className={styles.commentBody}>{renderBody(comment.body)}</div>
-      </div>
-    </li>
-  );
-}
-
-function QuickComment({ baseId, tableId, recordId, disabled }: { baseId: string; tableId: string; recordId: string; disabled: boolean }) {
+/** Bell: which comments on this record notify me. */
+function NotifyMenu({ baseId, tableId, recordId }: { baseId: string; tableId: string; recordId: string }) {
   const qc = useQueryClient();
-  const [text, setText] = useState("");
-  const send = useMutation({
-    mutationFn: (body: string) => commentsApi.create(baseId, tableId, recordId, body),
-    onSuccess: () => {
-      setText("");
-      void qc.invalidateQueries({ queryKey: ["comments", baseId, tableId, recordId] });
-    },
+  const key = ["record-subscription", baseId, tableId, recordId];
+  const sub = useQuery({ queryKey: key, queryFn: () => commentsApi.subscription(baseId, tableId, recordId), staleTime: 30_000 });
+  const set = useMutation({
+    mutationFn: (level: NotifyLevel) => commentsApi.setSubscription(baseId, tableId, recordId, level),
+    onMutate: (level) => qc.setQueryData(key, { level }),
+    onSettled: () => void qc.invalidateQueries({ queryKey: key }),
   });
-  const submit = () => {
-    const body = text.trim();
-    if (body && !send.isPending) send.mutate(body);
-  };
-  if (disabled) return null;
+  const level = sub.data?.level ?? "mentions";
+  const items: MenuItemSpec[] = [
+    { key: "h", heading: true, label: "Notify me about" },
+    ...(Object.keys(NOTIFY_LABELS) as NotifyLevel[]).map((l) => ({
+      key: l,
+      label: NOTIFY_LABELS[l],
+      hint: l === level ? "✓" : undefined,
+      onSelect: () => set.mutate(l),
+    })),
+  ];
   return (
-    <div className={styles.composer}>
-      <textarea
-        className={styles.textarea}
-        rows={2}
-        value={text}
-        placeholder="Leave a comment"
-        aria-label="Leave a comment"
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-            e.preventDefault();
-            submit();
-          }
-        }}
-      />
-      <div className={styles.composerRow}>
-        {send.isError ? <span className={styles.error}>{errorMessage(send.error)}</span> : <span className={styles.hint}>Ctrl+Enter to send</span>}
-        <button type="button" className={styles.btnPrimary} disabled={!text.trim() || send.isPending} onClick={submit}>
-          Comment
+    <DropdownMenu
+      align="right"
+      items={items}
+      trigger={({ toggle, open }) => (
+        <button
+          type="button"
+          className={open ? styles.headBtnOn : styles.headBtn}
+          onClick={toggle}
+          aria-label={`Notifications for this record: ${NOTIFY_LABELS[level]}`}
+          title={`Notifications: ${NOTIFY_LABELS[level]}`}
+        >
+          <span aria-hidden className={level === "off" ? styles.bellOff : undefined}>
+            🔔
+          </span>
+          <span aria-hidden className={styles.chevron}>
+            ⌄
+          </span>
         </button>
-      </div>
-    </div>
+      )}
+    />
   );
 }
 
@@ -250,24 +251,23 @@ export interface RecordActivityProps {
   recordVersion?: number | undefined;
   /** Live fields of the table (current names/config win over the history's snapshot). */
   fields: FieldLike[];
-  /** Full comments panel (reactions, replies, mentions) for "Comments only". */
-  comments: ReactNode;
   canComment?: boolean;
 }
 
-/** Drawer side panel: comments + revision history, with Airtable's activity filter. */
-export function RecordActivity({ baseId, tableId, recordId, recordVersion, fields, comments, canComment = true }: RecordActivityProps) {
+/** Drawer side panel: comments and revision history, with Airtable's activity menu and notification bell. */
+export function RecordActivity({ baseId, tableId, recordId, recordVersion, fields, canComment = true }: RecordActivityProps) {
   const qc = useQueryClient();
   const [filter, setFilterState] = useState<ActivityFilter>(readFilter);
+  const [showResolved, setShowResolvedState] = useState(readResolved);
   const setFilter = (f: ActivityFilter) => {
     setFilterState(f);
-    try {
-      localStorage.setItem(FILTER_KEY, f);
-    } catch {
-      /* private mode */
-    }
+    store(FILTER_KEY, f);
   };
-  const showHistory = filter !== "comments";
+  const setShowResolved = (v: boolean) => {
+    setShowResolvedState(v);
+    store(RESOLVED_KEY, v ? "1" : "0");
+  };
+  const showHistory = filter === "all" || filter === "history";
   const key = historyQueryKey(baseId, tableId, recordId);
   const history = useInfiniteQuery({
     queryKey: key,
@@ -275,12 +275,6 @@ export function RecordActivity({ baseId, tableId, recordId, recordVersion, field
     queryFn: ({ pageParam, signal }) => recordsApi.history(baseId, tableId, recordId, { cursor: pageParam, limit: 30 }, signal),
     getNextPageParam: (last) => last?.nextCursor ?? undefined,
     enabled: showHistory,
-  });
-  const commentsQuery = useQuery({
-    queryKey: ["comments", baseId, tableId, recordId],
-    queryFn: () => commentsApi.list(baseId, tableId, recordId),
-    enabled: filter === "all",
-    refetchInterval: 20_000,
   });
 
   const lastVersion = useRef(recordVersion);
@@ -298,69 +292,74 @@ export function RecordActivity({ baseId, tableId, recordId, recordVersion, field
   const entries = useMemo(() => pages.flatMap((p) => p?.entries ?? []), [pages]);
   const retentionDays = pages[0]?.retentionDays ?? null;
 
-  type Item = { at: number; key: string; node: ReactNode };
-  const items: Item[] = useMemo(() => {
-    const out: Item[] = [];
-    if (showHistory) {
-      for (const e of entries) {
-        out.push({ at: Date.parse(e.at), key: `h${e.id}`, node: <HistoryItem key={`h${e.id}`} entry={e} fields={fieldMap} metas={metas} /> });
-      }
-    }
-    if (filter === "all") {
-      // Comments older than the loaded history page would interleave wrongly; hold them until it loads.
-      const oldest = history.hasNextPage && entries.length ? Date.parse(entries[entries.length - 1]!.at) : -Infinity;
-      for (const c of commentsQuery.data?.comments ?? []) {
-        const at = Date.parse(c.createdAt);
-        if (at >= oldest) out.push({ at, key: `c${c.id}`, node: <CommentItem key={`c${c.id}`} comment={c} /> });
-      }
-    }
-    return out.sort((a, b) => b.at - a.at);
-  }, [showHistory, filter, entries, fieldMap, metas, commentsQuery.data, history.hasNextPage]);
+  const timeline: TimelineItem[] = useMemo(
+    () =>
+      showHistory
+        ? entries.map((e) => ({ at: Date.parse(e.at), key: `h${e.id}`, node: <HistoryItem key={`h${e.id}`} entry={e} fields={fieldMap} metas={metas} /> }))
+        : [],
+    [showHistory, entries, fieldMap, metas],
+  );
+  const oldestLoaded = filter === "all" && history.hasNextPage && entries.length ? Date.parse(entries[entries.length - 1]!.at) : -Infinity;
+
+  const menu: MenuItemSpec[] = [
+    ...(["all", "history"] as ActivityFilter[]).map((f) => ({ key: f, label: FILTER_LABELS[f], hint: filter === f ? "✓" : undefined, onSelect: () => setFilter(f) })),
+    ...(["comments", "record_comments", "attachment_comments", "with_attachments"] as ActivityFilter[]).map((f, i) => ({
+      key: f,
+      label: FILTER_LABELS[f],
+      hint: filter === f ? "✓" : undefined,
+      separatorBefore: i === 0,
+      onSelect: () => setFilter(f),
+    })),
+    {
+      key: "resolved",
+      label: "Show resolved comments",
+      hint: showResolved ? "✓" : undefined,
+      separatorBefore: true,
+      disabled: filter === "history",
+      onSelect: () => setShowResolved(!showResolved),
+    },
+  ];
 
   return (
     <section className={styles.panel} aria-label="Record activity">
       <div className={styles.head}>
-        <span className={styles.headTitle}>Activity</span>
-        <select
-          className={styles.filter}
-          aria-label="Show activity"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value as ActivityFilter)}
-        >
-          {(Object.keys(FILTER_LABELS) as ActivityFilter[]).map((f) => (
-            <option key={f} value={f}>
-              {FILTER_LABELS[f]}
-            </option>
-          ))}
-        </select>
+        <DropdownMenu
+          items={menu}
+          trigger={({ toggle, open }) => (
+            <button type="button" className={open ? styles.filterBtnOn : styles.filterBtn} onClick={toggle} aria-haspopup="menu" aria-label="Show activity">
+              {FILTER_LABELS[filter]}
+              <span aria-hidden className={styles.chevron}>
+                ⌄
+              </span>
+            </button>
+          )}
+        />
+        <NotifyMenu baseId={baseId} tableId={tableId} recordId={recordId} />
       </div>
-      {filter === "comments" ? (
-        <div className={styles.commentsWrap}>{comments}</div>
-      ) : (
-        <div className={styles.body}>
-          {filter === "all" ? <QuickComment baseId={baseId} tableId={tableId} recordId={recordId} disabled={!canComment} /> : null}
-          {history.isError ? <p className={styles.error}>Couldn't load history: {errorMessage(history.error)}</p> : null}
-          {history.isLoading ? <p className={styles.note}>Loading activity…</p> : null}
-          {!history.isLoading && items.length === 0 ? <p className={styles.note}>No activity yet.</p> : null}
-          <ul className={styles.list} data-testid="activity-list">
-            {items.map((it) => (
-              <Fragment key={it.key}>{it.node}</Fragment>
-            ))}
-          </ul>
-          {history.hasNextPage ? (
+      {history.isError && showHistory ? <p className={styles.error}>Couldn't load history: {errorMessage(history.error)}</p> : null}
+      <RecordComments
+        baseId={baseId}
+        tableId={tableId}
+        recordId={recordId}
+        filter={COMMENTS_FOR[filter]}
+        showResolved={showResolved}
+        canComment={canComment}
+        timeline={timeline}
+        hideCommentsBefore={oldestLoaded}
+        loadingTimeline={showHistory && history.isLoading}
+        top={
+          showHistory && history.hasNextPage ? (
             <button type="button" className={styles.more} disabled={history.isFetchingNextPage} onClick={() => void history.fetchNextPage()}>
               {history.isFetchingNextPage ? "Loading…" : "Show older activity"}
             </button>
-          ) : retentionDays && entries.length > 0 ? (
+          ) : null
+        }
+        footer={
+          showHistory && !history.hasNextPage && retentionDays && entries.length > 0 ? (
             <p className={styles.note}>Revision history is kept for {retentionDays} days on your plan.</p>
-          ) : null}
-          {filter === "all" ? (
-            <button type="button" className={styles.linkBtn} onClick={() => setFilter("comments")}>
-              Reply, react or @mention in Comments only
-            </button>
-          ) : null}
-        </div>
-      )}
+          ) : null
+        }
+      />
     </section>
   );
 }

@@ -18,6 +18,7 @@ import { ApiError } from "../../http/errors.js";
 import { pid } from "../../lib/public-ids.js";
 import { decodePublicId, type PublicIdPrefix } from "@tabula/types";
 import type { Db, FieldRowFull } from "./table-schema.js";
+import { editPermissionToWire, parseEditPermission } from "./field-permissions.js";
 
 export interface FieldDto {
   id: string;
@@ -127,7 +128,7 @@ export function configToWire(
 }
 
 export function fieldRowToDto(
-  row: Pick<FieldRowFull, "id" | "name" | "type" | "slot" | "config" | "description" | "isComputed"> & {
+  row: Pick<FieldRowFull, "id" | "name" | "type" | "slot" | "config" | "description" | "isComputed" | "editPermission"> & {
     tableId?: string;
   },
   ctx: { primaryFieldId: string | null; nameById: ReadonlyMap<string, string> },
@@ -143,6 +144,8 @@ export function fieldRowToDto(
     isComputed: row.isComputed || (isFieldTypeKey(row.type) && getFieldType(row.type).isComputed === true),
     isReadOnly: isFieldTypeKey(row.type) ? getFieldType(row.type).readOnly === true : true,
   };
+  const perm = parseEditPermission(row.editPermission);
+  if (perm) dto["editPermission"] = editPermissionToWire(perm);
   if (row.tableId) dto["tableId"] = pid("tbl", row.tableId);
   return dto;
 }

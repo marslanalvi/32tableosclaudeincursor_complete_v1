@@ -116,6 +116,16 @@ export function TableGridPage({
   // Record edits follow the base role (editor+), not the view lock.
   const canEditRecords = useBaseRole(baseId).canEditRecords ?? false;
   const [search, setSearch] = useState("");
+  // Each change re-queries the whole table, so wait until typing pauses.
+  const [appliedSearch, setAppliedSearch] = useState("");
+  useEffect(() => {
+    if (!search.trim()) {
+      setAppliedSearch("");
+      return;
+    }
+    const t = setTimeout(() => setAppliedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
   const [count, setCount] = useState<number | undefined>(undefined);
   const [recordId, setRecordId] = useRecordParam();
   const [addFieldOpen, setAddFieldOpen] = useState(false);
@@ -152,7 +162,7 @@ export function TableGridPage({
     config,
     update,
     canEdit,
-    search,
+    search: appliedSearch,
     onOpenRecord: openRecord,
     onCount: setCount,
   };
@@ -190,7 +200,7 @@ export function TableGridPage({
               filter={effectiveFilter}
               sorts={config.sorts}
               groups={config.groups}
-              search={search}
+              search={appliedSearch}
               hiddenFieldIds={config.hiddenFieldIds}
               fieldOrder={config.fieldOrder}
               fieldWidths={config.fieldWidths}

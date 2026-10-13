@@ -95,8 +95,29 @@ export function computeSummary(
   }
 }
 
-export function isEditableField(field: FieldLike, canEdit: boolean): boolean {
-  return canEdit && !field.isComputed && !isReadOnlyFieldType(field.type) && !(field as { isSynced?: boolean }).isSynced;
+export type FieldEditLevel = "editors" | "creators" | "specific" | "nobody";
+export interface FieldEditPermission {
+  level: FieldEditLevel;
+  userIds: string[];
+}
+export interface FieldAccess {
+  role: string;
+  userId: string | null;
+}
+
+/** Field permissions ("Who can edit values in this field?"); mirrors the server's check. */
+export function fieldPermissionAllows(field: FieldLike, access: FieldAccess | undefined): boolean {
+  const perm = (field as { editPermission?: FieldEditPermission }).editPermission;
+  if (!perm || perm.level === "editors") return true;
+  if (!access) return false;
+  if (perm.level === "nobody") return false;
+  if (perm.level === "creators") return access.role === "owner" || access.role === "creator";
+  return access.userId !== null && perm.userIds.includes(access.userId);
+}
+
+export function isEditableField(field: FieldLike, canEdit: boolean, access?: FieldAccess): boolean {
+  if (!canEdit || field.isComputed || isReadOnlyFieldType(field.type) || (field as { isSynced?: boolean }).isSynced) return false;
+  return fieldPermissionAllows(field, access);
 }
 
 // ---------------------------------------------------------------------------

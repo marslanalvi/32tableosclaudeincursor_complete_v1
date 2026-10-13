@@ -67,4 +67,5 @@ Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was intr
 `CHANGELOG.md` for what each one contains. Since then each release is tagged when it is cut
 (`v0.8.0`: record activity, one-row filters, views sidebar, sessions without expiry;
 `v0.8.1`: reverts 0.8.0 except sessions without expiry;
-`v0.8.2`: production sign-in fix, migrations applied on API start).
+`v0.8.2`: production sign-in fix, migrations applied on API start;
+`v0.9.0`: field permissions, search by column name, no logout while searching, activity and filter menus).
