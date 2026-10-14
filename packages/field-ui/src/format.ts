@@ -96,27 +96,44 @@ export function formatDate(value: string, format: unknown): string {
 export function formatDateTime(value: string, config: Config): string {
   const dt = new Date(value);
   if (Number.isNaN(dt.getTime())) return value;
-  const tz = typeof config["timeZone"] === "string" ? (config["timeZone"] as string) : undefined;
+  const tz = validZone(config["timeZone"]);
+  const zone = tz ? { timeZone: tz } : {};
   const hour12 = config["timeFormat"] !== "24h";
-  const datePart =
-    config["format"] && config["format"] !== "local"
-      ? formatDate(
-          `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`,
-          config["format"],
-        )
-      : dt.toLocaleDateString(undefined, {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          ...(tz ? { timeZone: tz } : {}),
-        });
-  const timePart = dt.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12,
-    ...(tz ? { timeZone: tz } : {}),
-  });
-  return `${datePart} ${timePart}`;
+  let datePart: string;
+  if (config["format"] && config["format"] !== "local") {
+    const parts = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", ...zone }).formatToParts(dt);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+    datePart = formatDate(`${get("year")}-${get("month")}-${get("day")}`, config["format"]);
+  } else {
+    datePart = dt.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", ...zone });
+  }
+  const timePart = dt.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", hour12, ...zone });
+  const out = `${datePart} ${timePart}`;
+  return config["showTimeZone"] === true ? `${out} ${timeZoneAbbr(dt, tz)}` : out;
+}
+
+function validZone(v: unknown): string | undefined {
+  if (typeof v !== "string" || !v) return undefined;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: v });
+    return v;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Short zone name at that instant: "EDT", "CET", "GMT+5" (falls back to the GMT offset). */
+export function timeZoneAbbr(dt: Date, tz: string | undefined): string {
+  const name = (locale: string) =>
+    new Intl.DateTimeFormat(locale, { timeZoneName: "short", ...(tz ? { timeZone: tz } : {}) })
+      .formatToParts(dt)
+      .find((p) => p.type === "timeZoneName")?.value ?? "";
+  const us = name("en-US");
+  if (tz?.startsWith("Europe/") && /^GMT[+-]/.test(us)) {
+    const gb = name("en-GB");
+    if (gb && !/^GMT[+-]/.test(gb)) return gb;
+  }
+  return us || "UTC";
 }
 
 /** ISO → value for <input type="datetime-local">. */

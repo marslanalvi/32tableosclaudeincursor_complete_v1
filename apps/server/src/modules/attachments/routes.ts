@@ -46,7 +46,7 @@ export async function sendAttachmentBody(
     if (!ctx.storage) {
       return reply.code(503).send({ detail: "Storage unavailable" });
     }
-    const signed = await ctx.storage.presignDownload(row.object_key);
+    const signed = await ctx.storage.presignDownload(row.object_key, download ? { downloadAs: row.filename } : undefined);
     return reply.redirect(signed.url, 302);
   }
   const storage = storageForDriver(ctx, row.storage_driver);
@@ -215,7 +215,6 @@ export async function registerAttachmentsRoutes(
             ...wire,
             // legacy aliases
             sizeBytes: wire.size,
-            downloadUrl: wire.url,
             scanStatus: row.scan_status,
             createdAt: row.created_at.toISOString(),
             recordId: row.record_id ? pid("rec", row.record_id) : null,

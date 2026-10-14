@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.9.1**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.10.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,17 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.10.0: attachments, time zones, device alerts, last-modified backfill, filter values
+
+* **Workflow rule:** `.cursor/rules/release-workflow.mdc` (always applied) lists the steps: understand, edit, test the change and the whole suite on `tabula_cc`, preview, version, push `release/vX.Y.Z`, merge only after approval.
+* **Last modified time (watched fields):** stored in the cell, previously stamped only by edits after the field existed. `data.backfill_watched_modified_time(field_id)` (migration 0078) takes the newest `record.updated` op in `data.base_changes` where a watched slot changed (before = `prevCells` or the inverse op) or a watched link changed, else `created_at` when a watched value exists. `createFieldInTx` and `updateFieldInTx` (watch list or type change) call it; the migration ran it for existing fields.
+* **Device approval bell:** `access/devices.ts` `notifyDeviceRequest` runs once, when a pending `core.org_devices` row is inserted (`RETURNING id`). It notifies the active org owners (category `system`, link `/admin?tab=devices`).
+* **Time zones:** `FieldConfigEditor` `DateTimeConfig` (datetime, created_time, modified_time): toggle for one zone, grouped `<optgroup>` list plus `Intl.supportedValuesOf("timeZone")`, `showTimeZone`. `format.ts` `formatDateTime` uses the zone for every date format and appends `timeZoneAbbr` (en-US names, en-GB for Europe so CET/BST appear).
+* **Downloads:** wire `downloadUrl` = signed `/v1/public/files/:token/:name?download=1` for every driver. For GCS, `sendAttachmentBody` redirects to a URL signed with `responseDisposition: attachment`. `AttachmentViewer.downloadHref(a)` prefers it.
+* **Expand attachments:** `field-ui/AttachmentsDialog.tsx`; `GridView` shows `.cellExpandBtn` on the active attachment cell.
+* **Filter values:** `.condValue > .tfu-form-box` fills the cell, and the form-mode `PickerShell` shows ▾.
+* **Tests:** `.data/verify-r11.mjs` (API), `.data/r2-shell/r11-ui.mjs` and `r11-filter-slow.mjs` (browser; the latter delays view saves by 1.5 s like the live server). `verify-r10.mjs` now waits for automation F before editing Bob.
 
 ## v0.9.1: automations run again
 

@@ -41,7 +41,8 @@ export interface TabulaStorage {
    * callers proxy uploads through the API instead (`putObject`).
    */
   presignUpload(key: string, contentType: string): Promise<PresignedUpload>;
-  presignDownload(key: string): Promise<PresignedDownload>;
+  /** With `downloadAs`, the URL makes the browser save the file under that name instead of showing it. */
+  presignDownload(key: string, opts?: { downloadAs?: string }): Promise<PresignedDownload>;
   ensureBucket(): Promise<void>;
   putObject(key: string, body: Buffer, contentType: string): Promise<void>;
   headObject(key: string): Promise<StoredObjectInfo | null>;
@@ -144,12 +145,16 @@ export function createStorage(env: StorageEnv): TabulaStorage {
       };
     },
 
-    async presignDownload(key: string): Promise<PresignedDownload> {
+    async presignDownload(key: string, opts?: { downloadAs?: string }): Promise<PresignedDownload> {
       const file = bucket.file(key);
+      const name = opts?.downloadAs;
       const [url] = await file.getSignedUrl({
         version: "v4",
         action: "read",
         expires: Date.now() + 60 * 60 * 1000,
+        ...(name
+          ? { responseDisposition: `attachment; filename="${name.replace(/["\\\r\n]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(name)}` }
+          : {}),
       });
       return { url, method: "GET" };
     },

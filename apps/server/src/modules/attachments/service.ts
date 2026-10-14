@@ -19,6 +19,8 @@ export interface AttachmentWire {
   mime: string;
   size: number;
   url: string;
+  /** Same-origin link that saves the file (works for every storage driver). */
+  downloadUrl: string;
   thumbnailUrl: string | null;
   width: number | null;
   height: number | null;
@@ -114,6 +116,7 @@ export async function toAttachmentWire(ctx: AppContext, row: AttachmentRow): Pro
     mime: row.mime,
     size: Number(row.size_bytes),
     url,
+    downloadUrl: `${localDownloadUrl(ctx, row.id, row.filename)}?download=1`,
     // No thumbnail pipeline yet: images use the original URL.
     thumbnailUrl: image ? url : null,
     width: row.width ?? null,

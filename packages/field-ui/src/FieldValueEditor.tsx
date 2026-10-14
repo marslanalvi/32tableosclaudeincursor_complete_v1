@@ -595,6 +595,11 @@ function PickerShell({
         }}
       >
         {boxContent}
+        {mode === "form" ? (
+          <span className="tfu-form-caret" aria-hidden>
+            ▾
+          </span>
+        ) : null}
       </div>
       {open && anchor ? (
         <Popover anchor={anchor} onClose={close} {...(popWidth ? { width: popWidth } : {})}>

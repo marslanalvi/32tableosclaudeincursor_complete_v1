@@ -925,6 +925,24 @@ textarea.input {
   padding: 0 2px;
 }
 
+/* Option/collaborator pickers fill the value cell so the whole cell opens the list. */
+.condValue > :global(.tfu-form-box) {
+  flex: 1;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 30px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.condValue > :global(.tfu-form-box):hover,
+.condValue > :global(.tfu-form-box):focus-visible {
+  background: var(--soft);
+  outline: none;
+}
+
 .condValue > * {
   min-width: 0;
 }

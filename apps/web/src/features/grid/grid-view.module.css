@@ -362,6 +362,28 @@
   z-index: 6;
 }
 
+.cellExpandBtn {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  z-index: 5;
+  width: 22px;
+  height: 22px;
+  margin-top: -11px;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  background: var(--canvas);
+  color: var(--focus);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.cellExpandBtn:hover {
+  background: var(--soft);
+}
+
 /* ---------- row number column ---------- */
 .rownum {
   position: sticky;

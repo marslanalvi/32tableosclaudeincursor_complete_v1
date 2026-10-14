@@ -3,6 +3,8 @@ import type { Env } from "@tabula/config";
 import type { TabulaDb } from "@tabula/db";
 import { sql } from "kysely";
 import type { FastifyReply, FastifyRequest } from "fastify";
+import { pid } from "../../lib/public-ids.js";
+import { createNotifications } from "../notifications/create.js";
 
 /**
  * Device approval (replaces MAC-address allowlists, which browsers can't read).
@@ -111,12 +113,14 @@ export async function blockedOrgsForDevice(
     const exempt = r.role === "owner" || !requiresDeviceApproval(r.settings);
     if (!r.device_id) {
       if (exempt) continue;
-      await sql`
+      const inserted = await sql<{ id: string }>`
         INSERT INTO core.org_devices (org_id, user_id, device_hash, label, user_agent, first_ip, last_ip)
         VALUES (${r.org_id}, ${userId}, ${hash}, ${deviceLabel(meta.userAgent)},
                 ${meta.userAgent?.slice(0, 500) ?? null}, ${meta.ip}::inet, ${meta.ip}::inet)
         ON CONFLICT (org_id, user_id, device_hash) DO NOTHING
+        RETURNING id
       `.execute(db);
+      if (inserted.rows[0]) await notifyDeviceRequest(db, r.org_id, userId, inserted.rows[0].id, meta);
       blocked.add(r.org_id);
       continue;
     }
@@ -133,4 +137,43 @@ export async function blockedOrgsForDevice(
   if (touch) lastTouch.set(key, Date.now());
   cache.set(key, { blocked, at: Date.now() });
   return blocked;
+}
+
+/** Bell notification to the org owners (who approve devices); never blocks the request. */
+async function notifyDeviceRequest(
+  db: TabulaDb,
+  orgId: string,
+  userId: string,
+  deviceId: string,
+  meta: { ip: string | null; userAgent: string | null },
+): Promise<void> {
+  try {
+    const who = await sql<{ email: string; display_name: string | null }>`
+      SELECT email, display_name FROM core.users WHERE id = ${userId}
+    `.execute(db);
+    const owners = await sql<{ user_id: string }>`
+      SELECT user_id FROM core.organization_members
+      WHERE org_id = ${orgId} AND role = 'owner' AND status = 'active' AND user_id <> ${userId}
+    `.execute(db);
+    if (owners.rows.length === 0) return;
+    const u = who.rows[0];
+    const name = u?.display_name?.trim() || u?.email || "A member";
+    const label = deviceLabel(meta.userAgent);
+    await createNotifications(
+      db,
+      owners.rows.map((o) => ({
+        userId: o.user_id,
+        workspaceId: null,
+        baseId: null,
+        category: "system" as const,
+        title: `Device approval needed: ${name}`,
+        text: `${name}${u?.email && u.email !== name ? ` (${u.email})` : ""} wants to sign in from a new device (${label}, IP ${meta.ip ?? "unknown"}). Approve or revoke it in Members & access → Devices.`,
+        link: "/admin?tab=devices",
+        actorUserId: userId,
+        data: { kind: "device_approval", deviceId: pid("dev", deviceId), email: u?.email ?? null, ip: meta.ip },
+      })),
+    );
+  } catch (err) {
+    console.error("[devices] approval notification failed", err);
+  }
 }

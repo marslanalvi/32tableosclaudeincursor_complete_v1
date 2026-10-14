@@ -69,4 +69,5 @@ Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was intr
 `v0.8.1`: reverts 0.8.0 except sessions without expiry;
 `v0.8.2`: production sign-in fix, migrations applied on API start;
 `v0.9.0`: field permissions, search by column name, no logout while searching, activity and filter menus;
-`v0.9.1`: automation engine runs inside the API, remembered automation tab/step, narrow conditions layout, Airtable-style scripts).
+`v0.9.1`: automation engine runs inside the API, remembered automation tab/step, narrow conditions layout, Airtable-style scripts;
+`v0.10.0`: expandable attachment cells, working downloads, device-approval notifications, field time zones, last-modified backfill, editable filter values).

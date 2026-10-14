@@ -68,6 +68,7 @@ export {
   openAttachmentViewer,
   type AttachmentViewerRequest,
 } from "./AttachmentViewer.js";
+export { AttachmentsDialog } from "./AttachmentsDialog.js";
 export { LinkRecordPicker } from "./LinkRecordPicker.js";
 export { Popover, SearchableList, type MenuItem } from "./Popover.js";
 export {
