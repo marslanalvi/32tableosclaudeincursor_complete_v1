@@ -24,6 +24,9 @@ import { MAX_CAUSATION_DEPTH, scheduleSchema, type TriggerDef } from "./types.js
 
 const LOCK_KEY = 728_431_901; // arbitrary constant
 const LOOKBACK_MS = 2 * 60_000; // tolerate late-committing transactions
+// After a long outage, older changes are skipped rather than replayed: acting on hours-old edits
+// (deleting or rewriting records) surprises people more than a missed trigger.
+const MAX_CATCH_UP_MS = 60 * 60_000;
 const BATCH = 200;
 
 interface OutboxRow {
@@ -219,7 +222,7 @@ export class AutomationConsumer {
       `.execute(db);
       return 0;
     }
-    const since = new Date(cursor.getTime() - LOOKBACK_MS);
+    const since = new Date(Math.max(cursor.getTime() - LOOKBACK_MS, Date.now() - MAX_CATCH_UP_MS));
     const events = await sql<OutboxRow>`
       SELECT o.id, o.created_at, o.base_id, o.workspace_id, o.event_type, o.base_seq, o.payload, o.actor
       FROM data.outbox_events o

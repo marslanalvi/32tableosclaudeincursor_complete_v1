@@ -15,6 +15,8 @@ for how releases are cut. The same notes appear in the app under
   and executor) only started in the worker process, and production runs just the API. The API now
   starts the engine too (it takes an advisory lock and claims runs with `SKIP LOCKED`, so a worker
   alongside it is safe). Set `AUTOMATIONS_IN_API=false` to leave it to a dedicated worker.
+  After an outage the engine catches up on the last hour of changes only, so it never acts on
+  day-old edits.
 - **Leaving Automations lost your place.** Switching to Data and back reopened the Edit tab.
   The open automation, Edit/Run history tab, selected step and expanded run are now remembered
   for the browser tab.
