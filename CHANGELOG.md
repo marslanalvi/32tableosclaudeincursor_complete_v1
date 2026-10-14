@@ -8,6 +8,27 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-14
+
+### Fixed
+- **Automations didn't run on the live site.** The automation engine (outbox consumer, scheduler
+  and executor) only started in the worker process, and production runs just the API. The API now
+  starts the engine too (it takes an advisory lock and claims runs with `SKIP LOCKED`, so a worker
+  alongside it is safe). Set `AUTOMATIONS_IN_API=false` to leave it to a dedicated worker.
+- **Leaving Automations lost your place.** Switching to Data and back reopened the Edit tab.
+  The open automation, Edit/Run history tab, selected step and expanded run are now remembered
+  for the browser tab.
+- **Automation conditions were unreadable in the side panel.** In narrow places each condition
+  becomes a small card (field and operator, then the value); inside a nested group the field,
+  operator and value each get their own line, and the add buttons wrap.
+
+### Added
+- **Airtable-style scripts.** `base.getTable(name)`, `table.selectRecordsAsync()`,
+  `createRecordAsync`, `updateRecordAsync`, `deleteRecordAsync` (and the plural forms),
+  `record.name`, `record.getCellValue()` / `getCellValueAsString()`.
+- **Script input variables.** Name values (with tokens such as the trigger record's Name) and read
+  them with `let { recordId, name } = input.config();`. `recordId` is always the trigger record.
+
 ## [0.9.0] - 2026-10-13
 
 ### Added

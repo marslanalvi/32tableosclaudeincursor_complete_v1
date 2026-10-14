@@ -165,6 +165,10 @@ export function BasePage({ baseId }: { baseId: string }) {
   const { role } = useBaseRole(baseId);
   const [baseTab, setBaseTab] = useState<BaseTab>("data");
   const [automationTarget, setAutomationTarget] = useState<{ automationId: string; actionId?: string } | null>(null);
+  // The target is a one-shot jump; keeping it would pull the editor back to it on every return to Automations.
+  useEffect(() => {
+    if (baseTab !== "automations") setAutomationTarget(null);
+  }, [baseTab]);
   const [viewsSidebarOpen, setViewsSidebarOpen] = useState(() => {
     try {
       return localStorage.getItem(VIEWS_SIDEBAR_KEY) !== "closed";

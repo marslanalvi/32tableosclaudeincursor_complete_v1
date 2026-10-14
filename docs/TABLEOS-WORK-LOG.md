@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.9.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.9.1**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,16 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.9.1: automations run again
+
+* **Why they stopped:** production (Render) runs only `node dist/api.js`, and `startAutomationEngine` was only called from `entrypoints/worker.ts` (which also needs Redis). Test runs worked because `/test` executes inline in the API; real triggers sat in `data.outbox_events` with nobody advancing `automation_engine_state.outbox_cursor`.
+* **Fix:** `entrypoints/api.ts` starts the engine after `listen`, with `API_URL` pointed at itself. The consumer holds advisory lock 728431901 and runs are claimed with `FOR UPDATE SKIP LOCKED`, so an API and a worker together never double-run (verified: one run per record with both up). `AUTOMATIONS_IN_API=false` turns it off.
+* **Still worker/relay only:** table sync, search indexing and comment notifications need `relay.ts` + `worker.ts` with Redis. Production doesn't run them yet.
+* **Scripts:** `script.ts` PRELUDE has an Airtable-compatible `base` (`getTable`, `selectRecordsAsync`, `*RecordAsync(s)`, `record.name`, `getCellValue(AsString)`); `config.inputs` (name + token value) feed `input.config()`, which always has `recordId`. `TableMeta.primaryFieldId` added for `record.name`.
+* **UI state:** `features/automations/remembered-state.ts` (`sessionStorage`, key `tableos:aut:…`) holds the selected automation, Edit/Run history tab, step and expanded run. `base.tsx` clears the one-shot `automationTarget` (Gmail return) when you leave Automations.
+* **Conditions:** `views.module.css` makes `.filterGroup`/`.filterGroupNested` inline-size containers; at ≤560px a condition is field+operator over value, at ≤340px field, operator and value each take a line.
+* **Tests:** `.data/verify-r10.mjs` (local `tabula_cc` only): every trigger except forms, update/create/condition/script actions, loop guard, turning off. UI: `.data/r2-shell/r10-ui.mjs`.
 
 ## v0.9.0: field permissions, search by column name, no logout while searching
 

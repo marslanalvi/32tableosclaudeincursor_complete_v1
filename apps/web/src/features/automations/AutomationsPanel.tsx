@@ -22,6 +22,7 @@ import { ActionEditor, TriggerEditor } from "./editors.tsx";
 import { RunDetail, RunHistory } from "./RunHistory.tsx";
 import { labelableFields, lastRecord, parseRecordRef, recordLabel } from "./test-record.ts";
 import { recordsApi } from "../../lib/api-areas/records.ts";
+import { useRememberedState } from "./remembered-state.ts";
 import styles from "./automations.module.css";
 
 type Selection = { kind: "trigger" } | { kind: "action"; id: string } | null;
@@ -40,7 +41,11 @@ function lastRunText(a: Automation): string {
 
 export function AutomationsPanel({ baseId, initial }: { baseId: string; initial?: { automationId: string; actionId?: string } | null }) {
   const queryClient = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(initial?.automationId ?? null);
+  const [rememberedId, setSelectedId] = useRememberedState<string | null>(`aut:${baseId}:selected`, null);
+  const selectedId = initial?.automationId && rememberedId === null ? initial.automationId : rememberedId;
+  useEffect(() => {
+    if (initial?.automationId) setSelectedId(initial.automationId);
+  }, [initial?.automationId, setSelectedId]);
   const [find, setFind] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -243,8 +248,17 @@ function AutomationBuilder({
 }) {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState<Automation>(automation);
-  const [selection, setSelection] = useState<Selection>(initialActionId ? { kind: "action", id: initialActionId } : { kind: "trigger" });
-  const [tab, setTab] = useState<"edit" | "runs">("edit");
+  const [selection, setSelection] = useRememberedState<Selection>(
+    `aut:${baseId}:${automation.id}:step`,
+    initialActionId ? { kind: "action", id: initialActionId } : { kind: "trigger" },
+  );
+  const [tab, setTab] = useRememberedState<"edit" | "runs">(`aut:${baseId}:${automation.id}:tab`, "edit");
+  useEffect(() => {
+    if (initialActionId) {
+      setSelection({ kind: "action", id: initialActionId });
+      setTab("edit");
+    }
+  }, [initialActionId, setSelection, setTab]);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);

@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { automationsApi, type AutomationRun, type StepResult } from "../../lib/api-areas/automations.ts";
 import { actionInfo, triggerInfo } from "./catalog.ts";
+import { useRememberedState } from "./remembered-state.ts";
 import styles from "./automations.module.css";
 
 function statusClass(s: string): string {
@@ -176,7 +177,7 @@ export function RunDetail({ run }: { run: AutomationRun }) {
 }
 
 export function RunHistory({ baseId, automationId }: { baseId: string; automationId: string }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useRememberedState<string | null>(`aut:${baseId}:${automationId}:run`, null);
   const q = useQuery({
     queryKey: ["automations", baseId, automationId, "runs"],
     queryFn: () => automationsApi.runs(baseId, automationId, 100),

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { runMigrations } from "@tabula/db";
 import { createApp } from "../composition/create-app.js";
+import { startAutomationEngine } from "../modules/automations/consumer.js";
 
 const rootEnv = resolve(process.cwd(), "../../.env");
 const localEnv = resolve(process.cwd(), ".env");
@@ -32,4 +33,18 @@ try {
 } catch (err) {
   ctx.log.error({ err }, "Failed to start API");
   process.exit(1);
+}
+
+// Automations must fire even when no separate worker is deployed. The engine takes a Postgres
+// advisory lock and claims runs with SKIP LOCKED, so it is safe next to a worker or other API
+// instances. Set AUTOMATIONS_IN_API=false when a dedicated worker runs it instead.
+if (process.env["AUTOMATIONS_IN_API"] !== "false") {
+  const engine = startAutomationEngine({
+    db: ctx.db,
+    env: { ...ctx.env, API_URL: `http://127.0.0.1:${ctx.env.PORT}` },
+    log: ctx.log,
+  });
+  const stop = () => engine.stop();
+  process.once("SIGTERM", stop);
+  process.once("SIGINT", stop);
 }
