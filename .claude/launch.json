@@ -10,7 +10,6 @@
       "env": {
         "PORT": "3200",
         "REALTIME_PORT": "3202",
-        "DATABASE_URL": "postgres://tabula:tabula@localhost:5432/tabula_cc",
         "REDIS_URL": "redis://localhost:6379/1",
         "APP_URL": "http://localhost:5283",
         "API_URL": "http://localhost:3200"
@@ -25,7 +24,6 @@
       "env": {
         "PORT": "3200",
         "REALTIME_PORT": "3202",
-        "DATABASE_URL": "postgres://tabula:tabula@localhost:5432/tabula_cc",
         "REDIS_URL": "redis://localhost:6379/1",
         "APP_URL": "http://localhost:5283",
         "API_URL": "http://localhost:3200"

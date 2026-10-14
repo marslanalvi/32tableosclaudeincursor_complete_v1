@@ -81,6 +81,8 @@ export interface ActionConfig {
   headers?: Record<string, string>;
   timeoutMs?: number;
   script?: string;
+  /** Script input variables, read with `input.config().<name>`. */
+  inputs?: { name: string; value?: string }[];
   match?: "all" | "any";
   conditions?: BranchCondition[];
   then?: AutomationAction[];

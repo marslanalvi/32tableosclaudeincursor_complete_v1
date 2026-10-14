@@ -997,6 +997,131 @@ textarea.input {
   margin-left: auto;
 }
 
+/* Narrow places (automation side panels, nested groups): each condition becomes a small card,
+   field and operator on the first line, the value on its own full-width line. */
+.filterGroup,
+.filterGroupNested {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+@container (max-width: 560px) {
+  .condRow {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .conj {
+    padding-left: 2px;
+  }
+
+  .selectConj {
+    width: 52px;
+    padding: 0 2px 0 6px;
+  }
+
+  .condBox {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "field op remove drag"
+      "value value value value";
+  }
+
+  .condField,
+  .condOp {
+    width: auto;
+    min-width: 0;
+    min-height: 32px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .condField {
+    grid-area: field;
+    border-radius: 6px 0 0 0;
+  }
+
+  .condOp {
+    grid-area: op;
+  }
+
+  .condBox > .condIconBtn {
+    grid-area: remove;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .condBox > .condHandle {
+    grid-area: drag;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .condValueCell {
+    grid-area: value;
+    min-height: 32px;
+    border-right: 0;
+  }
+
+  .condValueCell:has(> .condValueEmpty) {
+    display: none;
+  }
+
+  .condBox:has(.condValueEmpty) .condField,
+  .condBox:has(.condValueEmpty) .condOp,
+  .condBox:has(.condValueEmpty) > .condIconBtn,
+  .condBox:has(.condValueEmpty) > .condHandle {
+    border-bottom: 0;
+  }
+
+  .filterGroupNested {
+    padding: 8px;
+  }
+
+  .filterActions {
+    flex-wrap: wrap;
+    gap: 4px 16px;
+  }
+}
+
+/* Very narrow (a group nested inside the automation panel): field, operator and value each get a full line. */
+@container (max-width: 340px) {
+  .condRow {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .selectConj {
+    width: 44px;
+  }
+
+  .condBox {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "field remove drag"
+      "op op op"
+      "value value value";
+  }
+
+  .condField,
+  .condOp {
+    padding: 0 22px 0 8px;
+    border-right: 0;
+  }
+
+  .condField {
+    border-radius: 6px 0 0 0;
+  }
+
+  .condBox:has(.condValueEmpty) .condField,
+  .condBox:has(.condValueEmpty) > .condIconBtn,
+  .condBox:has(.condValueEmpty) > .condHandle {
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .filterGroupNested {
+    padding: 6px;
+  }
+}
+
 .linkBtnMuted {
   border: 0;
   background: transparent;

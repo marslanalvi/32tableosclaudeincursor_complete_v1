@@ -1,12 +1,12 @@
-# Run this checkout's full dev stack on its own ports/database so it can run
-# alongside other checkouts of the project. Each role runs detached; logs go
-# to $LogDir. Stop with scripts/dev-isolated-stop.ps1.
+# Run this checkout's full dev stack on its own ports so it can run alongside
+# other checkouts of the project. Each role runs detached; logs go to $LogDir.
+# Stop with scripts/dev-isolated-stop.ps1. The database comes from DATABASE_URL
+# in the root .env (not committed).
 param(
   [int]$ApiPort = 3200,
   [int]$RealtimePort = 3202,
   [int]$WebPort = 5283,
   [int]$PublicPort = 5284,
-  [string]$Database = "tabula_cc",
   [int]$RedisDb = 1,
   [string]$LogDir = (Join-Path $PSScriptRoot "..\.data\logs")
 )
@@ -16,7 +16,7 @@ New-Item -ItemType Directory -Force $LogDir | Out-Null
 
 $env:PORT = "$ApiPort"
 $env:REALTIME_PORT = "$RealtimePort"
-$env:DATABASE_URL = "postgres://tabula:tabula@localhost:5432/$Database"
+Remove-Item Env:DATABASE_URL -ErrorAction SilentlyContinue
 $env:REDIS_URL = "redis://localhost:6379/$RedisDb"
 $env:APP_URL = "http://localhost:$WebPort"
 $env:API_URL = "http://localhost:$ApiPort"

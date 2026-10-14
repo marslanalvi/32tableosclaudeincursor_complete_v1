@@ -8,6 +8,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.9.1",
+    date: "2026-10-14",
+    title: "Automations run again.",
+    items: [
+      "Fixed automations not running on their own: record, schedule, webhook and button triggers fire again.",
+      "Switching to Data and back keeps you on the same automation, tab (Edit or Run history) and step.",
+      "Conditions in the automation panel are readable: nested groups put the field, operator and value on separate lines.",
+      "Scripts accept Airtable-style code: base.getTable(), selectRecordsAsync(), deleteRecordAsync() and more.",
+      "Scripts can take input variables, read with input.config().",
+    ],
+  },
+  {
     version: "0.9.0",
     date: "2026-10-13",
     title: "Field permissions, better search, and the new activity and filter menus.",

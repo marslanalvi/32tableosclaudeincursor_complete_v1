@@ -18,6 +18,7 @@ export interface FieldMeta {
 export interface TableMeta {
   id: string; // tbl_…
   name: string;
+  primaryFieldId?: string;
   fields: FieldMeta[];
   views: { id: string; name: string; type?: string; config?: Record<string, unknown> }[];
 }

@@ -634,6 +634,20 @@ async function scriptFetch(args: unknown[], remainingMs: number): Promise<unknow
   return { status: res.status, headers: Object.fromEntries(res.headers.entries()), body: text };
 }
 
+const RESERVED_SCRIPT_INPUTS = new Set(["trigger", "steps", "automation", "base", "now", "today"]);
+
+/** Airtable-style input variables: `recordId` of the trigger record plus the step's named inputs. */
+function scriptInputVariables(ex: ExecCtx, cfg: ActionDef["config"]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (ex.triggerRecord?.id) out["recordId"] = ex.triggerRecord.id;
+  for (const v of cfg.inputs ?? []) {
+    const name = v.name.trim();
+    if (!name || RESERVED_SCRIPT_INPUTS.has(name)) continue;
+    out[name] = interpolate(v.value ?? "", ex.tokens);
+  }
+  return out;
+}
+
 async function scriptAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unknown> {
   const code = cfg.script ?? "";
   if (!code.trim()) throw new StepError("Write a script for “Run a script”");
@@ -652,11 +666,13 @@ async function scriptAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unkn
           tables: ex.base.tables.map((t) => ({
             id: t.id,
             name: t.name,
+            ...(t.primaryFieldId ? { primaryFieldId: t.primaryFieldId } : {}),
             fields: t.fields.map((f) => ({ id: f.id, name: f.name, type: f.type })),
           })),
         },
         now: ex.tokens["now"],
         today: ex.tokens["today"],
+        ...scriptInputVariables(ex, cfg),
       },
       call: async (name, args, remainingMs) => {
         switch (name) {

@@ -115,6 +115,10 @@ export const actionSchema: z.ZodType<ActionDef> = z.lazy(() =>
         timeoutMs: z.number().int().min(500).max(30_000).optional(),
         // script
         script: z.string().max(100_000).optional(),
+        inputs: z
+          .array(z.object({ name: z.string().max(100), value: z.string().max(10_000).optional() }))
+          .max(50)
+          .optional(),
         // condition
         match: z.enum(["all", "any"]).optional(),
         conditions: z
@@ -173,6 +177,7 @@ export interface ActionDef {
     headers?: Record<string, string> | undefined;
     timeoutMs?: number | undefined;
     script?: string | undefined;
+    inputs?: { name: string; value?: string | undefined }[] | undefined;
     match?: "all" | "any" | undefined;
     conditions?: { left: string; op: string; right?: string | undefined }[] | undefined;
     then?: ActionDef[] | undefined;

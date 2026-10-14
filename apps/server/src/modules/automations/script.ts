@@ -80,10 +80,87 @@ const __out = {};
 globalThis.output = Object.freeze({
   set(key, value) { __out[String(key)] = value === undefined ? null : value; },
 });
+const __tables = __input.base ? __input.base.tables : [];
+const __ref = (x) => (x && typeof x === "object" ? x.id || x.name : x);
+const __findTable = (ref) => {
+  const s = String(__ref(ref) ?? "");
+  return __tables.find((t) => t.id === s) || __tables.find((t) => t.name === s) || __tables.find((t) => t.name.toLowerCase() === s.toLowerCase()) || null;
+};
+const __findField = (t, ref) => {
+  const s = String(__ref(ref) ?? "");
+  return t.fields.find((f) => f.id === s) || t.fields.find((f) => f.name === s) || t.fields.find((f) => f.name.toLowerCase() === s.toLowerCase()) || null;
+};
+const __needField = (t, ref) => {
+  const f = __findField(t, ref);
+  if (!f) throw new Error('Field "' + __ref(ref) + '" does not exist in table ' + t.name);
+  return f;
+};
+// Airtable scripting API shapes on top of the host calls.
+const __record = (t, r) => {
+  if (!r) return null;
+  const primary = t.fields.find((f) => f.id === t.primaryFieldId) || t.fields[0];
+  return Object.freeze({
+    ...r,
+    name: primary ? (r.fields[primary.name] ?? "") : "",
+    getCellValue(ref) {
+      const v = r.raw ? r.raw[__needField(t, ref).name] : null;
+      return v === undefined ? null : v;
+    },
+    getCellValueAsString(ref) {
+      return r.fields[__needField(t, ref).name] ?? "";
+    },
+  });
+};
+const __table = (t) => Object.freeze({
+  id: t.id,
+  name: t.name,
+  fields: t.fields,
+  primaryField: t.fields.find((f) => f.id === t.primaryFieldId) || t.fields[0] || null,
+  getField: (ref) => __needField(t, ref),
+  getFieldIfExists: (ref) => __findField(t, ref),
+  async selectRecordsAsync(options) {
+    const o = options || {};
+    const rows = await __call("findRecords", t.id, { limit: 500, ...(o.view ? { view: __ref(o.view) } : {}) });
+    const records = rows.map((r) => __record(t, r));
+    return Object.freeze({ records, recordIds: records.map((r) => r.id), getRecord: (id) => records.find((r) => r.id === __ref(id)) || null });
+  },
+  async selectRecordAsync(recordId) {
+    return __record(t, await __call("getRecord", t.id, __ref(recordId)));
+  },
+  async createRecordAsync(fields) {
+    return (await __call("createRecord", t.id, fields || {})).id;
+  },
+  async createRecordsAsync(list) {
+    const ids = [];
+    for (const x of list || []) ids.push((await __call("createRecord", t.id, (x && x.fields) || {})).id);
+    return ids;
+  },
+  async updateRecordAsync(recordOrId, fields) {
+    await __call("updateRecord", t.id, __ref(recordOrId), fields || {});
+  },
+  async updateRecordsAsync(list) {
+    for (const x of list || []) await __call("updateRecord", t.id, __ref(x.id), x.fields || {});
+  },
+  async deleteRecordAsync(recordOrId) {
+    await __call("deleteRecord", t.id, __ref(recordOrId));
+  },
+  async deleteRecordsAsync(list) {
+    for (const x of list || []) await __call("deleteRecord", t.id, __ref(x));
+  },
+});
 globalThis.base = Object.freeze({
   id: __input.base ? __input.base.id : null,
   name: __input.base ? __input.base.name : null,
-  tables: __input.base ? __input.base.tables : [],
+  tables: __tables,
+  getTable(ref) {
+    const t = __findTable(ref);
+    if (!t) throw new Error('Table "' + __ref(ref) + '" does not exist in this base');
+    return __table(t);
+  },
+  getTableIfExists(ref) {
+    const t = __findTable(ref);
+    return t ? __table(t) : null;
+  },
   findRecords: (table, options) => __call("findRecords", table, options || {}),
   getRecord: (table, recordId) => __call("getRecord", table, recordId),
   createRecord: (table, fields) => __call("createRecord", table, fields || {}),

@@ -810,7 +810,10 @@ export function ActionEditor({
       ) : null}
 
       {action.type === "script" ? (
-        <ScriptEditor value={cfg.script ?? ""} onChange={(script) => set({ script })} tables={tables} tokens={tokens} />
+        <>
+          <ScriptInputs inputs={cfg.inputs ?? []} tokens={tokens} onChange={(inputs) => set({ inputs })} />
+          <ScriptEditor value={cfg.script ?? ""} onChange={(script) => set({ script })} tables={tables} tokens={tokens} />
+        </>
       ) : null}
 
       {action.type === "condition" ? (
@@ -827,6 +830,53 @@ export function ActionEditor({
         />
       ) : null}
     </div>
+  );
+}
+
+/** Airtable-style input variables: `let { recordId, name } = input.config();`. */
+function ScriptInputs({
+  inputs,
+  tokens,
+  onChange,
+}: {
+  inputs: { name: string; value?: string }[];
+  tokens: TokenOption[];
+  onChange: (next: { name: string; value?: string }[]) => void;
+}) {
+  const setAt = (i: number, patch: Partial<{ name: string; value: string }>) =>
+    onChange(inputs.map((v, j) => (j === i ? { ...v, ...patch } : v)));
+  return (
+    <Field
+      label="Input variables"
+      hint="Read them in the script with input.config(), e.g. let { recordId, name } = input.config(); recordId is always the trigger record's id."
+    >
+      <div className={styles.scriptInputs}>
+        {inputs.map((v, i) => (
+          <div key={i} className={styles.scriptInputRow}>
+            <input
+              className={styles.input}
+              value={v.name}
+              placeholder="name"
+              aria-label={`Input variable ${i + 1} name`}
+              onChange={(e) => setAt(i, { name: e.target.value.replace(/[^\w$]/g, "") })}
+            />
+            <TokenInput
+              value={v.value ?? ""}
+              onChange={(value) => setAt(i, { value })}
+              tokens={tokens}
+              placeholder="Value or token"
+              ariaLabel={`Input variable ${v.name || i + 1} value`}
+            />
+            <button type="button" className={styles.iconBtn} aria-label="Remove input variable" onClick={() => onChange(inputs.filter((_, j) => j !== i))}>
+              ✕
+            </button>
+          </div>
+        ))}
+        <button type="button" className={styles.linkBtn} onClick={() => onChange([...inputs, { name: "", value: "" }])}>
+          + Add input variable
+        </button>
+      </div>
+    </Field>
   );
 }
 
@@ -893,6 +943,11 @@ function ScriptEditor({
             <code>{'input.config().trigger.record.fields["Email"]'}</code>.
           </li>
           <li><code>output.set(key, value)</code>: later steps can use <code>{"{{steps.<this step>.<key>}}"}</code>.</li>
+          <li>
+            Airtable style: <code>let table = base.getTable("Table 1")</code>, then <code>await table.selectRecordsAsync()</code>, <code>selectRecordAsync(id)</code>,{" "}
+            <code>createRecordAsync(fields)</code>, <code>updateRecordAsync(id, fields)</code>, <code>deleteRecordAsync(id)</code> (and the plural versions);{" "}
+            <code>record.name</code>, <code>record.getCellValue("Field")</code>, <code>record.getCellValueAsString("Field")</code>.
+          </li>
           <li><code>await base.findRecords(table, {"{ view, limit, filter }"})</code> returns up to 500 records.</li>
           <li><code>await base.getRecord(table, id)</code>, <code>createRecord(table, fields)</code>, <code>updateRecord(table, id, fields)</code>, <code>deleteRecord(table, id)</code>.</li>
           <li><code>await fetch(url, {"{ method, headers, body }"})</code> to public addresses; <code>res.json()</code> / <code>res.text()</code>.</li>

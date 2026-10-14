@@ -80,6 +80,7 @@ export class AutomationApiClient {
     const tables = ((b["tables"] ?? raw["tables"] ?? []) as Record<string, unknown>[]).map((t) => ({
       id: String(t["id"]),
       name: String(t["name"] ?? ""),
+      ...(typeof t["primaryFieldId"] === "string" && t["primaryFieldId"] ? { primaryFieldId: t["primaryFieldId"] as string } : {}),
       fields: ((t["fields"] ?? []) as Record<string, unknown>[]).map((f) => ({
         id: String(f["id"]),
         name: String(f["name"] ?? ""),
