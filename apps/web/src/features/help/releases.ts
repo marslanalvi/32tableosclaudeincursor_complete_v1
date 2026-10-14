@@ -8,6 +8,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.10.0",
+    date: "2026-10-14",
+    title: "Attachment cells expand, time zones, and device approval alerts.",
+    items: [
+      "Select an attachment cell and click ⤢ to see all files large: open, download, delete, reorder or add more.",
+      "Download now saves the file to your computer.",
+      "Owners get a notification when someone needs a new device approved.",
+      "Date fields can use one time zone for everyone (US, Europe, GMT and more) and show it, e.g. EDT.",
+      "Last modified time fills in for records edited before the field was added.",
+      "Filter values can be changed directly: click anywhere in the value to open the list.",
+    ],
+  },
+  {
     version: "0.9.1",
     date: "2026-10-14",
     title: "Automations run again.",

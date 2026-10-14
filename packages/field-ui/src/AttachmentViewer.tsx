@@ -56,8 +56,14 @@ function formatSize(bytes: number | null | undefined): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** API-served URLs accept `?download=1` to force a download instead of inline display. */
-function downloadHref(url: string): string {
+/**
+ * Link that saves the file. Prefer the server's `downloadUrl`: files in cloud storage live on
+ * another domain, where browsers ignore the `download` attribute. API-served URLs accept
+ * `?download=1`.
+ */
+export function downloadHref(a: AttachmentValue): string {
+  if (a.downloadUrl) return a.downloadUrl;
+  const url = a.url ?? "";
   if (!url.startsWith("/")) return url;
   return `${url}${url.includes("?") ? "&" : "?"}download=1`;
 }
@@ -89,7 +95,7 @@ function Preview({ a }: { a: AttachmentValue }): ReactElement {
         <div className="tfu-av-nopreview">
           <span className="tfu-av-bigext">{extLabel(a)}</span>
           <span>No preview available for this file type.</span>
-          <a className="tfu-btn tfu-btn-primary" href={downloadHref(a.url)} download={a.filename}>
+          <a className="tfu-btn tfu-btn-primary" href={downloadHref(a)} download={a.filename}>
             Download
           </a>
         </div>
@@ -179,7 +185,7 @@ export function AttachmentViewerHost(): ReactElement | null {
               <a className="tfu-av-btn" href={a.url} target="_blank" rel="noreferrer" title="Open in a new tab">
                 Open
               </a>
-              <a className="tfu-av-btn tfu-av-primary" href={downloadHref(a.url)} download={a.filename}>
+              <a className="tfu-av-btn tfu-av-primary" href={downloadHref(a)} download={a.filename}>
                 Download
               </a>
             </>

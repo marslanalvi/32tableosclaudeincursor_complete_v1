@@ -35,6 +35,8 @@ export interface AttachmentValue {
   mime?: string | null | undefined;
   size?: number | null | undefined;
   url?: string | null | undefined;
+  /** Link that saves the file instead of opening it. */
+  downloadUrl?: string | null | undefined;
   thumbnailUrl?: string | null | undefined;
   width?: number | null | undefined;
   height?: number | null | undefined;

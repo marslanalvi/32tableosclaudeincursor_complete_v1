@@ -11,6 +11,7 @@ import {
 } from "react";
 import * as filterPkg from "@tabula/filter";
 import {
+  AttachmentsDialog,
   FieldUiServicesProvider,
   FieldValueEditor,
   cellValueToText,
@@ -451,6 +452,7 @@ export function GridView(props: GridViewProps) {
   }, [active?.r, table.id]);
   const [anchor, setAnchor] = useState<Cell | null>(null);
   const [editing, setEditing] = useState<(Cell & { initialText?: string | undefined }) | null>(null);
+  const [expandedAttachments, setExpandedAttachments] = useState<Cell | null>(null);
   const editingRef = useRef(editing);
   editingRef.current = editing;
 
@@ -1472,6 +1474,22 @@ export function GridView(props: GridViewProps) {
                   {!peerEditor && cellPeers!.length > 1 ? ` +${cellPeers!.length - 1}` : ""}
                 </span>
               ) : null}
+              {isActive && !isEditing && f.type === "attachment" ? (
+                <button
+                  type="button"
+                  className={styles.cellExpandBtn}
+                  title="Expand attachments"
+                  aria-label="Expand attachments"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedAttachments({ r: rec.id, f: f.id });
+                  }}
+                >
+                  ⤢
+                </button>
+              ) : null}
               {isRangeCorner ? (
                 <span
                   className={styles.fillHandle}
@@ -1814,6 +1832,26 @@ export function GridView(props: GridViewProps) {
             }}
           />
         ) : null}
+        {(() => {
+          if (!expandedAttachments) return null;
+          const f = fieldById(expandedAttachments.f);
+          const rec = records.find((r) => r.id === expandedAttachments.r);
+          if (!f || !rec) return null;
+          const close = () => {
+            setExpandedAttachments(null);
+            focusGrid();
+          };
+          const title = primaryId ? cellValueToText(fieldById(primaryId) ?? f, rec.fields[primaryId]) : "";
+          return (
+            <AttachmentsDialog
+              title={`${f.name}${title ? ` · ${title}` : ""}`}
+              value={Array.isArray(rec.fields[f.id]) ? (rec.fields[f.id] as never) : []}
+              readOnly={!isEditableField(f, canEditRecords, fieldAccessRef.current)}
+              onChange={(v) => void writes.writeRecord(rec.id, { [f.id]: v })}
+              onClose={close}
+            />
+          );
+        })()}
         <Toaster />
       </div>
     </FieldUiServicesProvider>

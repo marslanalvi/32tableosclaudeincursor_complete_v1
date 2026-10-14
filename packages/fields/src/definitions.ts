@@ -385,6 +385,7 @@ function datetimeConfig(input: Record<string, unknown>): FieldConfig {
   };
   const tz = cfgString(input, "timeZone", undefined, 64);
   if (tz) cfg["timeZone"] = tz;
+  if (cfgBool(input, "showTimeZone", false)) cfg["showTimeZone"] = true;
   return cfg;
 }
 

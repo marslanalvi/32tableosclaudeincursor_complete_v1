@@ -4,7 +4,7 @@ import {
   parseFormula,
   type FormulaAst,
 } from "@tabula/formula";
-import { cellValueToText } from "./format.js";
+import { cellValueToText, timeZoneAbbr } from "./format.js";
 import { OPTION_COLORS, fieldTypeIcon, nextOptionColor, optionColor } from "./metadata.js";
 import { ensureFieldUiStyles } from "./styles.js";
 import type { FieldLike, SelectOption, TableLike } from "./types.js";
@@ -610,9 +610,148 @@ function LastModifiedConfig({
           <span className="tfu-muted" style={{ fontSize: 12 }}>
             {watch.length === 0
               ? "Choose at least one field."
-              : `Updates when ${watch.length === 1 ? "this field changes" : `any of these ${watch.length} fields change`}. Records not edited since stay empty.`}
+              : `Shows when ${watch.length === 1 ? "this field" : `any of these ${watch.length} fields`} last changed, including edits made before this field existed.`}
           </span>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+const ZONE_GROUPS: { label: string; zones: [string, string][] }[] = [
+  { label: "GMT", zones: [["UTC", "GMT / UTC"]] },
+  {
+    label: "United States",
+    zones: [
+      ["America/New_York", "Eastern (New York)"],
+      ["America/Chicago", "Central (Chicago)"],
+      ["America/Denver", "Mountain (Denver)"],
+      ["America/Phoenix", "Arizona (Phoenix)"],
+      ["America/Los_Angeles", "Pacific (Los Angeles)"],
+      ["America/Anchorage", "Alaska (Anchorage)"],
+      ["Pacific/Honolulu", "Hawaii (Honolulu)"],
+    ],
+  },
+  {
+    label: "Europe",
+    zones: [
+      ["Europe/London", "London"],
+      ["Europe/Dublin", "Dublin"],
+      ["Europe/Lisbon", "Lisbon"],
+      ["Europe/Paris", "Paris"],
+      ["Europe/Berlin", "Berlin"],
+      ["Europe/Madrid", "Madrid"],
+      ["Europe/Rome", "Rome"],
+      ["Europe/Amsterdam", "Amsterdam"],
+      ["Europe/Brussels", "Brussels"],
+      ["Europe/Zurich", "Zurich"],
+      ["Europe/Vienna", "Vienna"],
+      ["Europe/Stockholm", "Stockholm"],
+      ["Europe/Oslo", "Oslo"],
+      ["Europe/Copenhagen", "Copenhagen"],
+      ["Europe/Warsaw", "Warsaw"],
+      ["Europe/Prague", "Prague"],
+      ["Europe/Athens", "Athens"],
+      ["Europe/Helsinki", "Helsinki"],
+      ["Europe/Bucharest", "Bucharest"],
+      ["Europe/Istanbul", "Istanbul"],
+    ],
+  },
+  {
+    label: "Asia & Pacific",
+    zones: [
+      ["Asia/Karachi", "Pakistan (Karachi)"],
+      ["Asia/Dubai", "Dubai"],
+      ["Asia/Kolkata", "India (Kolkata)"],
+      ["Asia/Dhaka", "Dhaka"],
+      ["Asia/Singapore", "Singapore"],
+      ["Asia/Tokyo", "Tokyo"],
+      ["Australia/Sydney", "Sydney"],
+    ],
+  },
+];
+
+function allZones(): string[] {
+  const listed = new Set(ZONE_GROUPS.flatMap((g) => g.zones.map(([z]) => z)));
+  const intl = Intl as unknown as { supportedValuesOf?: (k: string) => string[] };
+  return (intl.supportedValuesOf?.("timeZone") ?? []).filter((z) => !listed.has(z));
+}
+
+function zoneLabel(zone: string, label: string): string {
+  return `${label} (${timeZoneAbbr(new Date(), zone)})`;
+}
+
+/** Date format, time format and time zone for date fields (the time parts only with `withTime`). */
+function DateTimeConfig({ withTime, config, onChange }: { withTime: boolean; config: Config; onChange: (c: Config) => void }) {
+  const set = (patch: Config) => onChange({ ...config, ...patch });
+  const zone = typeof config["timeZone"] === "string" ? config["timeZone"] : "";
+  const others = allZones();
+  const setZone = (z: string | null) => {
+    const next = { ...config };
+    if (z) next["timeZone"] = z;
+    else delete next["timeZone"];
+    onChange(next);
+  };
+  return (
+    <div className="tfu-cfg">
+      <label>
+        Date format
+        <select className="tfu-input" value={String(config["format"] ?? "local")} onChange={(e) => set({ format: e.target.value })}>
+          <option value="local">Local (e.g. Mar 5, 2026)</option>
+          <option value="us">US (3/5/2026)</option>
+          <option value="eu">European (5/3/2026)</option>
+          <option value="iso">ISO (2026-03-05)</option>
+        </select>
+      </label>
+      {withTime ? (
+        <>
+          <label>
+            Time format
+            <select className="tfu-input" value={String(config["timeFormat"] ?? "12h")} onChange={(e) => set({ timeFormat: e.target.value })}>
+              <option value="12h">12 hour</option>
+              <option value="24h">24 hour</option>
+            </select>
+          </label>
+          <label className="tfu-inline">
+            <input type="checkbox" checked={zone !== ""} onChange={(e) => setZone(e.target.checked ? "UTC" : null)} />
+            Use the same time zone for all collaborators
+          </label>
+          {zone ? (
+            <label>
+              Time zone
+              <select className="tfu-input" value={zone} onChange={(e) => setZone(e.target.value)}>
+                {ZONE_GROUPS.map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.zones.map(([z, l]) => (
+                      <option key={z} value={z}>
+                        {zoneLabel(z, l)}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+                {others.length ? (
+                  <optgroup label="All time zones">
+                    {others.map((z) => (
+                      <option key={z} value={z}>
+                        {z.replace(/_/g, " ")}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  !ZONE_GROUPS.some((g) => g.zones.some(([z]) => z === zone)) && <option value={zone}>{zone}</option>
+                )}
+              </select>
+            </label>
+          ) : (
+            <span className="tfu-muted" style={{ fontSize: 12 }}>
+              Each person sees times in their own computer's time zone.
+            </span>
+          )}
+          <label className="tfu-inline">
+            <input type="checkbox" checked={config["showTimeZone"] === true} onChange={(e) => set({ showTimeZone: e.target.checked })} />
+            Display time zone (e.g. EDT, CET, GMT+5)
+          </label>
+        </>
       ) : null}
     </div>
   );
@@ -687,44 +826,8 @@ export function FieldConfigEditor({
       );
     case "date":
     case "datetime":
-      return (
-        <div className="tfu-cfg">
-          <label>
-            Date format
-            <select className="tfu-input" value={String(config["format"] ?? "local")} onChange={(e) => set({ format: e.target.value })}>
-              <option value="local">Local (e.g. Mar 5, 2026)</option>
-              <option value="us">US (3/5/2026)</option>
-              <option value="eu">European (5/3/2026)</option>
-              <option value="iso">ISO (2026-03-05)</option>
-            </select>
-          </label>
-          {type === "datetime" ? (
-            <>
-              <label>
-                Time format
-                <select className="tfu-input" value={String(config["timeFormat"] ?? "12h")} onChange={(e) => set({ timeFormat: e.target.value })}>
-                  <option value="12h">12 hour</option>
-                  <option value="24h">24 hour</option>
-                </select>
-              </label>
-              <label>
-                Time zone
-                <input
-                  className="tfu-input"
-                  placeholder="Viewer's local time zone"
-                  value={String(config["timeZone"] ?? "")}
-                  onChange={(e) => {
-                    const next = { ...config };
-                    if (e.target.value) next["timeZone"] = e.target.value;
-                    else delete next["timeZone"];
-                    onChange(next);
-                  }}
-                />
-              </label>
-            </>
-          ) : null}
-        </div>
-      );
+    case "created_time":
+      return <DateTimeConfig withTime={type !== "date"} config={config} onChange={onChange} />;
     case "link":
       return (
         <div className="tfu-cfg">
@@ -751,7 +854,12 @@ export function FieldConfigEditor({
         </div>
       );
     case "modified_time":
-      return <LastModifiedConfig config={config} onChange={onChange} fields={fields} fieldId={fieldId} />;
+      return (
+        <>
+          <LastModifiedConfig config={config} onChange={onChange} fields={fields} fieldId={fieldId} />
+          <DateTimeConfig withTime config={config} onChange={onChange} />
+        </>
+      );
     case "lookup":
     case "rollup":
     case "count":

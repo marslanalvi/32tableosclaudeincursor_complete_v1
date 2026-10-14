@@ -1,0 +1,34 @@
+---
+description: How every change to TableOS is made, tested, previewed, versioned and merged
+alwaysApply: true
+---
+
+# TableOS change workflow
+
+Follow these steps, in order, for every fix or feature.
+
+1. **Understand first.** Read the code involved and how it connects (server module, wire types,
+   web feature, CSS) before editing. Fix the cause, not the symptom.
+2. **Edit only what the request needs.** No unrelated refactors or behaviour changes.
+3. **Test the change itself**, with dummy data in the local database only
+   (`postgres://tabula:tabula@localhost:5432/tabula_cc`, test stack `.data/r10-stack.ps1`).
+   Never create test data in the shared live database from `.env`.
+4. **Test the whole architecture so nothing else changed:**
+   - `npx tsc -p apps/server/tsconfig.json --noEmit` and `npx tsc -p apps/web/tsconfig.app.json --noEmit`
+   - `npx pnpm@9.15.0 --filter @tabula/server build`
+   - regression scripts: `.data/verify-{access,sync,round,interfaces,r7,r9,r10}.mjs`,
+     `.data/r2-shell/r6-lockout.mjs` (sync needs the worker and relay running), plus a
+     Playwright check (`.data/r2-shell/pw.mjs`) with screenshots of every UI change.
+5. **Preview** on http://localhost:5283 (`scripts/dev-isolated.ps1`) and show the user screenshots.
+6. **Version** with `node scripts/version.mjs x.y.z` (patch for fixes, minor for features) and
+   update `CHANGELOG.md`, `apps/web/src/features/help/releases.ts`, `docs/VERSIONING.md`,
+   `docs/TABLEOS-WORK-LOG.md`.
+7. **Push to a new branch** `release/vX.Y.Z` on remote `complete`. Never push to master directly.
+8. **Ask for approval** (AskQuestion). Merge into master (`--no-ff`) and push only after the user
+   explicitly approves.
+
+# Standing constraints
+
+- Never commit credentials; `.env` is git-ignored. Mask passwords in any output.
+- Wrong-password alerts and lockouts never apply to the Owner's own account; other accounts'
+  failed attempts alert the Owner with the email and IP address.

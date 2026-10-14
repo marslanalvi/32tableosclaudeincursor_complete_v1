@@ -8,6 +8,32 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-14
+
+### Added
+- **Expand attachment cells.** Select an attachment cell and click ⤢ to open all its files large:
+  open, download, delete, drag to reorder, and add files with the button or by dropping them.
+- **Device approval notifications.** When a member signs in from a new device that needs approval,
+  the organization owner gets a bell notification (name, email, device, IP) that opens
+  Members & access → Devices.
+- **Time zones for date fields.** Date and time, Created time and Last modified time fields have
+  "Use the same time zone for all collaborators" with a picker grouped into GMT, United States,
+  Europe and Asia & Pacific (plus every other zone), and "Display time zone", which shows the
+  zone after the time (EDT, CET, GMT+5).
+
+### Fixed
+- **Last modified time was empty for records edited before the field existed.** Watching
+  specific fields now fills existing records from the change history (or the creation time when
+  the value was set on create), and recomputes when the watched fields change. Migration
+  `0078_modified_time_backfill.sql` fills fields that already existed.
+- **Download did nothing for files in cloud storage.** Attachments now carry a `downloadUrl` on
+  TableOS itself that saves the file under its name (Google Cloud Storage links are signed with
+  a download disposition).
+- **Filter values couldn't be edited once chosen.** Only the chips were clickable, and the middle
+  of the box was the first chip's ×. The option/collaborator picker now fills the whole value
+  cell and shows ▾, so clicking anywhere opens the list.
+- Date formats other than Local used the viewer's date even when a field had its own time zone.
+
 ## [0.9.1] - 2026-10-14
 
 ### Fixed

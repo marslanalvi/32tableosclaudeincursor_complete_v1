@@ -286,7 +286,19 @@ export async function createFieldInTx(
     await writeFieldDependencies(ctx.trx, { baseId: ctx.baseId, workspaceId: ctx.workspaceId, fieldId, edges });
     await backfillFieldsInTx(ctx.trx, scope(ctx), tableId, [fieldId], SYNC_CONVERT_LIMIT);
   }
+  if (input.type === "modified_time") await backfillWatchedModifiedTime(ctx, fieldId);
   return { fieldId, inverseFieldId, linkedTableId };
+}
+
+/**
+ * A Last modified time field that watches specific fields stores its time in the cell. Existing
+ * records get the time their watched fields last changed according to the change log, or their
+ * creation time when a watched field has a value but no recorded change (set on create, or the
+ * change is older than the log). The SQL lives in migration 0078, which also ran it for fields
+ * that existed before.
+ */
+export async function backfillWatchedModifiedTime(ctx: SchemaOpContext, fieldId: string): Promise<void> {
+  await sql`SELECT data.backfill_watched_modified_time(${fieldId}::uuid)`.execute(ctx.trx);
 }
 
 // ---------------------------------------------------------------------------
@@ -346,6 +358,7 @@ export async function updateFieldInTx(
   if (typeChanged) await assertNotLastRecordIdField(ctx.trx, tableId, field);
 
   const tableFields = await loadTableFieldRows(ctx.trx, tableId);
+  const previousConfig = field.config;
   // Merge partial config onto the existing one when the type is unchanged.
   const baseConfig = typeChanged ? {} : field.config;
   let mergedInput: Record<string, unknown> = { ...(input.config ?? {}) };
@@ -431,6 +444,12 @@ export async function updateFieldInTx(
     await backfillFieldsInTx(ctx.trx, scope(ctx), tableId, [fieldId], SYNC_CONVERT_LIMIT);
   } else {
     await sql`DELETE FROM data.field_dependencies WHERE dependent_field_id = ${fieldId}`.execute(ctx.trx);
+  }
+  if (
+    newType === "modified_time" &&
+    (typeChanged || JSON.stringify(previousConfig["watchFieldIds"] ?? null) !== JSON.stringify(newConfig["watchFieldIds"] ?? null))
+  ) {
+    await backfillWatchedModifiedTime(ctx, fieldId);
   }
   // Dependents (formulas/lookups/rollups elsewhere) see new values or type.
   if (typeChanged || linkRetarget) {

@@ -44,6 +44,8 @@ export interface AttachmentWire {
   mime: string;
   size: number;
   url: string;
+  /** Same-origin link that saves the file (works for every storage driver). */
+  downloadUrl: string;
   thumbnailUrl: string | null;
   width: number | null;
   height: number | null;
@@ -732,6 +734,7 @@ async function loadAttachments(
         mime: a.mime,
         size: Number(a.size_bytes),
         url,
+        downloadUrl: `${localAttachmentUrl(a.id, a.filename) ?? `${apiPath}/content`}?download=1`,
         thumbnailUrl: isImage ? url : null,
         width: typeof w === "number" ? w : null,
         height: typeof h === "number" ? h : null,
