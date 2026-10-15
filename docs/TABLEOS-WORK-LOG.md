@@ -32,7 +32,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 * **Admin matrix:** row checkboxes and `BulkAccessBar`. "No access" on a base under a workspace role writes `none`, otherwise removes the grant. Base rows offer "No access to this base" plus Reset/Remove.
 * **Bell:** `NotificationsBell` on Home (`routes/home.tsx`), polling every 15 s. Desktop alerts use `Notification` after "Turn on"; `localStorage["tableos:desktop-notified-at"]` holds the newest time seen, so the first load and old items never pop up, and `tag` dedupes across tabs.
 * **Help Back:** topic navigation and the `/help` redirect use `replace: true`.
-* **Import:** `uniqueName()` gives new fields free names; `nameProblems` marks each clashing row; "Rename them for me".
+* **Import:** a column whose name matches a field in the destination table (`matchFor`) is a highlighted row (`data-testid="import-match"`) with radio choices: existing / new (name and type) / replace / skip / a different field. Replace sets `ColumnMap.replace`; `run()` deletes those fields (`fieldsApi.remove`, soft delete, Undo restores) before creating the new ones, and their names count as free. Into-existing is disabled for non-writable types, and replace is disabled for the primary field. `uniqueName()` suggests free names; `nameProblems` marks bad rows; "Rename them for me" fixes them all. A new table reserves "Record ID". Test: `.data/r2-shell/r12-import.mjs`.
 * **Tests:** `.data/verify-r12.mjs` (per-base access and a 12-action privilege matrix for viewer/commenter/editor/creator), `.data/r2-shell/r12-ui.mjs`.
 
 ## v0.10.0: attachments, time zones, device alerts, last-modified backfill, filter values

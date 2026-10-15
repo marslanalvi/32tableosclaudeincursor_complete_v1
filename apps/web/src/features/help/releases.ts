@@ -17,7 +17,7 @@ export const RELEASES: Release[] = [
       "Tick several rows in a member’s access table to change them together.",
       "The notification bell is on the Home page too, and can show desktop notifications.",
       "Help → Back takes you back to where you were, not through the topics you read.",
-      "Importing columns named like existing fields (Notes, Attachments) just works: they get a free name you can change.",
+      "Import: columns named like existing fields (Notes, Attachments) are highlighted, and you choose for each: use the existing field, rename it, replace the existing field, or skip it.",
     ],
   },
   {

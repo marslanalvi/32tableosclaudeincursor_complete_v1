@@ -27,9 +27,12 @@ for how releases are cut. The same notes appear in the app under
 - **Help → Back stepped through every topic you read.** Topics replace each other in the history,
   so Back returns to the page you opened Help from.
 - **Importing a CSV with columns named like existing fields** (Notes, Attachments, Record ID)
-  stopped with "New field names must be unique". New fields now get a free name
-  ("Attachments 2"), a clashing row is marked with what to do, and **Rename them for me** fixes
-  all clashes.
+  stopped with "New field names must be unique". Matching columns are now highlighted (with a
+  banner naming them) and each one gets its own choice: import into the existing field, import
+  as a new field with a name you choose, **replace** the existing field (it is deleted, and
+  Undo brings it back), don't import it, or pick a different field. Options that can't work are
+  greyed out with the reason (an attachment field can't take text; the primary field can't be
+  deleted). **Rename them for me** still fixes every name clash at once.
 - The base collaborator list counted expired grants.
 
 ## [0.10.0] - 2026-10-14

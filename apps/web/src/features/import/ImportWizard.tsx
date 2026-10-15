@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, ApiProblemError, type BaseDetail } from "../../lib/api.ts";
 import { fieldsApi } from "../../lib/api-areas/fields.ts";
 import { importRows } from "../../lib/api-areas/collab.ts";
@@ -38,7 +38,11 @@ interface ColumnMap {
   target: string; // field id | NEW_FIELD | SKIP
   newName: string;
   newType: DetectedType;
+  /** With NEW_FIELD: delete the existing field of the same name first, then create this one. */
+  replace?: boolean;
 }
+
+type MatchChoice = "existing" | "new" | "replace" | "skip" | "other";
 
 /** `name`, or `name 2`, `name 3`… so it matches none of `taken` (lower-cased names). */
 function uniqueName(name: string, taken: Set<string>): string {
@@ -136,8 +140,18 @@ export function ImportWizard({
     [dest, destTable],
   );
 
+  /** Existing field with the same name as a column (destination table only). */
+  const matchFor = useCallback(
+    (header: string) =>
+      dest === "existing"
+        ? (destTable?.fields ?? []).find((f) => f.name.trim().toLowerCase() === header.trim().toLowerCase())
+        : undefined,
+    [dest, destTable],
+  );
+
+  // A new table starts with its Record ID field.
   const existingNames = useMemo(
-    () => new Set(dest === "existing" ? (destTable?.fields ?? []).map((f) => f.name.trim().toLowerCase()) : []),
+    () => new Set(dest === "existing" ? (destTable?.fields ?? []).map((f) => f.name.trim().toLowerCase()) : ["record id"]),
     [dest, destTable],
   );
 
@@ -197,12 +211,26 @@ export function ImportWizard({
   }
 
   const mappedCount = mapping.filter((m) => m.target !== SKIP).length;
-  /** Per column: why its new field name can't be used, or null. */
+  const headers = sheet?.headers ?? [];
+  const matches = headers.map((h) => matchFor(h));
+  /** Fields that will be deleted because a column replaces them. */
+  const replacedIds = new Set(
+    mapping.flatMap((m, i) => (m.target === NEW_FIELD && m.replace && matches[i] ? [matches[i]!.id] : [])),
+  );
+  const freeNames = new Set(
+    dest === "existing"
+      ? (destTable?.fields ?? []).filter((f) => !replacedIds.has(f.id)).map((f) => f.name.trim().toLowerCase())
+      : existingNames,
+  );
+  /** Per column: why its choice can't be imported, or null. */
   const nameProblems = mapping.map((m, i) => {
+    if (m.target !== NEW_FIELD && replacedIds.has(m.target)) {
+      return "That field is being replaced by another column. Pick a different field.";
+    }
     if (m.target !== NEW_FIELD) return null;
     const n = m.newName.trim().toLowerCase();
-    if (!n) return null;
-    if (existingNames.has(n)) return `“${m.newName.trim()}” already exists in this table. Rename it here, or choose the existing field above.`;
+    if (!n) return "Give the new field a name.";
+    if (freeNames.has(n)) return `“${m.newName.trim()}” already exists in this table. Rename it, or choose another option.`;
     if (mapping.some((o, j) => j < i && o.target === NEW_FIELD && o.newName.trim().toLowerCase() === n)) {
       return `Another column already creates “${m.newName.trim()}”. Give this one a different name.`;
     }
@@ -211,7 +239,7 @@ export function ImportWizard({
   const duplicateNames = nameProblems.some(Boolean);
   const renameClashes = () =>
     setMapping((old) => {
-      const taken = new Set(existingNames);
+      const taken = new Set(freeNames);
       return old.map((m) => {
         if (m.target !== NEW_FIELD) return m;
         const newName = uniqueName(m.newName, taken);
@@ -219,11 +247,45 @@ export function ImportWizard({
         return newName === m.newName ? m : { ...m, newName };
       });
     });
+  const matchedColumns = headers.filter((_, i) => matches[i]).length;
   const canRun =
     Boolean(sheet && sheet.rows.length > 0 && mappedCount > 0) &&
     !duplicateNames &&
     (dest === "new" ? newTableName.trim().length > 0 : Boolean(destTable)) &&
     mapping.every((m) => m.target !== NEW_FIELD || m.newName.trim().length > 0);
+
+  const choiceOf = (m: ColumnMap, i: number): MatchChoice => {
+    const match = matches[i];
+    if (m.target === SKIP) return "skip";
+    if (m.target === NEW_FIELD) return m.replace ? "replace" : "new";
+    return match && m.target === match.id ? "existing" : "other";
+  };
+  const choose = (i: number, choice: MatchChoice) =>
+    setMapping((old) =>
+      old.map((m, j) => {
+        if (j !== i) return m;
+        const match = matches[i];
+        const header = headers[i] ?? m.newName;
+        switch (choice) {
+          case "existing":
+            return match ? { ...m, target: match.id, replace: false } : m;
+          case "replace":
+            return { ...m, target: NEW_FIELD, replace: true, newName: match?.name ?? header };
+          case "new": {
+            const taken = new Set(freeNames);
+            old.forEach((o, k) => k !== i && o.target === NEW_FIELD && taken.add(o.newName.trim().toLowerCase()));
+            const keep = m.target === NEW_FIELD && !m.replace && !taken.has(m.newName.trim().toLowerCase());
+            return { ...m, target: NEW_FIELD, replace: false, newName: keep ? m.newName : uniqueName(header, taken) };
+          }
+          case "skip":
+            return { ...m, target: SKIP, replace: false };
+          default: {
+            const other = (destTable?.fields ?? []).find((f) => WRITABLE_TYPES.has(f.type) && f.id !== match?.id);
+            return other ? { ...m, target: other.id, replace: false } : m;
+          }
+        }
+      }),
+    );
 
   async function run() {
     if (!sheet) return;
@@ -263,7 +325,16 @@ export function ImportWizard({
           m.newType = primaryType as DetectedType;
         }
       }
-      // 2) New fields.
+      // 2) Fields the user chose to replace go first, so their names are free again.
+      if (dest === "existing") {
+        for (const [col, m] of effective.entries()) {
+          const match = matches[col];
+          if (m.target !== NEW_FIELD || !m.replace || !match) continue;
+          await fieldsApi.remove(baseId, targetTableId, match.id);
+          fields = fields.filter((f) => f.id !== match.id);
+        }
+      }
+      // 3) New fields.
       const typeOf = new Map(fields.map((f) => [f.id, f.type]));
       for (const [col, m] of effective.entries()) {
         if (m.target !== NEW_FIELD) continue;
@@ -513,11 +584,20 @@ export function ImportWizard({
                   </button>
                 </span>
               </div>
+              {matchedColumns ? (
+                <div className={s.matchBanner} role="note">
+                  <strong>
+                    {matchedColumns === 1 ? "1 column has" : `${matchedColumns} columns have`} the same name as a field already in “{destTable?.name}”:
+                  </strong>{" "}
+                  {headers.filter((_, i) => matches[i]).join(", ")}. They’re highlighted below. For each one, choose whether to import into the
+                  existing field, import as a new field with another name, replace the existing field, or not import it.
+                </div>
+              ) : null}
               {duplicateNames ? (
                 <div className={s.error} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                   <span>
-                    {nameProblems.filter(Boolean).length === 1 ? "One new field has" : `${nameProblems.filter(Boolean).length} new fields have`} a name
-                    that is already used. Rename {nameProblems.filter(Boolean).length === 1 ? "it" : "them"} below (marked in red).
+                    {nameProblems.filter(Boolean).length === 1 ? "One column needs" : `${nameProblems.filter(Boolean).length} columns need`} your attention
+                    (marked in red below).
                   </span>
                   <button type="button" className={s.btnSecondary} style={{ minHeight: 28, padding: "2px 10px" }} onClick={renameClashes}>
                     Rename them for me
@@ -539,6 +619,120 @@ export function ImportWizard({
                       if (!m) return null;
                       const set = (patch: Partial<ColumnMap>) =>
                         setMapping((old) => old.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+                      const match = matches[i];
+                      const choice = choiceOf(m, i);
+                      const canInto = Boolean(match && WRITABLE_TYPES.has(match.type));
+                      const canReplace = Boolean(match && match.id !== destTable?.primaryFieldId);
+                      const matchType = match ? (TYPE_LABELS[match.type] ?? match.type.replace(/_/g, " ")) : "";
+                      const radio = (value: MatchChoice, label: ReactNode, disabled = false, why?: string) => (
+                        <label className={s.matchOption} data-disabled={disabled || undefined} title={why}>
+                          <input
+                            type="radio"
+                            name={`match-${i}`}
+                            checked={choice === value}
+                            disabled={disabled}
+                            onChange={() => choose(i, value)}
+                          />
+                          <span>
+                            {label}
+                            {disabled && why ? <span className={s.matchWhy}> {why}</span> : null}
+                          </span>
+                        </label>
+                      );
+                      const newFieldInputs =
+                        m.target === NEW_FIELD ? (
+                          <div className={s.row} style={{ marginTop: 6 }}>
+                            <input
+                              className={s.input}
+                              value={m.newName}
+                              onChange={(e) => set({ newName: e.target.value })}
+                              aria-label="New field name"
+                              aria-invalid={nameProblems[i] ? true : undefined}
+                              style={nameProblems[i] ? { borderColor: "var(--tabula-color-danger)", boxShadow: "0 0 0 1px var(--tabula-color-danger)" } : undefined}
+                            />
+                            <select
+                              className={s.select}
+                              value={m.newType}
+                              onChange={(e) => set({ newType: e.target.value as DetectedType })}
+                              aria-label="New field type"
+                            >
+                              {Object.entries(TYPE_LABELS).map(([k, label]) => (
+                                <option key={k} value={k}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null;
+                      if (match) {
+                        return (
+                          <tr key={`${header}-${i}`} className={s.matchRow} data-testid="import-match">
+                            <td>
+                              <strong style={{ fontWeight: 500 }}>{header}</strong>
+                              <div className={s.matchTag}>Same name as an existing field</div>
+                            </td>
+                            <td>
+                              <div className={s.matchChoices} role="radiogroup" aria-label={`What to do with ${header}`}>
+                                {radio(
+                                  "existing",
+                                  <>
+                                    Import into the existing “{match.name}” field <span className={s.muted}>({matchType})</span>
+                                  </>,
+                                  !canInto,
+                                  canInto ? undefined : `(${matchType} fields can’t take imported values)`,
+                                )}
+                                {radio("new", "Import as a new field, with a name I choose")}
+                                {choice === "new" ? newFieldInputs : null}
+                                {radio(
+                                  "replace",
+                                  <>
+                                    Replace: delete the existing “{match.name}” field and import this column in its place
+                                  </>,
+                                  !canReplace,
+                                  canReplace ? undefined : "(the primary field can’t be deleted)",
+                                )}
+                                {choice === "replace" ? newFieldInputs : null}
+                                {choice === "replace" ? (
+                                  <div className={s.matchWhy}>
+                                    The current “{match.name}” field and its values are deleted when you import (Undo brings it back).
+                                  </div>
+                                ) : null}
+                                {radio("skip", "Don’t import this column")}
+                                {canInto || (destTable?.fields ?? []).some((f) => WRITABLE_TYPES.has(f.type) && f.id !== match.id)
+                                  ? radio("other", "Import into a different field")
+                                  : null}
+                                {choice === "other" ? (
+                                  <select
+                                    className={s.select}
+                                    value={m.target}
+                                    onChange={(e) => set({ target: e.target.value })}
+                                    aria-label={`Field for ${header}`}
+                                  >
+                                    {(destTable?.fields ?? [])
+                                      .filter((f) => WRITABLE_TYPES.has(f.type) && f.id !== match.id)
+                                      .map((f) => (
+                                        <option key={f.id} value={f.id}>
+                                          {f.name} · {TYPE_LABELS[f.type] ?? f.type}
+                                        </option>
+                                      ))}
+                                  </select>
+                                ) : null}
+                              </div>
+                              {nameProblems[i] ? (
+                                <div style={{ marginTop: 4, fontSize: 12, color: "var(--tabula-color-danger)" }}>{nameProblems[i]}</div>
+                              ) : null}
+                            </td>
+                            <td className={s.muted}>
+                              {sheet.rows
+                                .slice(0, 3)
+                                .map((r) => r[i] ?? "")
+                                .filter((v) => v.trim())
+                                .map((v) => (v.length > 40 ? `${v.slice(0, 40)}…` : v))
+                                .join(" · ") || "—"}
+                            </td>
+                          </tr>
+                        );
+                      }
                       return (
                         <tr key={`${header}-${i}`}>
                           <td>
@@ -563,30 +757,7 @@ export function ImportWizard({
                                     ))
                                 : null}
                             </select>
-                            {m.target === NEW_FIELD ? (
-                              <div className={s.row} style={{ marginTop: 6 }}>
-                                <input
-                                  className={s.input}
-                                  value={m.newName}
-                                  onChange={(e) => set({ newName: e.target.value })}
-                                  aria-label="New field name"
-                                  aria-invalid={nameProblems[i] ? true : undefined}
-                                  style={nameProblems[i] ? { borderColor: "var(--tabula-color-danger)", boxShadow: "0 0 0 1px var(--tabula-color-danger)" } : undefined}
-                                />
-                                <select
-                                  className={s.select}
-                                  value={m.newType}
-                                  onChange={(e) => set({ newType: e.target.value as DetectedType })}
-                                  aria-label="New field type"
-                                >
-                                  {Object.entries(TYPE_LABELS).map(([k, label]) => (
-                                    <option key={k} value={k}>
-                                      {label}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            ) : null}
+                            {newFieldInputs}
                             {nameProblems[i] ? (
                               <div style={{ marginTop: 4, fontSize: 12, color: "var(--tabula-color-danger)" }}>{nameProblems[i]}</div>
                             ) : null}
