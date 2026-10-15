@@ -336,7 +336,8 @@ export const HELP_TOPICS: HelpTopic[] = [
         <ul>
           <li>Changes in the source table arrive within a few seconds. A full check also runs every few minutes (5 by default).</li>
           <li>Field renames, new fields, type changes and deleted fields are copied too.</li>
-          <li>The bar above a synced table shows when it last synced. Use <b>Sync now</b>, <b>Pause</b> or <b>Resume</b> there or in the tab menu.</li>
+          <li>The bar above a synced table shows when it last synced. Use <b>Sync now</b>, <b>Stop</b>, <b>Pause</b> or <b>Resume</b> there or in the tab menu; while a sync runs, the bar shows its progress.</li>
+          <li>A value that doesn’t fit its field (for example an invalid phone number) is left empty and the rest syncs. Click <b>values couldn’t be synced — review</b> to see them by field, then keep that field as text or leave them empty.</li>
           <li>
             Synced fields and records are read-only, and you can’t add or delete records. You <b>can</b> add your own fields (notes, links, formulas)
             to a synced table; those stay editable.

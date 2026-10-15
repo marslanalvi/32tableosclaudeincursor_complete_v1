@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { runMigrations } from "@tabula/db";
 import { createApp } from "../composition/create-app.js";
 import { startAutomationEngine } from "../modules/automations/consumer.js";
+import { mfaKey } from "../modules/auth/mfa-pending.js";
+import { startSyncScheduler } from "../modules/sync/scheduler.js";
 
 const rootEnv = resolve(process.cwd(), "../../.env");
 const localEnv = resolve(process.cwd(), ".env");
@@ -45,6 +47,16 @@ if (process.env["AUTOMATIONS_IN_API"] !== "false") {
     log: ctx.log,
   });
   const stop = () => engine.stop();
+  process.once("SIGTERM", stop);
+  process.once("SIGINT", stop);
+}
+
+// Synced tables refresh on their interval even without a worker. Each run claims the sync's
+// lock first (`locked_until`), so an API and a worker never run the same sync twice. Source
+// edits only trigger an immediate run in the worker (domain events); here the sweep catches up.
+if (process.env["SYNC_IN_API"] !== "false") {
+  const scheduler = startSyncScheduler({ db: ctx.db, redis: ctx.redis, storage: ctx.storage, secretKey: mfaKey(ctx.env), google: ctx.env }, ctx.log);
+  const stop = () => scheduler.stop();
   process.once("SIGTERM", stop);
   process.once("SIGINT", stop);
 }

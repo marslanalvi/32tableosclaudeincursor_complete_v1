@@ -1,5 +1,5 @@
 import type { DomainEvent } from "@tabula/events";
-import { dueSyncIds, runTableSync, SyncBusyError, type SyncDeps } from "./engine.js";
+import { dueSyncIds, runTableSync, SyncBusyError, SyncCancelledError, type SyncDeps } from "./engine.js";
 
 interface Logger {
   info: (obj: unknown, msg?: string) => void;
@@ -29,7 +29,7 @@ export function startSyncScheduler(deps: SyncDeps, log: Logger) {
       const r = await runTableSync(deps, syncId);
       if (r.created || r.updated || r.deleted || r.fieldsChanged) log.info({ syncId, ...r }, "Table sync ran");
     } catch (err) {
-      if (err instanceof SyncBusyError) return;
+      if (err instanceof SyncBusyError || err instanceof SyncCancelledError) return;
       log.warn({ syncId, err: err instanceof Error ? err.message : err }, "Table sync failed");
     } finally {
       running.delete(syncId);

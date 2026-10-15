@@ -8,6 +8,31 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-15
+
+### Fixed
+- **One bad value failed the whole sync** ("failed: Phone: Invalid phone number"). Syncs from
+  Airtable, HubSpot, Gmail or another base now skip just the value that doesn't fit its field,
+  sync everything else, and show "N values couldn't be synced — review" on the bar.
+- **Synced tables never refreshed on their own in production**: the scheduler only ran in the
+  worker. The API now runs it too (`SYNC_IN_API=false` to turn off); runs lock per sync.
+- **Sync now** ran inside the request, so long Airtable syncs timed out. It now starts in the
+  background and the bar shows progress ("reading 1,200 records…", "saving 300 of 3,000…").
+- Syncing a table whose primary field is Record ID failed (two fields named "Record ID").
+- **Stop during an import** now stops at once instead of waiting for the current batch.
+
+### Added
+- **Review skipped sync values**: grouped by field with record, value and problem; per field
+  choose **Keep as text** (that field becomes text here and the values sync as they are) or
+  **Leave empty**. Migration `0080_sync_issues_and_control.sql`.
+- **Stop, Pause and Resume on the sync bar.** Stop ends the run in progress (what's written stays;
+  Sync now continues); Pause also stops it; Resume starts a run.
+- **Invalid import entries** are listed with row, column, value and problem; correct them and
+  import again, import them with the invalid value left empty, skip them, or download them.
+- **Devices log grouped per person**: waiting, approved and revoked devices (with who decided and
+  when), active and ended sign-in sessions, and the full approval/revocation history.
+- **Group record history** by person or by field (activity menu → Group revision history).
+
 ## [0.11.0] - 2026-10-15
 
 ### Added

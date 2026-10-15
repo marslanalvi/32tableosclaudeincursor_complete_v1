@@ -10,6 +10,7 @@ import { invalidateBaseSnapshotCache, invalidateUserSnapshotCache } from "../acc
 import { isOrgOwner } from "../access/workspace-access.js";
 import {
   DEVICE_COOKIE,
+  deviceLabel,
   hashDeviceKey,
   invalidateDeviceCache,
   requiresDeviceApproval,
@@ -237,6 +238,99 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
     }),
   );
 
+  /**
+   * Devices log, per person: devices by state (waiting, approved, revoked) with who decided,
+   * sign-in sessions (active and ended) and the history of approvals and revocations.
+   */
+  app.get<{ Params: OrgParams }>(
+    "/v1/orgs/:orgId/device-log",
+    wrap<OrgParams>(async (request, reply) => {
+      const { orgId } = await ownerOrg(request);
+      const [members, devices, sessions, events] = await Promise.all([
+        sql<{ user_id: string; email: string; display_name: string; role: string; status: string }>`
+          SELECT m.user_id, u.email, u.display_name, m.role, m.status
+          FROM core.organization_members m INNER JOIN core.users u ON u.id = m.user_id
+          WHERE m.org_id = ${orgId} AND m.status IN ('active','suspended')
+          ORDER BY (m.role = 'owner') DESC, u.display_name
+        `.execute(ctx.db),
+        sql<{ id: string; user_id: string; label: string; user_agent: string | null; first_ip: string | null; last_ip: string | null; status: string; first_seen_at: Date; last_seen_at: Date; decided_at: Date | null; decided_by_name: string | null }>`
+          SELECT d.id, d.user_id, d.label, d.user_agent, host(d.first_ip) AS first_ip, host(d.last_ip) AS last_ip, d.status,
+                 d.first_seen_at, d.last_seen_at, d.decided_at, nullif(u.display_name, '') AS decided_by_name
+          FROM core.org_devices d LEFT JOIN core.users u ON u.id = d.decided_by
+          WHERE d.org_id = ${orgId} ORDER BY d.last_seen_at DESC
+        `.execute(ctx.db),
+        sql<{ id: string; user_id: string; ip: string | null; user_agent: string | null; created_at: Date; last_seen_at: Date; revoked_at: Date | null; active: boolean }>`
+          SELECT id, user_id, ip, user_agent, created_at, last_seen_at, revoked_at, active FROM (
+            SELECT s.id, s.user_id, host(s.ip) AS ip, s.user_agent, s.created_at, s.last_seen_at, s.revoked_at,
+                   (s.revoked_at IS NULL AND s.expires_at > now() AND s.idle_expires_at > now()) AS active,
+                   row_number() OVER (PARTITION BY s.user_id ORDER BY s.last_seen_at DESC) AS n
+            FROM core.sessions s
+            WHERE s.auth_method <> 'automation'
+              AND s.user_id IN (SELECT user_id FROM core.organization_members WHERE org_id = ${orgId})
+          ) x WHERE n <= 30
+        `.execute(ctx.db),
+        sql<{ action: string; target_id: string | null; metadata: Record<string, unknown> | null; created_at: Date; actor_name: string | null }>`
+          SELECT e.action, e.target_id, e.metadata, e.created_at, nullif(u.display_name, '') AS actor_name
+          FROM audit.audit_events e LEFT JOIN core.users u ON u.id = e.actor_user_id
+          WHERE e.org_id = ${orgId} AND e.action IN ('device.approved', 'device.revoked', 'device.deleted')
+          ORDER BY e.created_at DESC LIMIT 1000
+        `.execute(ctx.db),
+      ]);
+      const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
+      const deviceById = new Map(devices.rows.map((d) => [d.id, d]));
+      void reply.send({
+        members: members.rows.map((m) => {
+          const own = devices.rows.filter((d) => d.user_id === m.user_id);
+          const ownIds = new Set(own.map((d) => d.id));
+          const history = [
+            ...own.map((d) => ({ kind: "requested" as const, at: iso(d.first_seen_at)!, deviceId: pid("dev", d.id), deviceLabel: d.label, by: null as string | null, ip: d.first_ip })),
+            ...events.rows
+              .filter((e) => (e.target_id && ownIds.has(e.target_id)) || e.metadata?.["userId"] === m.user_id)
+              .map((e) => ({
+                kind: e.action === "device.approved" ? ("approved" as const) : e.action === "device.revoked" ? ("revoked" as const) : ("forgotten" as const),
+                at: iso(e.created_at)!,
+                deviceId: e.target_id ? pid("dev", e.target_id) : null,
+                deviceLabel: (e.target_id && deviceById.get(e.target_id)?.label) || "a device",
+                by: e.actor_name,
+                ip: null as string | null,
+              })),
+          ].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+          return {
+            id: pid("usr", m.user_id),
+            email: m.email,
+            name: m.display_name,
+            isOwner: m.role === "owner",
+            status: m.status,
+            devices: own.map((d) => ({
+              id: pid("dev", d.id),
+              label: d.label,
+              userAgent: d.user_agent,
+              firstIp: d.first_ip,
+              lastIp: d.last_ip,
+              status: d.status,
+              firstSeenAt: iso(d.first_seen_at),
+              lastSeenAt: iso(d.last_seen_at),
+              decidedAt: iso(d.decided_at),
+              decidedBy: d.decided_by_name,
+            })),
+            sessions: sessions.rows
+              .filter((x) => x.user_id === m.user_id)
+              .map((x) => ({
+                id: x.id,
+                label: deviceLabel(x.user_agent),
+                ip: x.ip,
+                startedAt: iso(x.created_at),
+                lastSeenAt: iso(x.last_seen_at),
+                endedAt: iso(x.revoked_at),
+                active: x.active,
+              })),
+            history: history.slice(0, 100),
+          };
+        }),
+      });
+    }),
+  );
+
   app.patch<{ Params: OrgParams }>(
     "/v1/orgs/:orgId/settings",
     wrap<OrgParams>(async (request, reply) => {
@@ -405,7 +499,7 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
       const r = await sql<{ user_id: string }>`DELETE FROM core.org_devices WHERE id = ${id} AND org_id = ${orgId} RETURNING user_id`.execute(ctx.db);
       if (!r.rows[0]) throw new ApiError(404, "NOT_FOUND", "Device not found");
       invalidateDeviceCache(r.rows[0].user_id);
-      await writeAuditEvent(ctx.db, { orgId, actorUserId: actor, action: "device.deleted", targetType: "device", targetId: id, ip: request.ip });
+      await writeAuditEvent(ctx.db, { orgId, actorUserId: actor, action: "device.deleted", targetType: "device", targetId: id, metadata: { userId: r.rows[0].user_id }, ip: request.ip });
       void reply.code(204).send();
     }),
   );

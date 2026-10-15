@@ -13,7 +13,16 @@ import { bootstrapDefaultTable } from "../base/bootstrap-default-table.js";
 import { mfaKey } from "../auth/mfa-pending.js";
 import { loadConnection } from "../integrations/connections.js";
 import { HUBSPOT_OBJECTS, type HubSpotObject } from "../integrations/hubspot.js";
-import { editableSyncedFieldIds, loadSync, mapSourceField, runTableSync, sourceFieldsInOrder, type SyncRow } from "./engine.js";
+import {
+  editableSyncedFieldIds,
+  loadSync,
+  mapSourceField,
+  requestSyncStop,
+  runTableSync,
+  sourceFieldsInOrder,
+  startTableSync,
+  type SyncRow,
+} from "./engine.js";
 
 const createBody = z.object({
   sourceTableId: z.string(),
@@ -48,6 +57,13 @@ export function syncDto(s: SyncRow, names: { baseName: string; tableName: string
     twoWay: s.two_way,
     /** Synced fields that can be edited here and are written back to the source. */
     editableFieldIds: [...editableSyncedFieldIds(s)].map((f) => pid("fld", f)),
+    /** A run is going right now (Sync now returns before it finishes). */
+    running: Boolean(s.running),
+    stopRequested: Boolean(s.running && s.cancel_requested),
+    progress: s.running && s.progress ? s.progress : null,
+    /** Values that didn't fit their field and were left empty (see GET …/sync/issues). */
+    issueCount: Number(s.issue_count ?? 0),
+    textFieldKeys: Object.keys(s.field_overrides ?? {}).filter((k) => s.field_overrides?.[k] === "text"),
   };
 }
 
@@ -207,7 +223,8 @@ export async function registerSyncRoutes(app: FastifyInstance, ctx: AppContext):
             emptyRecords: 0,
             fields: [
               { name: srcPrimary?.name ?? "Name", type: primaryType.type, config: primaryType.config },
-              { name: "Record ID", type: "record_id", config: {} },
+              // Tables whose primary is their Record ID would otherwise get two fields with that name.
+              { name: (srcPrimary?.name ?? "").trim().toLowerCase() === "record id" ? "Local record ID" : "Record ID", type: "record_id", config: {} },
             ],
           });
           tableId = boot.tableId;
@@ -258,18 +275,120 @@ export async function registerSyncRoutes(app: FastifyInstance, ctx: AppContext):
     }),
   );
 
+  /**
+   * Sync now. Starts the run and answers right away (the bar shows progress and offers Stop);
+   * `{ "wait": true }` waits for the result instead (API clients, tests).
+   */
   app.post<{ Params: TableParams }>(
     "/v1/bases/:baseId/tables/:tableId/sync/run",
     wrap<TableParams>(async (request, reply) => {
       const { sync } = await tableSync(request, "record.update");
+      const wait = (request.body as { wait?: unknown } | null)?.wait === true;
       let result = null;
-      try {
-        result = await runTableSync(deps, sync.id, { full: true });
-      } catch {
-        // Stored on the sync row; returned below.
+      let started = false;
+      if (wait) {
+        try {
+          result = await runTableSync(deps, sync.id, { full: true });
+          started = true;
+        } catch {
+          // Stored on the sync row; returned below.
+        }
+      } else {
+        started = await startTableSync(deps, sync.id, { full: true }, (err) =>
+          request.log.warn({ err: err instanceof Error ? err.message : err, syncId: sync.id }, "Sync now failed"),
+        );
+        // Let the run take the lock so the answer already says "running".
+        await new Promise((r) => setTimeout(r, 150));
       }
       const fresh = (await loadSync(ctx.db, { id: sync.id }))!;
-      void reply.send({ result, sync: syncDto(fresh, await sourceNames(ctx.db, fresh)) });
+      void reply.code(wait ? 200 : 202).send({ result, started, alreadyRunning: !wait && !started, sync: syncDto(fresh, await sourceNames(ctx.db, fresh)) });
+    }),
+  );
+
+  /** Stop the run in progress at its next checkpoint (records written so far stay). */
+  app.post<{ Params: TableParams }>(
+    "/v1/bases/:baseId/tables/:tableId/sync/stop",
+    wrap<TableParams>(async (request, reply) => {
+      const { sync } = await tableSync(request, "record.update");
+      const stopping = await requestSyncStop(ctx.db, sync.id);
+      const fresh = (await loadSync(ctx.db, { id: sync.id }))!;
+      void reply.send({ stopping, sync: syncDto(fresh, await sourceNames(ctx.db, fresh)) });
+    }),
+  );
+
+  /** Values the sync couldn't write (they were left empty), grouped by field on the client. */
+  app.get<{ Params: TableParams }>(
+    "/v1/bases/:baseId/tables/:tableId/sync/issues",
+    wrap<TableParams>(async (request, reply) => {
+      const { sync } = await tableSync(request, "base.read");
+      const r = await sql<{ source_record_id: string; dest_record_id: string | null; source_field_id: string; field_name: string; record_label: string; value: string | null; message: string; created_at: Date }>`
+        SELECT source_record_id, dest_record_id, source_field_id, field_name, record_label, value, message, created_at
+        FROM data.table_sync_issues WHERE sync_id = ${sync.id}
+        ORDER BY field_name, record_label LIMIT 2000
+      `.execute(ctx.db);
+      void reply.send({
+        issues: r.rows.map((x) => ({
+          recordId: x.dest_record_id ? pid("rec", x.dest_record_id) : null,
+          sourceRecordId: x.source_record_id,
+          fieldKey: x.source_field_id,
+          fieldId: sync.field_map?.[x.source_field_id] ? pid("fld", sync.field_map[x.source_field_id]!) : null,
+          fieldName: x.field_name,
+          recordLabel: x.record_label,
+          value: x.value,
+          message: x.message,
+          at: x.created_at.toISOString(),
+        })),
+      });
+    }),
+  );
+
+  /**
+   * What to do with a field's invalid values: "text" keeps that field as plain text so every
+   * value fits (and re-syncs the affected records); "dismiss" leaves them empty and clears the list.
+   */
+  app.post<{ Params: TableParams }>(
+    "/v1/bases/:baseId/tables/:tableId/sync/issues/resolve",
+    wrap<TableParams>(async (request, reply) => {
+      const s = await tableSync(request, "base.manage_schema");
+      const body = z.object({ fieldKey: z.string().min(1).max(300), action: z.enum(["text", "dismiss"]) }).parse(request.body ?? {});
+      if (body.action === "text") {
+        await ctx.db.transaction().execute(async (trx) => {
+          await sql`
+            UPDATE data.table_syncs SET field_overrides = field_overrides || ${JSON.stringify({ [body.fieldKey]: "text" })}::jsonb, updated_at = now()
+            WHERE id = ${s.sync.id}
+          `.execute(trx);
+          // Rewrite the records that had a problem in this field on the next run.
+          await sql`
+            UPDATE data.table_sync_records m SET content_hash = ''
+            FROM data.table_sync_issues i
+            WHERE m.sync_id = ${s.sync.id} AND i.sync_id = m.sync_id AND i.source_record_id = m.source_record_id
+              AND i.source_field_id = ${body.fieldKey}
+          `.execute(trx);
+          await sql`
+            DELETE FROM data.table_sync_issues
+            WHERE sync_id = ${s.sync.id} AND source_field_id = ${body.fieldKey}
+              AND NOT EXISTS (SELECT 1 FROM data.table_sync_records m WHERE m.sync_id = ${s.sync.id} AND m.source_record_id = table_sync_issues.source_record_id)
+          `.execute(trx);
+        });
+        await startTableSync(deps, s.sync.id, { full: true }, (err) =>
+          request.log.warn({ err: err instanceof Error ? err.message : err }, "Re-sync after keeping a field as text failed"),
+        );
+      } else {
+        await sql`DELETE FROM data.table_sync_issues WHERE sync_id = ${s.sync.id} AND source_field_id = ${body.fieldKey}`.execute(ctx.db);
+      }
+      await writeAuditEvent(ctx.db, {
+        orgId: s.orgId,
+        workspaceId: s.workspaceId,
+        actorUserId: s.user.id,
+        action: body.action === "text" ? "table.sync_field_as_text" : "table.sync_issues_dismissed",
+        targetType: "table",
+        targetId: s.tableId,
+        metadata: { fieldKey: body.fieldKey },
+        ip: request.ip,
+      });
+      await new Promise((r) => setTimeout(r, 150));
+      const fresh = (await loadSync(ctx.db, { id: s.sync.id }))!;
+      void reply.send({ sync: syncDto(fresh, await sourceNames(ctx.db, fresh)) });
     }),
   );
 
@@ -299,6 +418,14 @@ export async function registerSyncRoutes(app: FastifyInstance, ctx: AppContext):
             updated_at = now()
         WHERE id = ${sync.id}
       `.execute(ctx.db);
+      // Pause also stops a run in progress; Resume starts one right away.
+      if (body.status === "paused") await requestSyncStop(ctx.db, sync.id);
+      if (body.status === "active" && sync.status !== "active") {
+        await startTableSync(deps, sync.id, { full: true }, (err) =>
+          request.log.warn({ err: err instanceof Error ? err.message : err }, "Sync after Resume failed"),
+        );
+        await new Promise((r) => setTimeout(r, 150));
+      }
       const fresh = (await loadSync(ctx.db, { id: sync.id }))!;
       void reply.send({ sync: syncDto(fresh, await sourceNames(ctx.db, fresh)) });
     }),

@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.11.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.12.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,19 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.12.0: sync issues and control, import stop and invalid entries, devices log, grouped history
+
+* **Why syncs failed:** record writes use `typecast`, so one invalid value (Airtable phone "call me maybe") threw `FIELD_VALIDATION_FAILED` and failed the batch and the run (`status = 'error'`). Now `writeChunks` retries a failed batch record by record (`writeOneByOne`), nulls the rejected field (`ApiError.meta.field`), and stores it in `data.table_sync_issues` (0080). Each run replaces the issues of the records it rewrote. The content hash is the intended one, so unchanged records aren't retried every run.
+* **Keep as text:** `table_syncs.field_overrides[sourceFieldKey] = "text"` maps that source field to text (the schema step converts the destination field) and sends values through `wireText`. Resolving resets the hashes of the affected records and starts a run.
+* **Runs:** `startTableSync` (Sync now / Resume / resolve) runs in the background; `POST …/sync/run {wait:true}` keeps the old blocking behaviour (used by `verify-sync`). `checkpoint()` (at most every second, per source batch and write chunk) writes `progress`, extends `locked_until` and throws `SyncCancelledError` when `cancel_requested`. Stop = `POST …/sync/stop`; Pause also requests a stop. A stopped run keeps its status and says "Stopped before it finished".
+* **Scheduler in the API** (`entrypoints/api.ts`, `SYNC_IN_API`): production only runs the API, so syncs had never refreshed on their interval. The sweep claims each sync's lock first.
+* **Record ID primary:** creating a synced copy of a table whose primary is "Record ID" added a second "Record ID" field (409). The local one is now "Local record ID".
+* **Import:** row errors carry `field` (also stored in `data.import_errors.field_id`). The wizard keeps the failed rows (`FailedRow`) with an editable value: "Import with my corrections", "…left empty", "Skip", CSV. Stop aborts the in-flight request (`AbortController`) and shows the summary at once; chunks are 100 rows.
+* **Devices log:** `GET /v1/orgs/:orgId/device-log` returns, per member, devices with `decidedBy`, the last 30 sessions (active = not revoked or expired; automation sessions excluded), and history from `org_devices.first_seen_at` plus `audit.audit_events` `device.*` (device.deleted now records `userId`).
+* **History grouping:** `RecordActivity` `groupHistory()` groups by person or by field (one entry per field change; created/deleted get their own group), stored in `localStorage["tabula.recordActivityGroup"]`.
+* **Process slip:** the live preview was still running from 0.11.0 while server code was edited, so its restart applied 0080 (additive) to the shared database before approval. No sync ran against live with the new code (checked).
+* **Tests:** `.data/verify-r13.mjs`, `.data/r2-shell/r13-ui.mjs`.
 
 ## v0.11.0: access per base, notifications on Home, Help Back, import clashes
 

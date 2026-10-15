@@ -194,7 +194,7 @@ export interface ImportChunkResult {
   importJobId: string;
   rowsImported: number;
   rowsFailed: number;
-  errors: { row: number; message: string }[];
+  errors: { row: number; message: string; field?: string }[];
   totalImported: number;
   totalFailed: number;
   status: "running" | "succeeded" | "failed";
@@ -212,8 +212,9 @@ export function importRows(
     final?: boolean;
     typecast?: boolean;
   },
+  signal?: AbortSignal,
 ) {
-  return request<ImportChunkResult>(`/v1/bases/${baseId}/import`, { method: "POST", json: body });
+  return request<ImportChunkResult>(`/v1/bases/${baseId}/import`, { method: "POST", json: body, ...(signal ? { signal } : {}) });
 }
 
 export function exportUrl(baseId: string, tableId: string, format: "csv" | "xlsx", viewId?: string): string {

@@ -10,7 +10,22 @@ type Step = "source" | "map" | "run" | "done";
 
 const NEW_FIELD = "__new__";
 const SKIP = "__skip__";
-const CHUNK = 200;
+const CHUNK = 100;
+
+/** A row the server rejected, kept so the user can fix it or import it without the bad value. */
+interface FailedRow {
+  /** Index in sheet.rows. */
+  index: number;
+  /** Row number in the file (as shown to the user). */
+  line: number;
+  message: string;
+  /** Field that rejected its value, when the server says. */
+  fieldId?: string | undefined;
+  /** What was sent for this row, keyed by field id. */
+  values: Record<string, unknown>;
+  /** Editable text for the rejected value. */
+  edit: string;
+}
 
 const TYPE_LABELS: Record<string, string> = {
   text: "Single line text",
@@ -108,7 +123,12 @@ export function ImportWizard({
   const [parsing, setParsing] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0, imported: 0, failed: 0 });
-  const [rowErrors, setRowErrors] = useState<{ row: number; message: string }[]>([]);
+  const [rowErrors, setRowErrors] = useState<FailedRow[]>([]);
+  const [stopped, setStopped] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  /** From the last run: field types and the import job, for retries. */
+  const runInfo = useRef<{ tableId: string; typeOf: Map<string, string>; fieldName: Map<string, string>; colOf: Map<string, number> } | null>(null);
   const [resultTableId, setResultTableId] = useState<string | null>(null);
   const cancelRef = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -292,6 +312,8 @@ export function ImportWizard({
     setError(null);
     setStep("run");
     cancelRef.current = false;
+    setStopped(false);
+    abortRef.current = new AbortController();
     setRowErrors([]);
     setProgress({ done: 0, total: sheet.rows.length, imported: 0, failed: 0 });
     try {
@@ -353,12 +375,16 @@ export function ImportWizard({
       }
       await qc.invalidateQueries({ queryKey: ["bases", baseId] });
 
-      // 3) Rows in chunks.
+      // 4) Rows in chunks.
       let importJobId: string | undefined;
       let imported = 0;
       let failed = 0;
-      const errs: { row: number; message: string }[] = [];
+      const errs: FailedRow[] = [];
       const firstDataRow = hasHeader ? 2 : 1;
+      const colOf = new Map<string, number>();
+      effective.forEach((m, col) => m.target !== SKIP && colOf.set(m.target, col));
+      const freshFields = (await api.getBase(baseId)).tables.find((t) => t.id === targetTableId)?.fields ?? [];
+      runInfo.current = { tableId: targetTableId, typeOf, fieldName: new Map(freshFields.map((f) => [f.id, f.name])), colOf };
       for (let i = 0; i < sheet.rows.length; i += CHUNK) {
         if (cancelRef.current) break;
         const slice = sheet.rows.slice(i, i + CHUNK);
@@ -371,19 +397,34 @@ export function ImportWizard({
           });
           return out;
         });
-        const res = await importRows(baseId, {
-          tableId: targetTableId,
-          rows,
-          filename: fileName,
-          rowOffset: i,
-          typecast: true,
-          final: i + CHUNK >= sheet.rows.length,
-          ...(importJobId ? { importJobId } : { totalRows: sheet.rows.length }),
-        });
+        const res = await importRows(
+          baseId,
+          {
+            tableId: targetTableId,
+            rows,
+            filename: fileName,
+            rowOffset: i,
+            typecast: true,
+            final: i + CHUNK >= sheet.rows.length,
+            ...(importJobId ? { importJobId } : { totalRows: sheet.rows.length }),
+          },
+          abortRef.current?.signal,
+        );
         importJobId = res.importJobId;
         imported += res.rowsImported;
         failed += res.rowsFailed;
-        errs.push(...res.errors.map((e) => ({ row: e.row + firstDataRow - 1, message: e.message })));
+        for (const e of res.errors) {
+          const index = e.row - 1;
+          const col = e.field ? colOf.get(e.field) : undefined;
+          errs.push({
+            index,
+            line: e.row + firstDataRow - 1,
+            message: e.message,
+            fieldId: e.field,
+            values: rows[index - i] ?? {},
+            edit: col !== undefined ? (sheet.rows[index]?.[col] ?? "") : "",
+          });
+        }
         setRowErrors([...errs]);
         setProgress({ done: Math.min(i + CHUNK, sheet.rows.length), total: sheet.rows.length, imported, failed });
       }
@@ -393,13 +434,72 @@ export function ImportWizard({
       onDone?.();
       setStep("done");
     } catch (err) {
+      if (abortRef.current?.signal.aborted) return;
       setError(errorText(err));
       setStep("done");
     }
   }
 
+  /** Stop right away: the request in flight is abandoned and the summary shows at once. */
+  function stopNow() {
+    cancelRef.current = true;
+    abortRef.current?.abort();
+    setStopped(true);
+    setStep("done");
+    if (runInfo.current) setResultTableId(runInfo.current.tableId);
+    void qc.invalidateQueries({ queryKey: ["records", baseId] });
+    onDone?.();
+  }
+
+  /**
+   * Import the failed rows again: "fixed" uses the edited values, "blank" leaves the rejected
+   * value empty so the rest of the row still comes in.
+   */
+  async function retryFailed(mode: "fixed" | "blank") {
+    const info = runInfo.current;
+    if (!info || rowErrors.length === 0) return;
+    setRetrying(true);
+    setError(null);
+    try {
+      const pending = rowErrors.map((f) => {
+        const values = { ...f.values };
+        if (f.fieldId) {
+          if (mode === "blank") delete values[f.fieldId];
+          else {
+            const v = convertValue(info.typeOf.get(f.fieldId) ?? "text", f.edit);
+            if (v === undefined) delete values[f.fieldId];
+            else values[f.fieldId] = v;
+          }
+        }
+        return { ...f, values };
+      });
+      const still: FailedRow[] = [];
+      let ok = 0;
+      for (let i = 0; i < pending.length; i += CHUNK) {
+        const chunk = pending.slice(i, i + CHUNK);
+        const res = await importRows(baseId, { tableId: info.tableId, rows: chunk.map((c) => c.values), filename: fileName, typecast: true, final: true });
+        ok += res.rowsImported;
+        const failedIdx = new Map(res.errors.map((e) => [e.row - 1, e]));
+        chunk.forEach((c, k) => {
+          const e = failedIdx.get(k);
+          if (!e) return;
+          const col = e.field ? info.colOf.get(e.field) : undefined;
+          still.push({ ...c, message: e.message, fieldId: e.field, edit: col !== undefined && e.field !== c.fieldId ? (sheet?.rows[c.index]?.[col] ?? "") : c.edit });
+        });
+      }
+      setRowErrors(still);
+      setProgress((p) => ({ ...p, imported: p.imported + ok, failed: still.length }));
+      await qc.invalidateQueries({ queryKey: ["records", baseId] });
+    } catch (err) {
+      setError(errorText(err));
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   function downloadErrors() {
-    const lines = [["Row", "Error"], ...rowErrors.map((e) => [String(e.row), e.message])]
+    const name = (id?: string) => (id ? (runInfo.current?.fieldName.get(id) ?? "") : "");
+    const lines = [["Row", "Column", "Value", "Error"], ...rowErrors.map((e) => [String(e.line), name(e.fieldId), e.edit, e.message])]
       .map((r) => r.map((v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(","))
       .join("\r\n");
     const url = URL.createObjectURL(new Blob([lines], { type: "text/csv" }));
@@ -805,9 +905,11 @@ export function ImportWizard({
                 <div className={s.settingTitle}>
                   {step === "run"
                     ? `Importing… ${progress.done.toLocaleString()} of ${progress.total.toLocaleString()}`
-                    : error
+                    : stopped
                       ? "Import stopped"
-                      : "Import complete"}
+                      : error
+                        ? "Import stopped"
+                        : "Import complete"}
                 </div>
                 <div className={s.progressTrack} aria-hidden>
                   <div
@@ -817,41 +919,77 @@ export function ImportWizard({
                 </div>
                 <p className={s.hint}>
                   {progress.imported.toLocaleString()} imported
-                  {progress.failed ? ` · ${progress.failed.toLocaleString()} failed` : ""}
+                  {rowErrors.length ? ` · ${rowErrors.length.toLocaleString()} need your attention` : ""}
+                  {stopped
+                    ? ` · stopped at row ${progress.done.toLocaleString()} of ${progress.total.toLocaleString()}. Rows that were already being saved when you pressed Stop may also appear.`
+                    : ""}
                 </p>
               </div>
-              {rowErrors.length ? (
-                <div>
-                  <div className={s.row} style={{ justifyContent: "space-between", marginBottom: 6 }}>
-                    <span className={s.settingTitle}>Rows that could not be imported</span>
+              {rowErrors.length && step === "done" ? (
+                <div data-testid="import-invalid">
+                  <div className={s.row} style={{ justifyContent: "space-between", marginBottom: 6, flexWrap: "wrap" }}>
+                    <span className={s.settingTitle}>
+                      Entries that couldn’t be imported ({rowErrors.length.toLocaleString()})
+                    </span>
                     <button type="button" className={s.btnText} onClick={downloadErrors}>
-                      Download error report
+                      Download as CSV
                     </button>
                   </div>
-                  <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid var(--tabula-color-border)", borderRadius: 10 }}>
+                  <p className={s.hint} style={{ marginTop: 0 }}>
+                    These values don’t fit their field (wrong format or type). Correct them below and import again, import those rows with
+                    the invalid value left empty, or skip them.
+                  </p>
+                  <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid var(--tabula-color-border)", borderRadius: 10 }}>
                     <table className={s.table}>
                       <thead>
                         <tr>
-                          <th style={{ width: 80 }}>Row</th>
-                          <th>Error</th>
+                          <th style={{ width: 60 }}>Row</th>
+                          <th style={{ width: "22%" }}>Column</th>
+                          <th style={{ width: "30%" }}>Value</th>
+                          <th>Problem</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {rowErrors.slice(0, 200).map((e) => (
-                          <tr key={`${e.row}-${e.message}`}>
-                            <td>{e.row}</td>
-                            <td>{e.message}</td>
+                        {rowErrors.slice(0, 200).map((e, k) => (
+                          <tr key={`${e.index}-${e.fieldId ?? ""}`} data-testid="import-invalid-row">
+                            <td>{e.line}</td>
+                            <td>{e.fieldId ? (runInfo.current?.fieldName.get(e.fieldId) ?? "—") : "—"}</td>
+                            <td>
+                              {e.fieldId ? (
+                                <input
+                                  className={s.input}
+                                  value={e.edit}
+                                  aria-label={`Value in row ${e.line}`}
+                                  onChange={(ev) => setRowErrors((old) => old.map((x, j) => (j === k ? { ...x, edit: ev.target.value } : x)))}
+                                />
+                              ) : (
+                                "—"
+                              )}
+                            </td>
+                            <td>{e.message.replace(/^[^:]+: /, "")}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                  {rowErrors.length > 200 ? <p className={s.hint}>Showing the first 200; the CSV has all of them.</p> : null}
+                  <div className={s.row} style={{ gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                    <button type="button" className={s.btnPrimary} disabled={retrying} onClick={() => void retryFailed("fixed")}>
+                      {retrying ? "Importing…" : "Import with my corrections"}
+                    </button>
+                    <button type="button" className={s.btnSecondary} disabled={retrying} onClick={() => void retryFailed("blank")}>
+                      Import them with the invalid values left empty
+                    </button>
+                    <button type="button" className={s.btnText} disabled={retrying} onClick={() => setRowErrors([])}>
+                      Skip these rows
+                    </button>
                   </div>
                 </div>
               ) : null}
             </div>
             <div className={s.footer}>
               {step === "run" ? (
-                <button type="button" className={s.btnSecondary} onClick={() => (cancelRef.current = true)}>
+                <button type="button" className={s.btnSecondary} onClick={stopNow}>
                   Stop
                 </button>
               ) : (

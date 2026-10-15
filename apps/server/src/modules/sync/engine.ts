@@ -3,7 +3,7 @@ import type { TabulaDb } from "@tabula/db";
 import type { TabulaStorage } from "@tabula/storage";
 import type { Redis } from "ioredis";
 import { sql } from "kysely";
-import { pid } from "../../lib/public-ids.js";
+import { parsePid, pid } from "../../lib/public-ids.js";
 import { withBaseTx } from "../../kernel/mutation.js";
 import { compileForUser } from "../access/compile.js";
 import { loadTableFieldRows } from "../schema/table-schema.js";
@@ -15,9 +15,10 @@ import { loadConnection, openCredentials, type ConnectionRow } from "../integrat
 import { gmailSource, gmailTokenProvider, parseGmailConfig } from "../integrations/gmail.js";
 import { hubspotSource, parseHubSpotConfig, SearchTooLarge } from "../integrations/hubspot.js";
 import { hasRejectedPushes, heldRecordIds, prunePushes, pushHubSpotEdits } from "../integrations/hubspot-push.js";
-import { SyncBusyError, SyncError, type Conv, type MappedField, type SourceField, type SyncSource } from "./source.js";
+import { ApiError } from "../../http/errors.js";
+import { SyncBusyError, SyncCancelledError, SyncError, type Conv, type MappedField, type SourceField, type SyncSource } from "./source.js";
 
-export { SyncBusyError, SyncError, type MappedField, type SourceField, type SyncSource } from "./source.js";
+export { SyncBusyError, SyncCancelledError, SyncError, type MappedField, type SourceField, type SyncSource } from "./source.js";
 
 /**
  * Synced tables. A destination table mirrors a source — a table from another
@@ -61,7 +62,27 @@ export interface SyncRow {
   writable_keys: string[];
   last_full_synced_at: Date | null;
   pulled_through: Date | null;
+  locked_until?: Date | null;
+  /** From loadSync: a run holds the lock right now. */
+  running?: boolean;
+  issue_count?: number;
+  cancel_requested?: boolean;
+  progress?: { phase: "reading" | "writing"; done: number; total: number | null } | null;
+  /** Source field id → "text": imported as plain text instead of its own type. */
+  field_overrides?: Record<string, string> | null;
 }
+
+/** A value (or record) the last runs couldn't write; the rest of the sync went through. */
+interface SyncIssue {
+  srcId: string;
+  destId: string | null;
+  sourceFieldId: string;
+  fieldName: string;
+  label: string;
+  value: string | null;
+  message: string;
+}
+const MAX_ISSUES = 2000;
 
 /** Field types copied as-is (config and values round-trip unchanged). */
 const SAME_TYPES = new Set([
@@ -176,8 +197,8 @@ function convertValue(conv: Conv, v: unknown): unknown {
 
 export async function loadSync(db: TabulaDb, where: { id?: string; tableId?: string }): Promise<SyncRow | null> {
   const r = where.id
-    ? await sql<SyncRow>`SELECT * FROM data.table_syncs WHERE id = ${where.id}`.execute(db)
-    : await sql<SyncRow>`SELECT * FROM data.table_syncs WHERE table_id = ${where.tableId!}`.execute(db);
+    ? await sql<SyncRow>`SELECT s.*, (SELECT count(*)::int FROM data.table_sync_issues i WHERE i.sync_id = s.id) AS issue_count, (s.locked_until > now()) AS running FROM data.table_syncs s WHERE s.id = ${where.id}`.execute(db)
+    : await sql<SyncRow>`SELECT s.*, (SELECT count(*)::int FROM data.table_sync_issues i WHERE i.sync_id = s.id) AS issue_count, (s.locked_until > now()) AS running FROM data.table_syncs s WHERE s.table_id = ${where.tableId!}`.execute(db);
   return r.rows[0] ?? null;
 }
 
@@ -342,6 +363,8 @@ export interface SyncResult {
   /** Local edits written back to the source (two-way syncs). */
   pushed: number;
   pushError: string | null;
+  /** Values (or records) this run skipped because they didn't fit; see data.table_sync_issues. */
+  skippedValues: number;
 }
 
 /** Overlap for incremental pulls; HubSpot's search index trails writes slightly. */
@@ -357,7 +380,10 @@ export async function runTableSync(deps: SyncDeps, syncId: string, opts: { full?
   const sync = await loadSync(db, { id: syncId });
   if (!sync) throw new SyncError("Sync not found");
   const claimed = await sql<{ now: Date }>`
-    UPDATE data.table_syncs SET locked_until = now() + make_interval(mins => ${LOCK_MINUTES}::int)
+    UPDATE data.table_syncs
+    SET locked_until = now() + make_interval(mins => ${LOCK_MINUTES}::int),
+        cancel_requested = false,
+        progress = '{"phase":"reading","done":0,"total":null}'::jsonb
     WHERE id = ${sync.id} AND (locked_until IS NULL OR locked_until < now())
     RETURNING clock_timestamp() AS now
   `.execute(db);
@@ -393,6 +419,14 @@ export async function runTableSync(deps: SyncDeps, syncId: string, opts: { full?
     `.execute(db);
     return result;
   } catch (err) {
+    if (err instanceof SyncCancelledError) {
+      // Already-written records stay; the next run (Sync now / Resume) picks up the rest.
+      await sql`
+        UPDATE data.table_syncs SET last_error = ${"Stopped before it finished. Sync now or Resume continues where it left off."}, updated_at = now()
+        WHERE id = ${sync.id}
+      `.execute(db);
+      throw err;
+    }
     const message = err instanceof Error ? err.message : String(err);
     await sql`
       UPDATE data.table_syncs SET status = 'error', last_error = ${message.slice(0, 500)}, last_synced_at = now(), updated_at = now()
@@ -400,8 +434,35 @@ export async function runTableSync(deps: SyncDeps, syncId: string, opts: { full?
     `.execute(db);
     throw err;
   } finally {
-    await sql`UPDATE data.table_syncs SET locked_until = NULL WHERE id = ${sync.id}`.execute(db).catch(() => undefined);
+    await sql`UPDATE data.table_syncs SET locked_until = NULL, progress = NULL, cancel_requested = false WHERE id = ${sync.id}`
+      .execute(db)
+      .catch(() => undefined);
   }
+}
+
+/** Start a run without waiting for it; false when one is already going. */
+export async function startTableSync(
+  deps: SyncDeps,
+  syncId: string,
+  opts: { full?: boolean } = {},
+  onError?: (err: unknown) => void,
+): Promise<boolean> {
+  const busy = await sql<{ n: number }>`
+    SELECT 1 AS n FROM data.table_syncs WHERE id = ${syncId} AND locked_until > now()
+  `.execute(deps.db);
+  if (busy.rows[0]) return false;
+  void runTableSync(deps, syncId, opts).catch((err) => {
+    if (!(err instanceof SyncBusyError) && !(err instanceof SyncCancelledError)) onError?.(err);
+  });
+  return true;
+}
+
+/** Ask a running sync to stop at its next checkpoint (within one batch). */
+export async function requestSyncStop(db: TabulaDb, syncId: string): Promise<boolean> {
+  const r = await sql<{ id: string }>`
+    UPDATE data.table_syncs SET cancel_requested = true WHERE id = ${syncId} AND locked_until > now() RETURNING id
+  `.execute(db);
+  return Boolean(r.rows[0]);
 }
 
 async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Promise<SyncResult> {
@@ -420,8 +481,31 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
   const actor = { actorType: "system" as const, actorId: sync.owner_user_id, via: "system" as const };
   const txParams = { orgId, workspaceId: sync.workspace_id, baseId: sync.base_id, actor, redis: deps.redis ?? null };
 
+  // Fields the user chose to keep as text (after a value didn't fit their type).
+  const overrides = sync.field_overrides ?? {};
+  const asText = new Set(Object.keys(overrides).filter((k) => overrides[k] === "text"));
+  const srcFields: SourceField[] = source.fields.map((f) =>
+    asText.has(f.id) && f.mapped.type !== "text" && f.mapped.type !== "long_text"
+      ? { ...f, mapped: { type: "text", config: {}, conv: "text", compare: "none" } }
+      : f,
+  );
+
+  let lastCheck = 0;
+  /** Progress for the UI; also where Stop takes effect and the lock is extended. */
+  const checkpoint = async (phase: "reading" | "writing", done: number, total: number | null, force = false) => {
+    if (!force && Date.now() - lastCheck < 1000) return;
+    lastCheck = Date.now();
+    const r = await sql<{ cancel_requested: boolean }>`
+      UPDATE data.table_syncs
+      SET progress = ${JSON.stringify({ phase, done, total })}::jsonb,
+          locked_until = now() + make_interval(mins => ${LOCK_MINUTES}::int)
+      WHERE id = ${sync.id}
+      RETURNING cancel_requested
+    `.execute(db);
+    if (r.rows[0]?.cancel_requested) throw new SyncCancelledError();
+  };
+
   // ---- 1. schema
-  const srcFields = source.fields;
   const fieldMap: Record<string, string> = { ...sync.field_map };
   let fieldsChanged = 0;
   if (await schemaNeedsWork(db, sync, srcFields, fieldMap)) await withBaseTx(db, txParams, async (mctx, trx) => {
@@ -518,6 +602,7 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
   const toCreate: Array<{ srcId: string; fields: Record<string, unknown>; hash: string }> = [];
   const toUpdate: Array<{ srcId: string; destId: string; fields: Record<string, unknown>; hash: string }> = [];
   for await (const batch of source.rows()) {
+    await checkpoint("reading", live.size, null);
     for (const row of batch) {
       if (!row.id) continue;
       const key = recordKey(row.id);
@@ -527,7 +612,9 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
       const fields: Record<string, unknown> = {};
       for (const sf of srcFields) {
         const destId = fieldMap[sf.id];
-        if (destId) fields[destId] = row.values[sf.id] ?? null;
+        if (!destId) continue;
+        const v = row.values[sf.id] ?? null;
+        fields[destId] = asText.has(sf.id) && v !== null ? wireText(v) || null : v;
       }
       const hash = createHash("sha1").update(JSON.stringify(fields)).digest("hex");
       const prev = known.get(key);
@@ -553,9 +640,8 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
     ...(mctx.afterCommit ? { afterCommit: mctx.afterCommit } : {}),
   });
 
-  for (let i = 0; i < toCreate.length; i += MAX_BATCH) {
-    const chunk = toCreate.slice(i, i + MAX_BATCH);
-    await withBaseTx(db, txParams, async (mctx, trx) => {
+  const createChunk = (chunk: typeof toCreate) =>
+    withBaseTx(db, txParams, async (mctx, trx) => {
       const res = await createRecordsInTx(writeCtx(mctx, trx), sync.table_id, chunk.map((c) => ({ fields: c.fields })), { typecast: true });
       for (let k = 0; k < chunk.length; k++) {
         await sql`
@@ -574,10 +660,8 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
         payload: { tableId: sync.table_id, recordIds: res.ids, count: res.ids.length, sync: true },
       };
     });
-  }
-  for (let i = 0; i < toUpdate.length; i += MAX_BATCH) {
-    const chunk = toUpdate.slice(i, i + MAX_BATCH);
-    await withBaseTx(db, txParams, async (mctx, trx) => {
+  const updateChunk = (chunk: typeof toUpdate) =>
+    withBaseTx(db, txParams, async (mctx, trx) => {
       const res = await updateRecordsInTx(writeCtx(mctx, trx), sync.table_id, chunk.map((c) => ({ id: c.destId, fields: c.fields })), { typecast: true });
       for (const c of chunk) {
         await sql`UPDATE data.table_sync_records SET content_hash = ${c.hash} WHERE sync_id = ${sync.id} AND source_record_id = ${c.srcId}`.execute(trx);
@@ -592,7 +676,78 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
         payload: { tableId: sync.table_id, recordIds: chunk.map((c) => c.destId), sync: true },
       };
     });
+
+  // A value that doesn't fit its field (e.g. an invalid phone number) no longer fails the run:
+  // the batch is retried record by record, the bad value is left empty and listed as an issue.
+  const issues: SyncIssue[] = [];
+  const destToSrc = new Map(Object.entries(fieldMap).map(([s, d]) => [d, s]));
+  const primaryDest = srcFields[0] ? fieldMap[srcFields[0].id] : undefined;
+  const nameOfSrc = (srcFieldId: string) => srcFields.find((f) => f.id === srcFieldId)?.name ?? "a field";
+  const rejectedField = (err: unknown): string | null => {
+    if (!(err instanceof ApiError) || err.code !== "FIELD_VALIDATION_FAILED") return null;
+    const ref = err.meta?.["field"];
+    if (typeof ref !== "string") return null;
+    try {
+      return parsePid(ref, "fld");
+    } catch {
+      return null;
+    }
+  };
+  const cleanMessage = (err: unknown, fieldName: string) => {
+    const m = err instanceof Error ? err.message : String(err);
+    return m.startsWith(`${fieldName}: `) ? m.slice(fieldName.length + 2) : m;
+  };
+  async function writeOneByOne<T extends { srcId: string; fields: Record<string, unknown> }>(
+    items: T[],
+    write: (one: T) => Promise<unknown>,
+    destIdOf: (one: T) => string | null,
+  ): Promise<void> {
+    for (const item of items) {
+      const fields = { ...item.fields };
+      const label = primaryDest ? wireText(item.fields[primaryDest]) : "";
+      const dropped = new Set<string>();
+      for (;;) {
+        try {
+          await write({ ...item, fields });
+          break;
+        } catch (err) {
+          const destField = rejectedField(err);
+          if (!destField || dropped.has(destField) || !(destField in fields)) {
+            if (!(err instanceof ApiError) || err.status !== 422) throw err;
+            issues.push({ srcId: item.srcId, destId: destIdOf(item), sourceFieldId: "__record", fieldName: "Record", label, value: null, message: err.message });
+            break;
+          }
+          const srcFieldId = destToSrc.get(destField) ?? destField;
+          const name = nameOfSrc(srcFieldId);
+          issues.push({ srcId: item.srcId, destId: destIdOf(item), sourceFieldId: srcFieldId, fieldName: name, label, value: wireText(fields[destField]) || null, message: cleanMessage(err, name) });
+          dropped.add(destField);
+          fields[destField] = null;
+        }
+      }
+    }
   }
+  async function writeChunks<T extends { srcId: string; fields: Record<string, unknown> }>(
+    items: T[],
+    writeMany: (chunk: T[]) => Promise<unknown>,
+    destIdOf: (one: T) => string | null,
+    doneBefore: number,
+    total: number,
+  ) {
+    for (let i = 0; i < items.length; i += MAX_BATCH) {
+      await checkpoint("writing", doneBefore + i, total);
+      const chunk = items.slice(i, i + MAX_BATCH);
+      try {
+        await writeMany(chunk);
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.status !== 422) throw err;
+        await writeOneByOne(chunk, (one) => writeMany([one]), destIdOf);
+      }
+    }
+  }
+  const totalWrites = toCreate.length + toUpdate.length;
+  await writeChunks(toCreate, createChunk, () => null, 0, totalWrites);
+  await writeChunks(toUpdate, updateChunk, (u) => u.destId, toCreate.length, totalWrites);
+  await checkpoint("writing", totalWrites, totalWrites, true);
   for (let i = 0; i < toDelete.length; i += MAX_BATCH) {
     const chunk = toDelete.slice(i, i + MAX_BATCH);
     await withBaseTx(db, txParams, async (mctx, trx) => {
@@ -611,6 +766,36 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
       };
     });
   }
+  // Issues: records rewritten (or deleted) in this run replace their old issues.
+  const touched = [...toCreate.map((c) => c.srcId), ...toUpdate.map((u) => u.srcId), ...toDelete.map((d) => d.source_record_id)];
+  if (touched.length) {
+    await sql`DELETE FROM data.table_sync_issues WHERE sync_id = ${sync.id} AND source_record_id = ANY(${touched}::uuid[])`.execute(db);
+  }
+  if (!source.partial) {
+    await sql`DELETE FROM data.table_sync_issues WHERE sync_id = ${sync.id} AND NOT (source_record_id = ANY(${[...live]}::uuid[]))`.execute(db);
+  }
+  if (issues.length) {
+    await sql`
+      INSERT INTO data.table_sync_issues (sync_id, source_record_id, dest_record_id, source_field_id, field_name, record_label, value, message)
+      SELECT ${sync.id}, i.src::uuid,
+             coalesce(i.dest::uuid, (SELECT m.dest_record_id FROM data.table_sync_records m WHERE m.sync_id = ${sync.id} AND m.source_record_id = i.src::uuid)),
+             i.field, i.name, i.label, i.value, i.message
+      FROM jsonb_to_recordset(${JSON.stringify(
+        issues.slice(0, MAX_ISSUES).map((x) => ({
+          src: x.srcId,
+          dest: x.destId,
+          field: x.sourceFieldId,
+          name: x.fieldName.slice(0, 200),
+          label: x.label.slice(0, 200),
+          value: x.value?.slice(0, 500) ?? null,
+          message: x.message.slice(0, 500),
+        })),
+      )}::jsonb) AS i(src text, dest text, field text, name text, label text, value text, message text)
+      ON CONFLICT (sync_id, source_record_id, source_field_id)
+      DO UPDATE SET dest_record_id = EXCLUDED.dest_record_id, field_name = EXCLUDED.field_name, record_label = EXCLUDED.record_label,
+                    value = EXCLUDED.value, message = EXCLUDED.message, created_at = now()
+    `.execute(db);
+  }
   if (sync.two_way) await prunePushes(db, sync.id);
   return {
     created: toCreate.length,
@@ -621,6 +806,7 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
     mode: source.partial ? "incremental" : "full",
     pushed: push.pushed,
     pushError: push.error,
+    skippedValues: issues.length,
   };
 }
 
@@ -632,7 +818,7 @@ export function editableSyncedFieldIds(s: Pick<SyncRow, "two_way" | "writable_ke
 
 /** Read-only destination field ids managed by syncs, per destination table. */
 export async function syncedFieldsByTable(db: TabulaDb, baseId: string): Promise<Map<string, { sync: SyncRow; fieldIds: Set<string> }>> {
-  const r = await sql<SyncRow>`SELECT * FROM data.table_syncs WHERE base_id = ${baseId}`.execute(db);
+  const r = await sql<SyncRow>`SELECT s.*, (SELECT count(*)::int FROM data.table_sync_issues i WHERE i.sync_id = s.id) AS issue_count, (s.locked_until > now()) AS running FROM data.table_syncs s WHERE s.base_id = ${baseId}`.execute(db);
   return new Map(
     r.rows.map((s) => {
       const editable = editableSyncedFieldIds(s);

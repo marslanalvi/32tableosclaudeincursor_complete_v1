@@ -16,6 +16,10 @@ import styles from "./record-activity.module.css";
 /** Airtable's record activity menu. */
 export type ActivityFilter = "all" | "history" | "comments" | "record_comments" | "attachment_comments" | "with_attachments";
 
+/** How revision history is grouped (many people editing the same table). */
+export type HistoryGrouping = "none" | "person" | "field";
+const GROUP_KEY = "tabula.recordActivityGroup";
+const GROUP_LABELS: Record<HistoryGrouping, string> = { none: "Don’t group", person: "By person", field: "By field" };
 const FILTER_KEY = "tabula.recordActivityFilter";
 const RESOLVED_KEY = "tabula.recordActivityResolved";
 const FILTER_LABELS: Record<ActivityFilter, string> = {
@@ -46,6 +50,15 @@ function readFilter(): ActivityFilter {
     return v && v in FILTER_LABELS ? (v as ActivityFilter) : "all";
   } catch {
     return "all";
+  }
+}
+
+function readGrouping(): HistoryGrouping {
+  try {
+    const v = localStorage.getItem(GROUP_KEY);
+    return v === "person" || v === "field" ? v : "none";
+  } catch {
+    return "none";
   }
 }
 
@@ -199,6 +212,69 @@ function HistoryItem({ entry, fields, metas }: { entry: HistoryEntryWire; fields
   );
 }
 
+interface HistoryGroup {
+  key: string;
+  title: string;
+  icon: string;
+  entries: HistoryEntryWire[];
+  latest: number;
+  people: number;
+}
+
+/** Revision history entries grouped by who made them, or by the field they changed. */
+function groupHistory(entries: HistoryEntryWire[], by: Exclude<HistoryGrouping, "none">, metas: Record<string, HistoryFieldWire>, fields: Map<string, FieldLike>): HistoryGroup[] {
+  const groups = new Map<string, HistoryGroup>();
+  const add = (key: string, title: string, icon: string, entry: HistoryEntryWire) => {
+    const g = groups.get(key) ?? { key, title, icon, entries: [], latest: 0, people: 0 };
+    g.entries.push(entry);
+    g.latest = Math.max(g.latest, Date.parse(entry.at));
+    groups.set(key, g);
+  };
+  for (const e of entries) {
+    if (by === "person") {
+      const who = actorLabel(e);
+      add(`p:${e.actor?.id ?? e.source}:${who}`, who, e.source === "automation" ? "⚡" : e.source === "form" ? "✉" : initials(who), e);
+      continue;
+    }
+    if (e.changes.length === 0) {
+      add(`k:${e.kind}`, e.kind === "created" ? "Record created" : e.kind === "deleted" ? "Record deleted" : e.kind === "restored" ? "Record restored" : "Other changes", "•", e);
+      continue;
+    }
+    for (const c of e.changes) {
+      const f = fields.get(c.fieldId);
+      const name = f?.name ?? metas[c.fieldId]?.name ?? "Deleted field";
+      add(`f:${c.fieldId}`, name, fieldTypeIcon(f?.type ?? metas[c.fieldId]?.type ?? "text"), { ...e, changes: [c] });
+    }
+  }
+  for (const g of groups.values()) g.people = new Set(g.entries.map((e) => actorLabel(e))).size;
+  return [...groups.values()].sort((a, b) => b.latest - a.latest);
+}
+
+function HistoryGroupItem({ group, by, fields, metas, open }: { group: HistoryGroup; by: Exclude<HistoryGrouping, "none">; fields: Map<string, FieldLike>; metas: Record<string, HistoryFieldWire>; open: boolean }) {
+  const n = group.entries.length;
+  return (
+    <li className={styles.group} data-testid="history-group" data-group={group.key}>
+      <details open={open}>
+        <summary className={styles.groupHead}>
+          <span className={by === "person" ? styles.avatar : styles.groupIcon} aria-hidden>
+            {group.icon}
+          </span>
+          <span className={styles.groupTitle}>{group.title}</span>
+          <span className={styles.groupMeta}>
+            {n} change{n === 1 ? "" : "s"}
+            {by === "field" ? ` · ${group.people} ${group.people === 1 ? "person" : "people"}` : ""} · latest {relativeTime(new Date(group.latest).toISOString())}
+          </span>
+        </summary>
+        <ul className={styles.groupList}>
+          {group.entries.map((e, i) => (
+            <HistoryItem key={`${e.id}:${i}`} entry={e} fields={fields} metas={metas} />
+          ))}
+        </ul>
+      </details>
+    </li>
+  );
+}
+
 /** Bell: which comments on this record notify me. */
 function NotifyMenu({ baseId, tableId, recordId }: { baseId: string; tableId: string; recordId: string }) {
   const qc = useQueryClient();
@@ -259,6 +335,11 @@ export function RecordActivity({ baseId, tableId, recordId, recordVersion, field
   const qc = useQueryClient();
   const [filter, setFilterState] = useState<ActivityFilter>(readFilter);
   const [showResolved, setShowResolvedState] = useState(readResolved);
+  const [grouping, setGroupingState] = useState<HistoryGrouping>(readGrouping);
+  const setGrouping = (g: HistoryGrouping) => {
+    setGroupingState(g);
+    store(GROUP_KEY, g);
+  };
   const setFilter = (f: ActivityFilter) => {
     setFilterState(f);
     store(FILTER_KEY, f);
@@ -292,13 +373,18 @@ export function RecordActivity({ baseId, tableId, recordId, recordVersion, field
   const entries = useMemo(() => pages.flatMap((p) => p?.entries ?? []), [pages]);
   const retentionDays = pages[0]?.retentionDays ?? null;
 
-  const timeline: TimelineItem[] = useMemo(
-    () =>
-      showHistory
-        ? entries.map((e) => ({ at: Date.parse(e.at), key: `h${e.id}`, node: <HistoryItem key={`h${e.id}`} entry={e} fields={fieldMap} metas={metas} /> }))
-        : [],
-    [showHistory, entries, fieldMap, metas],
-  );
+  const timeline: TimelineItem[] = useMemo(() => {
+    if (!showHistory) return [];
+    if (grouping === "none") {
+      return entries.map((e) => ({ at: Date.parse(e.at), key: `h${e.id}`, node: <HistoryItem key={`h${e.id}`} entry={e} fields={fieldMap} metas={metas} /> }));
+    }
+    const groups = groupHistory(entries, grouping, metas, fieldMap);
+    return groups.map((g) => ({
+      at: g.latest,
+      key: `g${g.key}`,
+      node: <HistoryGroupItem key={`g${g.key}`} group={g} by={grouping} fields={fieldMap} metas={metas} open={groups.length === 1} />,
+    }));
+  }, [showHistory, entries, fieldMap, metas, grouping]);
   const oldestLoaded = filter === "all" && history.hasNextPage && entries.length ? Date.parse(entries[entries.length - 1]!.at) : -Infinity;
 
   const menu: MenuItemSpec[] = [
@@ -318,6 +404,14 @@ export function RecordActivity({ baseId, tableId, recordId, recordVersion, field
       disabled: filter === "history",
       onSelect: () => setShowResolved(!showResolved),
     },
+    { key: "group-h", heading: true, label: "Group revision history", separatorBefore: true },
+    ...(Object.keys(GROUP_LABELS) as HistoryGrouping[]).map((g) => ({
+      key: `group-${g}`,
+      label: GROUP_LABELS[g],
+      hint: grouping === g ? "✓" : undefined,
+      disabled: !showHistory,
+      onSelect: () => setGrouping(g),
+    })),
   ];
 
   return (
@@ -328,6 +422,7 @@ export function RecordActivity({ baseId, tableId, recordId, recordVersion, field
           trigger={({ toggle, open }) => (
             <button type="button" className={open ? styles.filterBtnOn : styles.filterBtn} onClick={toggle} aria-haspopup="menu" aria-label="Show activity">
               {FILTER_LABELS[filter]}
+              {showHistory && grouping !== "none" ? ` · ${GROUP_LABELS[grouping].toLowerCase()}` : ""}
               <span aria-hidden className={styles.chevron}>
                 ⌄
               </span>

@@ -8,6 +8,20 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.12.0",
+    date: "2026-10-15",
+    title: "Reliable syncs you can stop, clearer imports, device and history logs.",
+    items: [
+      "A value that doesn’t fit (like an invalid phone number) no longer fails a sync: everything else syncs, and you review the rest.",
+      "Review skipped values by field: keep that field as text, or leave them empty.",
+      "Sync now runs in the background with progress; Stop, Pause and Resume are on the sync bar.",
+      "Synced tables refresh on their own again.",
+      "Import: Stop works instantly, and invalid entries are listed so you can fix them, import them empty, or skip them.",
+      "Members & access → Devices is grouped per person, with active and ended sessions and every approval and revocation.",
+      "Record history can be grouped by person or by field.",
+    ],
+  },
+  {
     version: "0.11.0",
     date: "2026-10-15",
     title: "Access per base, notifications everywhere, smoother imports.",
