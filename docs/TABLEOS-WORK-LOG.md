@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.10.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.11.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,17 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.11.0: access per base, notifications on Home, Help Back, import clashes
+
+* **Access rule** (`packages/permissions/src/snapshot.ts` `combineBaseRole`): workspace `owner` → creator everywhere; otherwise a base grant wins over the workspace role (higher or lower), and base role `none` (`NO_ACCESS_ROLE`, allowed by migration 0079) means no access. Before, the higher of the two won, so a base could never be removed from a workspace member. `listBaseCollaborators` uses the same rule (and now skips expired grants); `GET /v1/workspaces` ignores `none` grants.
+* **Why "one base gave the whole workspace":** on live, Mahad's `Home` editor grant came from two workspace invitations (home-page Share dialog). The later Signize.us invite was correctly base-only. With overrides the owner can now block single bases.
+* **Multi-base invites:** `core.invitations.extra_base_ids uuid[]` (0079); `POST /v1/invitations` takes `baseIds` (same org, owner only); accept grants each base. The admin invite form has "Selected bases only" with a tick list.
+* **Admin matrix:** row checkboxes and `BulkAccessBar`. "No access" on a base under a workspace role writes `none`, otherwise removes the grant. Base rows offer "No access to this base" plus Reset/Remove.
+* **Bell:** `NotificationsBell` on Home (`routes/home.tsx`), polling every 15 s. Desktop alerts use `Notification` after "Turn on"; `localStorage["tableos:desktop-notified-at"]` holds the newest time seen, so the first load and old items never pop up, and `tag` dedupes across tabs.
+* **Help Back:** topic navigation and the `/help` redirect use `replace: true`.
+* **Import:** `uniqueName()` gives new fields free names; `nameProblems` marks each clashing row; "Rename them for me".
+* **Tests:** `.data/verify-r12.mjs` (per-base access and a 12-action privilege matrix for viewer/commenter/editor/creator), `.data/r2-shell/r12-ui.mjs`.
 
 ## v0.10.0: attachments, time zones, device alerts, last-modified backfill, filter values
 

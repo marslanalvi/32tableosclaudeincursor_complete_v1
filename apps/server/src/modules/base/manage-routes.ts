@@ -8,6 +8,7 @@ import { resolveBaseContext } from "../access/helpers.js";
 import { assertCan } from "../access/assert.js";
 import { compileForUser, compileForWorkspace } from "../access/compile.js";
 import { duplicateBase } from "./duplicate-base.js";
+import { NO_ACCESS_ROLE, combineBaseRole } from "@tabula/permissions";
 
 const duplicateBody = z
   .object({
@@ -58,6 +59,7 @@ export async function listBaseCollaborators(
     LEFT JOIN core.access_grants g
       ON g.principal_type = 'user'
      AND g.principal_id = m.user_id
+     AND (g.expires_at IS NULL OR g.expires_at > now())
      AND (
        (g.resource_type = 'base' AND g.resource_id = ${baseId})
        OR (g.resource_type = 'workspace' AND g.resource_id = ${workspaceId})
@@ -67,25 +69,30 @@ export async function listBaseCollaborators(
 
   const byUser = new Map<
     string,
-    { id: string; name: string; email: string; role: string | null }
+    { id: string; name: string; email: string; base: string | null; workspace: string | null; orgOwner: boolean }
   >();
   for (const row of rows.rows) {
     const existing = byUser.get(row.user_id) ?? {
       id: row.user_id,
       name: row.display_name || row.email,
       email: row.email,
-      role: null as string | null,
+      base: null as string | null,
+      workspace: null as string | null,
+      orgOwner: false,
     };
-    if (row.grant_role) {
-      existing.role = higherRole(existing.role, row.grant_role);
+    if (row.grant_role && row.grant_scope === "base") {
+      existing.base = row.grant_role === NO_ACCESS_ROLE ? (existing.base ?? NO_ACCESS_ROLE) : higherRole(existing.base === NO_ACCESS_ROLE ? null : existing.base, row.grant_role);
     }
-    if (row.org_role === "owner" || row.org_role === "admin") {
-      existing.role = higherRole(existing.role, "owner");
-    }
+    if (row.grant_role && row.grant_scope === "workspace") existing.workspace = higherRole(existing.workspace, row.grant_role);
+    if (row.org_role === "owner" || row.org_role === "admin") existing.orgOwner = true;
     byUser.set(row.user_id, existing);
   }
 
   return [...byUser.values()]
+    .map((u) => ({
+      ...u,
+      role: u.orgOwner || u.workspace === "owner" ? "owner" : combineBaseRole(u.base, u.workspace),
+    }))
     .filter((u): u is typeof u & { role: string } => u.role !== null)
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((u) => ({ id: pid("usr", u.id), name: u.name, email: u.email, role: u.role }));

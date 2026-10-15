@@ -654,18 +654,19 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
         <ul>
           <li>A <b>workspace role</b> applies to every base in the workspace.</li>
           <li>A <b>base role</b> applies to one base. Use it to give someone access to a single base, or a different role in it.</li>
-          <li>When both apply, the person gets the higher of the two.</li>
+          <li>When both apply, the base’s own setting wins: it can be higher or lower than the workspace role, or <b>No access to this base</b>. <b>Reset</b> goes back to the workspace role. Workspace owners always keep full access.</li>
           <li>Set <b>Access until</b> on any role to have it end automatically on that date.</li>
         </ul>
         <h2>Inviting people</h2>
         <ol>
           <li>Open <b>Members &amp; access → People</b>.</li>
-          <li>Enter an email, choose a workspace or a single base and a role, and send the invitation.</li>
+          <li>Enter an email, choose <b>Selected bases only</b> and tick one or more bases (or pick a whole workspace), choose a role, and send the invitation. People invited to selected bases don’t see the other bases.</li>
           <li>If email isn’t set up, copy the invite link and send it yourself. Pending invitations can be cancelled.</li>
         </ol>
         <h2>Changing or removing access</h2>
         <ul>
           <li>Change any role in the member’s access table; choose “No access” to remove it from that workspace or base.</li>
+          <li>Tick several rows to give them the same role, or No access, in one step.</li>
           <li><b>Suspend</b> blocks a person immediately while keeping their settings; <b>Reactivate</b> restores them.</li>
           <li><b>Remove</b> takes away all of their access in the organization and signs out their devices.</li>
         </ul>

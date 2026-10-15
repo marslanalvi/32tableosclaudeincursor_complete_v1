@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   adminApi,
   type ApiTokenInfo,
+  type BaseGrantRole,
   type GrantRole,
   type OrgAccess,
   type OrgMember,
@@ -64,42 +65,47 @@ function useInvalidateAccess(orgId: string) {
 
 function InviteForm({ orgId, data }: { orgId: string; data: OrgAccess }) {
   const refresh = useInvalidateAccess(orgId);
-  const targets = useMemo(
-    () =>
-      data.workspaces.flatMap((w) => [
-        { value: `wsp:${w.id}`, label: `Workspace · ${w.name} (all bases)` },
-        ...w.bases.map((b) => ({ value: `bas:${b.id}`, label: `    Base · ${b.name}` })),
-      ]),
-    [data.workspaces],
-  );
   const [email, setEmail] = useState("");
-  const [target, setTarget] = useState(targets.find((t) => t.value.startsWith("bas:"))?.value ?? targets[0]?.value ?? "");
+  /** "bases" = only the ticked bases; `wsp:<id>` = the whole workspace. */
+  const [scope, setScope] = useState<string>("bases");
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [role, setRole] = useState<GrantRole>("editor");
   const [link, setLink] = useState<string | null>(null);
   const invite = useMutation({
-    mutationFn: () => {
-      const [kind, id] = target.split(":") as ["wsp" | "bas", string];
-      return accountApi.createInvitation({ email: email.trim(), role, ...(kind === "wsp" ? { workspaceId: id } : { baseId: id }) });
-    },
+    mutationFn: () =>
+      accountApi.createInvitation({
+        email: email.trim(),
+        role,
+        ...(scope === "bases" ? { baseIds: [...picked] } : { workspaceId: scope.slice(4) }),
+      }),
     onSuccess: (res) => {
       setLink(res.invitation.acceptUrl);
       setEmail("");
+      setPicked(new Set());
       refresh();
     },
   });
+  const toggle = (ids: string[], on: boolean) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      for (const id of ids) on ? next.add(id) : next.delete(id);
+      return next;
+    });
+  const ready = Boolean(email.trim()) && (scope !== "bases" || picked.size > 0);
   return (
     <form
       className={styles.inviteRow}
       onSubmit={(e) => {
         e.preventDefault();
-        if (email.trim() && target) invite.mutate();
+        if (ready) invite.mutate();
       }}
     >
       <input className={account.input} type="email" required placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email" />
-      <select className={account.input} value={target} onChange={(e) => setTarget(e.target.value)} aria-label="Give access to">
-        {targets.map((t) => (
-          <option key={t.value} value={t.value}>
-            {t.label}
+      <select className={account.input} value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Give access to">
+        <option value="bases">Selected bases only</option>
+        {data.workspaces.map((w) => (
+          <option key={w.id} value={`wsp:${w.id}`}>
+            Workspace · {w.name} (all its bases)
           </option>
         ))}
       </select>
@@ -110,9 +116,35 @@ function InviteForm({ orgId, data }: { orgId: string; data: OrgAccess }) {
           </option>
         ))}
       </select>
-      <button type="submit" className={account.primary} disabled={invite.isPending || !email.trim()}>
-        {invite.isPending ? "Inviting…" : "Invite"}
+      <button type="submit" className={account.primary} disabled={invite.isPending || !ready}>
+        {invite.isPending ? "Inviting…" : picked.size > 1 && scope === "bases" ? `Invite to ${picked.size} bases` : "Invite"}
       </button>
+      {scope === "bases" ? (
+        <div className={`${styles.full} ${styles.basePicker}`} role="group" aria-label="Bases to give access to">
+          {data.workspaces.map((w) => {
+            const ids = w.bases.map((b) => b.id);
+            const all = ids.length > 0 && ids.every((id) => picked.has(id));
+            return (
+              <div key={w.id} className={styles.basePickerGroup}>
+                <label className={styles.basePickerHead}>
+                  <input type="checkbox" checked={all} disabled={!ids.length} onChange={(e) => toggle(ids, e.target.checked)} />
+                  {w.name}
+                  <span className={account.muted}>{ids.length ? "select all" : "no bases"}</span>
+                </label>
+                {w.bases.map((b) => (
+                  <label key={b.id} className={styles.basePickerItem}>
+                    <input type="checkbox" checked={picked.has(b.id)} onChange={(e) => toggle([b.id], e.target.checked)} />
+                    {b.name}
+                  </label>
+                ))}
+              </div>
+            );
+          })}
+          <span className={account.muted}>
+            {picked.size ? `${picked.size} base${picked.size === 1 ? "" : "s"} selected. They won't see the other bases in these workspaces.` : "Tick the bases this person may open."}
+          </span>
+        </div>
+      ) : null}
       {invite.isError ? <div className={account.error}>{errorText(invite.error)}</div> : null}
       {link ? (
         <div className={`${account.ok} ${styles.full}`}>
@@ -133,6 +165,8 @@ function AccessRow({
   indent,
   scope,
   inherited,
+  selected,
+  onSelect,
 }: {
   orgId: string;
   member: OrgMember;
@@ -140,23 +174,32 @@ function AccessRow({
   indent: boolean;
   scope: { workspaceId: string } | { baseId: string };
   inherited: string | null;
+  selected: boolean;
+  onSelect: (on: boolean) => void;
 }) {
   const refresh = useInvalidateAccess(orgId);
-  const id = "workspaceId" in scope ? scope.workspaceId : scope.baseId;
+  const isBase = "baseId" in scope;
+  const id = isBase ? scope.baseId : scope.workspaceId;
   const grant = member.grants.find((g) => g.resourceId === id);
+  const blocked = grant?.role === "none";
   const save = useMutation({
-    mutationFn: (body: { role: GrantRole | null; expiresAt?: string | null }) => adminApi.setGrant(orgId, member.id, { ...scope, ...body }),
+    mutationFn: (body: { role: BaseGrantRole | null; expiresAt?: string | null }) => adminApi.setGrant(orgId, member.id, { ...scope, ...body }),
     onSettled: refresh,
   });
   return (
-    <tr>
+    <tr className={selected ? styles.rowSelected : undefined}>
+      <td className={styles.pickCell}>
+        <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label={`Select ${label}`} />
+      </td>
       <td className={indent ? styles.indent : styles.strong}>{label}</td>
       <td>
         <select
           className={`${account.input} ${styles.compact}`}
           value={grant?.role ?? ""}
           disabled={save.isPending}
-          onChange={(e) => save.mutate({ role: (e.target.value || null) as GrantRole | null, expiresAt: grant?.expiresAt ?? null })}
+          onChange={(e) =>
+            save.mutate({ role: (e.target.value || null) as BaseGrantRole | null, expiresAt: e.target.value === "none" ? null : (grant?.expiresAt ?? null) })
+          }
           aria-label={`Role on ${label}`}
         >
           <option value="">{inherited ? `Inherit (${inherited})` : "No access"}</option>
@@ -165,13 +208,14 @@ function AccessRow({
               {r.label}
             </option>
           ))}
+          {isBase && inherited ? <option value="none">No access to this base</option> : null}
         </select>
       </td>
       <td>
         <input
           type="date"
           className={`${account.input} ${styles.compact}`}
-          disabled={!grant || save.isPending}
+          disabled={!grant || blocked || save.isPending}
           value={toDateInput(grant?.expiresAt ?? null)}
           min={new Date().toISOString().slice(0, 10)}
           onChange={(e) => grant && save.mutate({ role: grant.role as GrantRole, expiresAt: fromDateInput(e.target.value) })}
@@ -179,15 +223,97 @@ function AccessRow({
         />
       </td>
       <td className={styles.state}>
-        {save.isError ? <span className={styles.bad}>{errorText(save.error)}</span> : grant?.expired ? <span className={styles.bad}>Expired</span> : grant?.expiresAt ? "Time-limited" : grant ? "No end date" : ""}
+        {save.isError ? (
+          <span className={styles.bad}>{errorText(save.error)}</span>
+        ) : blocked ? (
+          <span className={styles.bad}>Blocked</span>
+        ) : grant?.expired ? (
+          <span className={styles.bad}>Expired</span>
+        ) : grant?.expiresAt ? (
+          "Time-limited"
+        ) : grant ? (
+          "No end date"
+        ) : (
+          ""
+        )}
+        {grant ? (
+          <button
+            type="button"
+            className={styles.linkBtn}
+            disabled={save.isPending}
+            title={isBase && inherited ? "Back to the workspace role" : "Remove this access"}
+            onClick={() => save.mutate({ role: null })}
+          >
+            {isBase && inherited ? "Reset" : "Remove"}
+          </button>
+        ) : null}
       </td>
     </tr>
+  );
+}
+
+/** Set one role (or remove access) on every selected workspace/base row at once. */
+function BulkAccessBar({
+  orgId,
+  member,
+  data,
+  selected,
+  onDone,
+}: {
+  orgId: string;
+  member: OrgMember;
+  data: OrgAccess;
+  selected: Set<string>;
+  onDone: () => void;
+}) {
+  const refresh = useInvalidateAccess(orgId);
+  const [role, setRole] = useState<GrantRole | "remove">("editor");
+  const apply = useMutation({
+    mutationFn: async () => {
+      for (const key of selected) {
+        const [kind, id] = key.split(":") as ["wsp" | "bas", string];
+        if (kind === "wsp") {
+          await adminApi.setGrant(orgId, member.id, { workspaceId: id, role: role === "remove" ? null : role });
+          continue;
+        }
+        const ws = data.workspaces.find((w) => w.bases.some((b) => b.id === id));
+        const inherits = Boolean(ws && member.grants.some((g) => g.resourceId === ws.id && g.role) && !selected.has(`wsp:${ws.id}`));
+        await adminApi.setGrant(orgId, member.id, { baseId: id, role: role === "remove" ? (inherits ? "none" : null) : role });
+      }
+    },
+    onSettled: () => {
+      refresh();
+      onDone();
+    },
+  });
+  return (
+    <div className={styles.bulkBar} role="toolbar" aria-label="Change selected">
+      <span>
+        {selected.size} selected
+      </span>
+      <select className={`${account.input} ${styles.compact}`} value={role} onChange={(e) => setRole(e.target.value as GrantRole | "remove")} aria-label="Role for selected">
+        {ROLES.map((r) => (
+          <option key={r.value} value={r.value}>
+            {r.label}
+          </option>
+        ))}
+        <option value="remove">No access</option>
+      </select>
+      <button type="button" className={account.primary} disabled={apply.isPending} onClick={() => apply.mutate()}>
+        {apply.isPending ? "Applying…" : "Apply to selected"}
+      </button>
+      <button type="button" className={styles.linkBtn} onClick={onDone}>
+        Clear selection
+      </button>
+      {apply.isError ? <span className={styles.bad}>{errorText(apply.error)}</span> : null}
+    </div>
   );
 }
 
 function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember; data: OrgAccess }) {
   const refresh = useInvalidateAccess(orgId);
   const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const status = useMutation({
     mutationFn: (s: "active" | "suspended") => adminApi.setMemberStatus(orgId, member.id, s),
     onSettled: refresh,
@@ -244,27 +370,64 @@ function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember;
       {status.isError ? <div className={account.error}>{errorText(status.error)}</div> : null}
       {remove.isError ? <div className={account.error}>{errorText(remove.error)}</div> : null}
       {open ? (
-        <table className={styles.matrix}>
-          <thead>
-            <tr>
-              <th>Workspace / base</th>
-              <th>Role</th>
-              <th>Access until</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {data.workspaces.map((w) => {
-              const wsRole = member.grants.find((g) => g.resourceId === w.id)?.role ?? null;
-              return [
-                <AccessRow key={w.id} orgId={orgId} member={member} label={w.name} indent={false} scope={{ workspaceId: w.id }} inherited={null} />,
-                ...w.bases.map((b) => (
-                  <AccessRow key={b.id} orgId={orgId} member={member} label={b.name} indent scope={{ baseId: b.id }} inherited={wsRole} />
-                )),
-              ];
-            })}
-          </tbody>
-        </table>
+        <>
+          {selected.size ? (
+            <BulkAccessBar orgId={orgId} member={member} data={data} selected={selected} onDone={() => setSelected(new Set())} />
+          ) : (
+            <p className={account.muted}>
+              A workspace role opens every base in it. Change a base's own role to give it more or less, or pick "No access to this base".
+              Tick several rows to change them together.
+            </p>
+          )}
+          <table className={styles.matrix}>
+            <thead>
+              <tr>
+                <th />
+                <th>Workspace / base</th>
+                <th>Role</th>
+                <th>Access until</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {data.workspaces.map((w) => {
+                const wsRole = member.grants.find((g) => g.resourceId === w.id)?.role ?? null;
+                const pick = (key: string) => (on: boolean) =>
+                  setSelected((prev) => {
+                    const next = new Set(prev);
+                    on ? next.add(key) : next.delete(key);
+                    return next;
+                  });
+                return [
+                  <AccessRow
+                    key={w.id}
+                    orgId={orgId}
+                    member={member}
+                    label={w.name}
+                    indent={false}
+                    scope={{ workspaceId: w.id }}
+                    inherited={null}
+                    selected={selected.has(`wsp:${w.id}`)}
+                    onSelect={pick(`wsp:${w.id}`)}
+                  />,
+                  ...w.bases.map((b) => (
+                    <AccessRow
+                      key={b.id}
+                      orgId={orgId}
+                      member={member}
+                      label={b.name}
+                      indent
+                      scope={{ baseId: b.id }}
+                      inherited={wsRole}
+                      selected={selected.has(`bas:${b.id}`)}
+                      onSelect={pick(`bas:${b.id}`)}
+                    />
+                  )),
+                ];
+              })}
+            </tbody>
+          </table>
+        </>
       ) : null}
     </li>
   );
@@ -274,12 +437,11 @@ function PeopleSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
   const refresh = useInvalidateAccess(orgId);
   const revoke = useMutation({ mutationFn: (id: string) => accountApi.revokeInvitation(id), onSettled: refresh });
   const nameOf = (i: OrgAccess["invitations"][number]) => {
-    for (const w of data.workspaces) {
-      if (i.workspaceId === w.id) return `${w.name} (workspace)`;
-      const b = w.bases.find((x) => x.id === i.baseId);
-      if (b) return b.name;
-    }
-    return "—";
+    const ws = data.workspaces.find((w) => w.id === i.workspaceId);
+    if (ws) return `${ws.name} (workspace)`;
+    const ids = i.baseIds?.length ? i.baseIds : i.baseId ? [i.baseId] : [];
+    const names = ids.map((id) => data.workspaces.flatMap((w) => w.bases).find((b) => b.id === id)?.name).filter(Boolean);
+    return names.length ? names.join(", ") : "—";
   };
   return (
     <>

@@ -40,6 +40,16 @@ interface ColumnMap {
   newType: DetectedType;
 }
 
+/** `name`, or `name 2`, `name 3`… so it matches none of `taken` (lower-cased names). */
+function uniqueName(name: string, taken: Set<string>): string {
+  const base = name.trim() || "Field";
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n++) {
+    const candidate = `${base} ${n}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+  }
+}
+
 /** Most decimal places used in a numeric column (0–8), so 0.0079 doesn't display as 0. */
 function decimalsIn(rows: string[][], col: number): number {
   let max = 0;
@@ -126,9 +136,16 @@ export function ImportWizard({
     [dest, destTable],
   );
 
-  // (Re)build the default mapping whenever the source or destination changes.
+  const existingNames = useMemo(
+    () => new Set(dest === "existing" ? (destTable?.fields ?? []).map((f) => f.name.trim().toLowerCase()) : []),
+    [dest, destTable],
+  );
+
+  // (Re)build the default mapping whenever the source or destination changes. New fields get
+  // names that clash with nothing (e.g. "Attachments 2" next to the table's Attachments field).
   useEffect(() => {
     if (!sheet) return;
+    const taken = new Set(existingNames);
     setMapping(
       sheet.headers.map((header, i) => {
         // Look at the whole column (evenly sampled when huge): one odd value late in the file
@@ -136,10 +153,13 @@ export function ImportWizard({
         const step = Math.max(1, Math.ceil(sheet.rows.length / 5000));
         const sample: string[] = [];
         for (let r = 0; r < sheet.rows.length; r += step) sample.push(sheet.rows[r]?.[i] ?? "");
-        return { target: defaultTarget(header), newName: header, newType: detectType(sample) };
+        const target = defaultTarget(header);
+        const newName = target === NEW_FIELD ? uniqueName(header, taken) : header;
+        if (target === NEW_FIELD) taken.add(newName.toLowerCase());
+        return { target, newName, newType: detectType(sample) };
       }),
     );
-  }, [sheet, defaultTarget]);
+  }, [sheet, defaultTarget, existingNames]);
 
   const importAll = () =>
     setMapping((old) =>
@@ -177,11 +197,28 @@ export function ImportWizard({
   }
 
   const mappedCount = mapping.filter((m) => m.target !== SKIP).length;
-  const newFieldNames = mapping.filter((m) => m.target === NEW_FIELD).map((m) => m.newName.trim().toLowerCase());
-  const duplicateNames =
-    new Set(newFieldNames).size !== newFieldNames.length ||
-    (dest === "existing" &&
-      newFieldNames.some((n) => destTable?.fields.some((f) => f.name.trim().toLowerCase() === n)));
+  /** Per column: why its new field name can't be used, or null. */
+  const nameProblems = mapping.map((m, i) => {
+    if (m.target !== NEW_FIELD) return null;
+    const n = m.newName.trim().toLowerCase();
+    if (!n) return null;
+    if (existingNames.has(n)) return `“${m.newName.trim()}” already exists in this table. Rename it here, or choose the existing field above.`;
+    if (mapping.some((o, j) => j < i && o.target === NEW_FIELD && o.newName.trim().toLowerCase() === n)) {
+      return `Another column already creates “${m.newName.trim()}”. Give this one a different name.`;
+    }
+    return null;
+  });
+  const duplicateNames = nameProblems.some(Boolean);
+  const renameClashes = () =>
+    setMapping((old) => {
+      const taken = new Set(existingNames);
+      return old.map((m) => {
+        if (m.target !== NEW_FIELD) return m;
+        const newName = uniqueName(m.newName, taken);
+        taken.add(newName.toLowerCase());
+        return newName === m.newName ? m : { ...m, newName };
+      });
+    });
   const canRun =
     Boolean(sheet && sheet.rows.length > 0 && mappedCount > 0) &&
     !duplicateNames &&
@@ -477,7 +514,15 @@ export function ImportWizard({
                 </span>
               </div>
               {duplicateNames ? (
-                <p className={s.error}>New field names must be unique and must not match existing fields.</p>
+                <div className={s.error} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <span>
+                    {nameProblems.filter(Boolean).length === 1 ? "One new field has" : `${nameProblems.filter(Boolean).length} new fields have`} a name
+                    that is already used. Rename {nameProblems.filter(Boolean).length === 1 ? "it" : "them"} below (marked in red).
+                  </span>
+                  <button type="button" className={s.btnSecondary} style={{ minHeight: 28, padding: "2px 10px" }} onClick={renameClashes}>
+                    Rename them for me
+                  </button>
+                </div>
               ) : null}
               <div style={{ overflowX: "auto", border: "1px solid var(--tabula-color-border)", borderRadius: 10 }}>
                 <table className={s.table}>
@@ -525,6 +570,8 @@ export function ImportWizard({
                                   value={m.newName}
                                   onChange={(e) => set({ newName: e.target.value })}
                                   aria-label="New field name"
+                                  aria-invalid={nameProblems[i] ? true : undefined}
+                                  style={nameProblems[i] ? { borderColor: "var(--tabula-color-danger)", boxShadow: "0 0 0 1px var(--tabula-color-danger)" } : undefined}
                                 />
                                 <select
                                   className={s.select}
@@ -539,6 +586,9 @@ export function ImportWizard({
                                   ))}
                                 </select>
                               </div>
+                            ) : null}
+                            {nameProblems[i] ? (
+                              <div style={{ marginTop: 4, fontSize: 12, color: "var(--tabula-color-danger)" }}>{nameProblems[i]}</div>
                             ) : null}
                           </td>
                           <td className={s.muted}>

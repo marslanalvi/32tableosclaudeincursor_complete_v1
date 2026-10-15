@@ -227,7 +227,7 @@ const helpIndexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/help",
   beforeLoad: () => {
-    throw redirect({ to: "/help/$topic", params: { topic: "getting-started" } });
+    throw redirect({ to: "/help/$topic", params: { topic: "getting-started" }, replace: true });
   },
 });
 
@@ -241,7 +241,8 @@ const helpRoute = createRoute({
     return (
       <HelpPage
         topic={topic}
-        onTopic={(t) => void navigate({ to: "/help/$topic", params: { topic: t } })}
+        // Replace, so Back leaves Help for the page you came from instead of stepping through topics.
+        onTopic={(t) => void navigate({ to: "/help/$topic", params: { topic: t }, replace: true })}
         onBack={() => {
           if (window.history.length > 1) window.history.back();
           else void navigate({ to: "/" });

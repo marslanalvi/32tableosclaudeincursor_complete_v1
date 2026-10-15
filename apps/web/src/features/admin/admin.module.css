@@ -201,6 +201,66 @@
   padding: 0;
 }
 
+.basePicker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tabula-space-2) var(--tabula-space-4);
+  padding: var(--tabula-space-2) var(--tabula-space-3);
+  border: 1px solid var(--tabula-color-border);
+  border-radius: var(--tabula-radius-sm);
+  max-height: 260px;
+  overflow: auto;
+}
+.basePicker > .muted,
+.basePicker > span {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+.basePickerGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+.basePickerHead,
+.basePickerItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.basePickerHead {
+  font-weight: 500;
+}
+.basePickerHead span {
+  font-weight: 400;
+  font-size: 11px;
+}
+.basePickerItem {
+  padding-left: 22px;
+}
+.pickCell {
+  width: 28px;
+}
+.rowSelected td {
+  background: var(--tabula-color-surface-muted, #f2f6fd);
+}
+.bulkBar {
+  display: flex;
+  align-items: center;
+  gap: var(--tabula-space-2);
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: var(--tabula-radius-sm);
+  background: #eef4ff;
+  font-size: 13px;
+}
+.state .linkBtn {
+  margin-left: 8px;
+  font-size: 12px;
+}
+
 @media (max-width: 720px) {
   .inviteRow {
     grid-template-columns: 1fr;
