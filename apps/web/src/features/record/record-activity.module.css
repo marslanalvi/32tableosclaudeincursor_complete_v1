@@ -122,6 +122,74 @@
   min-width: 0;
 }
 
+/* Grouped revision history (by person or by field). */
+.group {
+  padding: 6px 0;
+  border-bottom: 1px solid #eceef1;
+  list-style: none;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.groupHead::-webkit-details-marker {
+  display: none;
+}
+
+.groupHead::after {
+  content: "▸";
+  margin-left: auto;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.group details[open] > .groupHead::after {
+  content: "▾";
+}
+
+.groupIcon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: #f1f3f6;
+  color: #41454d;
+  font-size: 13px;
+}
+
+.groupTitle {
+  flex: none;
+  max-width: 55%;
+  font-size: 13px;
+  font-weight: 600;
+  color: #181d26;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupMeta {
+  min-width: 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.groupList {
+  margin: 4px 0 0;
+  padding: 0 0 0 14px;
+  border-left: 2px solid #eceef1;
+  list-style: none;
+}
+
 .line {
   color: #41454d;
   font-size: 13px;

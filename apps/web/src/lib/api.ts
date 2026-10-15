@@ -208,6 +208,14 @@ export interface TableSyncInfo {
   /** Edits to editable synced fields are written back to the source. */
   twoWay: boolean;
   editableFieldIds: string[];
+  /** A run is going right now. */
+  running?: boolean;
+  stopRequested?: boolean;
+  progress?: { phase: "reading" | "writing"; done: number; total: number | null } | null;
+  /** Values that didn't fit their field and were left empty. */
+  issueCount?: number;
+  /** Source fields kept as plain text. */
+  textFieldKeys?: string[];
 }
 
 export interface ViewDto {

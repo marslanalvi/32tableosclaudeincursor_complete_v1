@@ -802,8 +802,7 @@ export function TableTabs({
     mutationFn: (tableId: string) => syncApi.runNow(baseId, tableId),
     onSuccess: async (res) => {
       await refresh();
-      if (res.sync.lastError) toast.error(new Error(res.sync.lastError), "Sync failed");
-      else toast.success("Synced");
+      toast.success(res.alreadyRunning ? "This table is already syncing" : "Syncing… progress shows above the table");
     },
     onError: (err) => toast.error(err, "Could not sync"),
   });

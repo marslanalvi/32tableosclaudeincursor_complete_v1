@@ -7,6 +7,13 @@ export class SyncBusyError extends SyncError {
   }
 }
 
+/** Someone pressed Stop (or Pause) while the run was going. */
+export class SyncCancelledError extends SyncError {
+  constructor() {
+    super("Stopped before it finished");
+  }
+}
+
 export type Conv = "same" | "number" | "datetime" | "checkbox" | "text" | "files";
 
 export interface MappedField {

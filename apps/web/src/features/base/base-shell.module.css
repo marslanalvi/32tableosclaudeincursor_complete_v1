@@ -797,3 +797,74 @@
 .syncToggle + .syncBtn {
   margin-left: 0;
 }
+.syncBar[data-state="running"] {
+  background: #eaf6ee;
+}
+.syncActions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: 6px;
+}
+.syncToggle + .syncActions {
+  margin-left: 0;
+}
+.syncActions .syncBtn {
+  margin-left: 0;
+}
+.syncLink {
+  font: inherit;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #9a5b00;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.issuesIntro {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: var(--tabula-color-text-muted);
+}
+.issuesList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-height: 60vh;
+  overflow: auto;
+}
+.issueGroup {
+  border: 1px solid var(--tabula-color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.issueHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #fff8eb;
+  font-size: 13px;
+}
+.issueHead .syncBtn {
+  margin-left: 0;
+}
+.issueTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.issueTable th,
+.issueTable td {
+  text-align: left;
+  padding: 5px 10px;
+  border-top: 1px solid var(--tabula-color-border);
+  vertical-align: top;
+}
+.issueTable th {
+  font-weight: 500;
+  color: var(--tabula-color-text-muted);
+}
+.issueTable code {
+  font-size: 12px;
+  word-break: break-all;
+}

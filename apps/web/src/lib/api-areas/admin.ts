@@ -65,6 +65,18 @@ export interface ApiTokenInfo {
   createdAt: string;
 }
 
+/** Devices log for one person (Members & access → Devices). */
+export interface DeviceLogMember {
+  id: string;
+  email: string;
+  name: string;
+  isOwner: boolean;
+  status: "active" | "suspended";
+  devices: (MemberDevice & { firstIp: string | null; decidedBy: string | null })[];
+  sessions: { id: string; label: string; ip: string | null; startedAt: string; lastSeenAt: string; endedAt: string | null; active: boolean }[];
+  history: { kind: "requested" | "approved" | "revoked" | "forgotten"; at: string; deviceId: string | null; deviceLabel: string; by: string | null; ip: string | null }[];
+}
+
 export interface PendingDevice {
   orgId: string;
   orgName: string;
@@ -100,6 +112,9 @@ export const adminApi = {
   },
   removeMember(orgId: string, userId: string) {
     return request<void>(`${org(orgId)}/members/${encodeURIComponent(userId)}`, { method: "DELETE" });
+  },
+  deviceLog(orgId: string) {
+    return request<{ members: DeviceLogMember[] }>(`${org(orgId)}/device-log`);
   },
   updateDevice(orgId: string, deviceId: string, body: { status?: "approved" | "revoked"; label?: string }) {
     return request<{ status: string }>(`${org(orgId)}/devices/${encodeURIComponent(deviceId)}`, { method: "PATCH", json: body });

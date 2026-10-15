@@ -11,7 +11,9 @@ Follow these steps, in order, for every fix or feature.
    web feature, CSS) before editing. Fix the cause, not the symptom.
 2. **Edit only what the request needs.** No unrelated refactors or behaviour changes.
    Stop any preview running on the live database before editing server code or migrations:
-   `tsx watch` restarts the API on save, and the API applies new migrations on start.
+   `tsx watch` restarts the API on save, and the API applies new migrations on start. At the
+   start of every round run `scripts/dev-isolated-stop.ps1` first unless the local test stack
+   is what is running.
 3. **Test the change itself**, with dummy data in the local database only
    (`postgres://tabula:tabula@localhost:5432/tabula_cc`, test stack `.data/r10-stack.ps1`).
    Never create test data in the shared live database from `.env`.

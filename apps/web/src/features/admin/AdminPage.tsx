@@ -4,6 +4,7 @@ import {
   adminApi,
   type ApiTokenInfo,
   type BaseGrantRole,
+  type DeviceLogMember,
   type GrantRole,
   type OrgAccess,
   type OrgMember,
@@ -484,71 +485,168 @@ function PeopleSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
 
 /* ----------------------------------------------------------------- devices */
 
+const HISTORY_TEXT: Record<DeviceLogMember["history"][number]["kind"], string> = {
+  requested: "asked for access from",
+  approved: "approved",
+  revoked: "revoked / denied",
+  forgotten: "forgot",
+};
+
 function DevicesSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
-  const refresh = useInvalidateAccess(orgId);
+  const refreshAccess = useInvalidateAccess(orgId);
+  const qc = useQueryClient();
+  const log = useQuery({ queryKey: ["admin", "device-log", orgId], queryFn: () => adminApi.deviceLog(orgId), enabled: !!orgId });
+  const refresh = () => {
+    refreshAccess();
+    void qc.invalidateQueries({ queryKey: ["admin", "device-log", orgId] });
+  };
   const update = useMutation({
     mutationFn: (v: { id: string; status?: "approved" | "revoked"; label?: string }) =>
       adminApi.updateDevice(orgId, v.id, { ...(v.status ? { status: v.status } : {}), ...(v.label !== undefined ? { label: v.label } : {}) }),
     onSettled: refresh,
   });
   const del = useMutation({ mutationFn: (id: string) => adminApi.deleteDevice(orgId, id), onSettled: refresh });
-  const rows = data.members
-    .filter((m) => !m.isOwner)
-    .flatMap((m) => m.devices.map((d) => ({ ...d, member: m })))
-    .sort((a, b) => (a.status === "pending" ? -1 : 0) - (b.status === "pending" ? -1 : 0));
+  const members = [...(log.data?.members ?? [])].sort((a, b) => {
+    const wa = a.devices.some((d) => d.status === "pending") ? 0 : 1;
+    const wb = b.devices.some((d) => d.status === "pending") ? 0 : 1;
+    return wa - wb || (a.isOwner ? 1 : 0) - (b.isOwner ? 1 : 0) || (a.name || a.email).localeCompare(b.name || b.email);
+  });
+
+  const deviceRow = (d: DeviceLogMember["devices"][number]) => (
+    <li key={d.id} className={account.sessionItem} data-testid="device-row">
+      <div className={account.sessionText}>
+        <span className={account.sessionName}>
+          {d.label}
+          <span className={d.status === "approved" ? account.badgeOn : styles.badgeWarn}>
+            {d.status === "pending" ? "Waiting for approval" : d.status === "approved" ? "Approved" : "Revoked"}
+          </span>
+        </span>
+        <span className={account.muted}>
+          {d.lastIp ?? "Unknown IP"} · first seen {fmt(d.firstSeenAt)} · last active {fmt(d.lastSeenAt)}
+          {d.decidedAt ? ` · ${d.status === "approved" ? "approved" : "revoked"} ${fmt(d.decidedAt)}${d.decidedBy ? ` by ${d.decidedBy}` : ""}` : ""}
+        </span>
+      </div>
+      <div className={account.actions}>
+        <button
+          type="button"
+          className={styles.linkBtn}
+          onClick={() => {
+            const label = window.prompt("Device name", d.label);
+            if (label && label.trim()) update.mutate({ id: d.id, label: label.trim() });
+          }}
+        >
+          Rename
+        </button>
+        {d.status !== "approved" ? (
+          <button type="button" className={account.primary} onClick={() => update.mutate({ id: d.id, status: "approved" })} disabled={update.isPending}>
+            Approve
+          </button>
+        ) : null}
+        {d.status !== "revoked" ? (
+          <button type="button" className={account.danger} onClick={() => update.mutate({ id: d.id, status: "revoked" })} disabled={update.isPending}>
+            {d.status === "pending" ? "Deny" : "Revoke"}
+          </button>
+        ) : (
+          <button type="button" className={account.secondary} onClick={() => del.mutate(d.id)} disabled={del.isPending}>
+            Forget
+          </button>
+        )}
+      </div>
+    </li>
+  );
+
   return (
     <Section
       title="Devices"
       description={
         data.org.requireDeviceApproval
-          ? "Each person can only open your data from devices you approve. A new browser or computer shows up here as “Waiting” the first time they sign in. Approve it, or revoke it later to cut that device off immediately."
+          ? "Grouped by person. Each person can only open your data from devices you approve; a new browser or computer shows up as “Waiting” the first time they sign in. Each group also lists their active and ended sign-in sessions and every approval and revocation."
           : "Device approval is turned off (see Security), so any signed-in device works. Revoked devices stay blocked."
       }
     >
-      {rows.length === 0 ? <p className={account.muted}>No devices yet. They appear when invited people sign in.</p> : null}
-      <ul className={account.sessionList}>
-        {rows.map((d) => (
-          <li key={d.id} className={account.sessionItem}>
-            <div className={account.sessionText}>
-              <span className={account.sessionName}>
-                {d.member.name || d.member.email} — {d.label}
-                <span className={d.status === "approved" ? account.badgeOn : styles.badgeWarn}>
-                  {d.status === "pending" ? "Waiting for approval" : d.status === "approved" ? "Approved" : "Revoked"}
+      {log.isLoading ? <p className={account.muted}>Loading…</p> : null}
+      {log.isError ? <div className={account.error}>{errorText(log.error)}</div> : null}
+      <div className={styles.deviceGroups}>
+        {members.map((m) => {
+          const waiting = m.devices.filter((d) => d.status === "pending");
+          const approved = m.devices.filter((d) => d.status === "approved");
+          const revoked = m.devices.filter((d) => d.status === "revoked");
+          const active = m.sessions.filter((x) => x.active);
+          const ended = m.sessions.filter((x) => !x.active);
+          return (
+            <details key={m.id} className={styles.deviceGroup} open={waiting.length > 0} data-testid="device-group">
+              <summary className={styles.deviceGroupHead}>
+                <span className={account.sessionName}>
+                  {m.name || m.email}
+                  {m.isOwner ? <span className={account.badgeOn}>Owner</span> : null}
+                  {m.status === "suspended" ? <span className={styles.badgeWarn}>Suspended</span> : null}
                 </span>
-              </span>
-              <span className={account.muted}>
-                {d.lastIp ?? "Unknown IP"} · first seen {fmt(d.firstSeenAt)} · last active {fmt(d.lastSeenAt)}
-              </span>
-            </div>
-            <div className={account.actions}>
-              <button
-                type="button"
-                className={styles.linkBtn}
-                onClick={() => {
-                  const label = window.prompt("Device name", d.label);
-                  if (label && label.trim()) update.mutate({ id: d.id, label: label.trim() });
-                }}
-              >
-                Rename
-              </button>
-              {d.status !== "approved" ? (
-                <button type="button" className={account.primary} onClick={() => update.mutate({ id: d.id, status: "approved" })} disabled={update.isPending}>
-                  Approve
-                </button>
-              ) : null}
-              {d.status !== "revoked" ? (
-                <button type="button" className={account.danger} onClick={() => update.mutate({ id: d.id, status: "revoked" })} disabled={update.isPending}>
-                  {d.status === "pending" ? "Deny" : "Revoke"}
-                </button>
-              ) : (
-                <button type="button" className={account.secondary} onClick={() => del.mutate(d.id)} disabled={del.isPending}>
-                  Forget
-                </button>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
+                <span className={styles.deviceCounts}>
+                  {waiting.length ? <span className={styles.badgeWarn}>{waiting.length} waiting</span> : null}
+                  <span>
+                    {approved.length} approved · {revoked.length} revoked · {active.length} active session{active.length === 1 ? "" : "s"}
+                  </span>
+                </span>
+              </summary>
+              <div className={styles.deviceGroupBody}>
+                <span className={account.muted}>{m.email}</span>
+                {m.isOwner ? <p className={account.muted}>The owner’s devices never need approval.</p> : null}
+                {waiting.length ? (
+                  <>
+                    <h4 className={styles.deviceSub}>Waiting for approval ({waiting.length})</h4>
+                    <ul className={account.sessionList}>{waiting.map(deviceRow)}</ul>
+                  </>
+                ) : null}
+                {!m.isOwner ? (
+                  <>
+                    <h4 className={styles.deviceSub}>Approved devices ({approved.length})</h4>
+                    {approved.length ? <ul className={account.sessionList}>{approved.map(deviceRow)}</ul> : <p className={account.muted}>None.</p>}
+                    {revoked.length ? (
+                      <>
+                        <h4 className={styles.deviceSub}>Revoked or denied ({revoked.length})</h4>
+                        <ul className={account.sessionList}>{revoked.map(deviceRow)}</ul>
+                      </>
+                    ) : null}
+                  </>
+                ) : null}
+                <h4 className={styles.deviceSub}>Active sessions ({active.length})</h4>
+                {active.length ? (
+                  <ul className={styles.sessionLog}>
+                    {active.map((x) => (
+                      <li key={x.id} data-testid="session-active">
+                        <strong>{x.label}</strong> · {x.ip ?? "Unknown IP"} · signed in {fmt(x.startedAt)} · last active {fmt(x.lastSeenAt)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={account.muted}>Not signed in anywhere right now.</p>
+                )}
+                <details className={styles.subDetails}>
+                  <summary>Ended sessions ({ended.length})</summary>
+                  <ul className={styles.sessionLog}>
+                    {ended.map((x) => (
+                      <li key={x.id} data-testid="session-ended">
+                        <strong>{x.label}</strong> · {x.ip ?? "Unknown IP"} · {fmt(x.startedAt)} → {x.endedAt ? `signed out ${fmt(x.endedAt)}` : `expired (last active ${fmt(x.lastSeenAt)})`}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+                <details className={styles.subDetails} open={m.history.some((h) => h.kind !== "requested")}>
+                  <summary>Approvals and revocations ({m.history.length})</summary>
+                  <ul className={styles.sessionLog}>
+                    {m.history.map((h, i) => (
+                      <li key={`${h.at}-${i}`} data-testid="device-history" data-kind={h.kind}>
+                        {fmt(h.at)} · {h.kind === "requested" ? (m.name || m.email) : (h.by ?? "Owner")} {HISTORY_TEXT[h.kind]} <strong>{h.deviceLabel}</strong>
+                        {h.ip ? ` (${h.ip})` : ""}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            </details>
+          );
+        })}
+      </div>
       {update.isError ? <div className={account.error}>{errorText(update.error)}</div> : null}
     </Section>
   );

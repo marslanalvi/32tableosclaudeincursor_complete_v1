@@ -38,6 +38,8 @@ const importBody = z.object({
 interface RowError {
   row: number;
   message: string;
+  /** `fld_` id of the value that was rejected, when known. */
+  field?: string;
 }
 
 export async function registerImportExportRoutes(
@@ -64,7 +66,8 @@ export async function registerImportExportRoutes(
       const status = err instanceof ApiError ? err.status : 500;
       if (status !== 422) throw err;
       if (rows.length === 1) {
-        return { created: 0, errors: [{ row: rowOffset + 1, message: (err as Error).message }] };
+        const field = err instanceof ApiError && typeof err.meta?.["field"] === "string" ? (err.meta["field"] as string) : undefined;
+        return { created: 0, errors: [{ row: rowOffset + 1, message: (err as Error).message, ...(field ? { field } : {}) }] };
       }
       const mid = Math.ceil(rows.length / 2);
       const left = await writeBatch(scope, rows.slice(0, mid), typecast, rowOffset);
@@ -140,9 +143,15 @@ export async function registerImportExportRoutes(
     }
 
     for (const e of errors.slice(0, 500)) {
+      let fieldId: string | null = null;
+      try {
+        fieldId = e.field ? parsePid(e.field, "fld") : null;
+      } catch {
+        fieldId = null;
+      }
       await sql`
-        INSERT INTO data.import_errors (id, import_job_id, workspace_id, source_row, message)
-        VALUES (${generateUuidV7()}, ${importJobId}, ${base.workspaceId}, ${e.row}, ${e.message.slice(0, 1000)})
+        INSERT INTO data.import_errors (id, import_job_id, workspace_id, source_row, message, field_id)
+        VALUES (${generateUuidV7()}, ${importJobId}, ${base.workspaceId}, ${e.row}, ${e.message.slice(0, 1000)}, ${fieldId})
       `.execute(ctx.db);
     }
     const totals = await sql<{ rows_imported: string; rows_failed: string }>`
