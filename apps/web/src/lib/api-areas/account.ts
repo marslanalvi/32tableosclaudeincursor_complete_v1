@@ -92,7 +92,7 @@ export const accountApi = {
       { method: "POST", json: { token } },
     );
   },
-  createInvitation(body: { email: string; role: string; workspaceId?: string; baseId?: string }) {
+  createInvitation(body: { email: string; role: string; workspaceId?: string; baseId?: string; baseIds?: string[] }) {
     return request<{ invitation: InvitationPreview & { acceptUrl: string } }>("/v1/invitations", {
       method: "POST",
       json: body,

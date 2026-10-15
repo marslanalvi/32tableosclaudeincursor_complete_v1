@@ -57,30 +57,42 @@ export function compileSnapshot(
   return compileSnapshotInner(input, epoch);
 }
 
+/** Base grant role that blocks a base the workspace role would otherwise open. */
+export const NO_ACCESS_ROLE = "none";
+
+/**
+ * A base's own setting wins over the role inherited from its workspace (higher, lower, or
+ * `none` = no access). Workspace owners always keep full access.
+ */
+export function combineBaseRole(baseRole: string | null, workspaceRole: string | null): BaseRole | null {
+  if (workspaceRole === "owner") return "creator";
+  if (baseRole) return baseRole === NO_ACCESS_ROLE ? null : (baseRole as BaseRole);
+  return workspaceRole ? mapWorkspaceRoleToBase(workspaceRole as WorkspaceRole) : null;
+}
+
+const WORKSPACE_RANK: Record<string, number> = { owner: 5, creator: 4, editor: 3, commenter: 2, viewer: 1 };
+
 function compileSnapshotInner(
   input: CompileSnapshotInput,
   permEpoch: number,
 ): PermissionSnapshot {
-  let role: BaseRole | null = null;
+  let baseRole: string | null = null;
+  let workspaceRole: string | null = null;
 
   for (const grant of input.grants) {
     if (grant.resource_type === "base" && grant.base_id === input.baseId) {
-      const baseRole = grant.role as BaseRole;
-      role = role ? maxBaseRole(role, baseRole) : baseRole;
+      if (grant.role === NO_ACCESS_ROLE) baseRole = baseRole ?? NO_ACCESS_ROLE;
+      else baseRole = !baseRole || baseRole === NO_ACCESS_ROLE ? grant.role : maxBaseRole(baseRole as BaseRole, grant.role as BaseRole);
     }
-    if (
-      grant.resource_type === "workspace" &&
-      grant.workspace_id === input.workspaceId
-    ) {
-      const mapped = mapWorkspaceRoleToBase(grant.role as WorkspaceRole);
-      role = role ? maxBaseRole(role, mapped) : mapped;
+    if (grant.resource_type === "workspace" && grant.workspace_id === input.workspaceId) {
+      if (!workspaceRole || (WORKSPACE_RANK[grant.role] ?? 0) > (WORKSPACE_RANK[workspaceRole] ?? 0)) workspaceRole = grant.role;
     }
   }
 
   return {
     baseId: input.baseId,
     workspaceId: input.workspaceId,
-    effectiveBaseRole: role,
+    effectiveBaseRole: combineBaseRole(baseRole, workspaceRole),
     permEpoch,
   };
 }

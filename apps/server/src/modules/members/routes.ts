@@ -23,7 +23,8 @@ import { TOKEN_SCOPES, generateApiToken } from "../access/api-tokens.js";
  */
 
 const WORKSPACE_GRANT_ROLES = ["creator", "editor", "commenter", "viewer"] as const;
-const BASE_GRANT_ROLES = ["creator", "editor", "commenter", "viewer"] as const;
+/** `none` blocks a base that the member's workspace role would otherwise open. */
+const BASE_GRANT_ROLES = ["creator", "editor", "commenter", "viewer", "none"] as const;
 
 const grantBody = z
   .object({
@@ -175,8 +176,8 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
           SELECT id, user_id, label, user_agent, host(last_ip) AS last_ip, status, first_seen_at, last_seen_at, decided_at
           FROM core.org_devices WHERE org_id = ${orgId} ORDER BY last_seen_at DESC
         `.execute(ctx.db),
-        sql<{ id: string; email: string; role: string; workspace_id: string | null; base_id: string | null; expires_at: Date; created_at: Date }>`
-          SELECT id, email, role, workspace_id, base_id, expires_at, created_at FROM core.invitations
+        sql<{ id: string; email: string; role: string; workspace_id: string | null; base_id: string | null; extra_base_ids: string[] | null; expires_at: Date; created_at: Date }>`
+          SELECT id, email, role, workspace_id, base_id, extra_base_ids, expires_at, created_at FROM core.invitations
           WHERE org_id = ${orgId} AND status = 'pending' AND expires_at > now() ORDER BY created_at DESC
         `.execute(ctx.db),
       ]);
@@ -228,6 +229,7 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
           role: i.role,
           workspaceId: i.workspace_id && !i.base_id ? pid("wsp", i.workspace_id) : null,
           baseId: i.base_id ? pid("bas", i.base_id) : null,
+          baseIds: i.base_id ? [i.base_id, ...(i.extra_base_ids ?? [])].map((b) => pid("bas", b)) : [],
           expiresAt: iso(i.expires_at),
         })),
         pendingDevices: devices.rows.filter((d) => d.status === "pending").length,

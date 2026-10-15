@@ -5,6 +5,7 @@ import { api, type BaseSummary, type Workspace } from "../lib/api.ts";
 import { shellApi } from "../lib/api-areas/shell.ts";
 import { useMe } from "../features/auth/use-auth.ts";
 import { AccountMenu } from "../features/base/AccountMenu.tsx";
+import { NotificationsBell } from "../features/notifications/NotificationsBell.tsx";
 import {
   Avatar,
   ConfirmDialog,
@@ -560,6 +561,7 @@ export function HomePage() {
           Search… <kbd>Ctrl K</kbd>
         </button>
         <div className={styles.headerActions}>
+          <NotificationsBell />
           <AccountMenu />
         </div>
       </header>

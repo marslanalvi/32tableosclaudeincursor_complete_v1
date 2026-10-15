@@ -8,6 +8,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.11.0",
+    date: "2026-10-15",
+    title: "Access per base, notifications everywhere, smoother imports.",
+    items: [
+      "Members & access: a base’s own role overrides the workspace role, including “No access to this base”.",
+      "Invite someone to several selected bases in one go; they don’t see the other bases.",
+      "Tick several rows in a member’s access table to change them together.",
+      "The notification bell is on the Home page too, and can show desktop notifications.",
+      "Help → Back takes you back to where you were, not through the topics you read.",
+      "Import: columns named like existing fields (Notes, Attachments) are highlighted, and you choose for each: use the existing field, rename it, replace the existing field, or skip it.",
+    ],
+  },
+  {
     version: "0.10.0",
     date: "2026-10-14",
     title: "Attachment cells expand, time zones, and device approval alerts.",

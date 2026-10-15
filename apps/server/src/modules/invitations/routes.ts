@@ -37,10 +37,12 @@ const createInviteBody = z
     email: z.string().email().max(320),
     workspaceId: z.string().optional(),
     baseId: z.string().optional(),
+    /** Several bases in one invitation (same organization). */
+    baseIds: z.array(z.string()).min(1).max(100).optional(),
     role: z.enum(WORKSPACE_ROLES),
   })
-  .refine((b) => Boolean(b.workspaceId) !== Boolean(b.baseId), {
-    message: "Provide exactly one of workspaceId or baseId",
+  .refine((b) => [b.workspaceId, b.baseId, b.baseIds].filter(Boolean).length === 1, {
+    message: "Provide exactly one of workspaceId, baseId or baseIds",
   });
 
 const acceptBody = z.object({
@@ -63,6 +65,7 @@ interface InviteRow {
   expires_at: Date;
   invited_by: string | null;
   created_at: Date;
+  extra_base_ids?: string[] | null;
 }
 
 function inviteDto(row: InviteRow) {
@@ -96,34 +99,44 @@ export async function registerInvitationRoutes(
       }
       const body = createInviteBody.parse(request.body);
 
-      let orgId: string;
-      let workspaceId: string;
+      let orgId!: string;
+      let workspaceId!: string;
       let baseId: string | null = null;
-      let targetName: string;
+      let extraBaseIds: string[] = [];
+      let targetName!: string;
 
-      if (body.baseId) {
-        baseId = parsePid(body.baseId, "bas");
-        const dir = await sql<{ workspace_id: string; org_id: string; name: string }>`
-          SELECT workspace_id, org_id, name FROM core.base_directory
-          WHERE base_id = ${baseId} AND status = 'active' AND deleted_at IS NULL LIMIT 1
-        `.execute(ctx.db);
-        const d = dir.rows[0];
-        const snap = d ? await compileForUser(ctx.db, user.id, baseId) : null;
-        if (!d || !snap?.effectiveBaseRole) {
-          notFound(request, reply, "Base not found");
-          return;
-        }
+      const basePids = body.baseIds ?? (body.baseId ? [body.baseId] : null);
+      if (basePids) {
         if (!(BASE_ROLES as readonly string[]).includes(body.role)) {
           validationProblem(request, reply, `Role "${body.role}" is not a base role`);
           return;
         }
-        if (!(await isOrgOwner(ctx.db, user.id, d.org_id))) {
-          forbidden(request, reply, "Only the owner can invite people");
-          return;
+        const ids = [...new Set(basePids.map((b) => parsePid(b, "bas")))];
+        const names: string[] = [];
+        for (const id of ids) {
+          const dir = await sql<{ workspace_id: string; org_id: string; name: string }>`
+            SELECT workspace_id, org_id, name FROM core.base_directory
+            WHERE base_id = ${id} AND status = 'active' AND deleted_at IS NULL LIMIT 1
+          `.execute(ctx.db);
+          const d = dir.rows[0];
+          const snap = d ? await compileForUser(ctx.db, user.id, id) : null;
+          if (!d || !snap?.effectiveBaseRole || (orgId && d.org_id !== orgId)) {
+            notFound(request, reply, "Base not found");
+            return;
+          }
+          if (!orgId) {
+            if (!(await isOrgOwner(ctx.db, user.id, d.org_id))) {
+              forbidden(request, reply, "Only the owner can invite people");
+              return;
+            }
+            orgId = d.org_id;
+            workspaceId = d.workspace_id;
+          }
+          names.push(d.name);
         }
-        orgId = d.org_id;
-        workspaceId = d.workspace_id;
-        targetName = d.name;
+        baseId = ids[0]!;
+        extraBaseIds = ids.slice(1);
+        targetName = names.length > 3 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more bases` : names.join(", ");
       } else {
         workspaceId = parsePid(body.workspaceId!, "wsp");
         const access = await getWorkspaceAccess(ctx.db, user.id, workspaceId);
@@ -166,11 +179,11 @@ export async function registerInvitationRoutes(
       await sql`
         INSERT INTO core.invitations (
           id, org_id, workspace_id, base_id, email, email_normalized, role,
-          resource_type, resource_id, token_hash, invited_by, expires_at
+          resource_type, resource_id, token_hash, invited_by, expires_at, extra_base_ids
         ) VALUES (
           ${inviteId}, ${orgId}, ${workspaceId}, ${baseId}, ${body.email}, ${emailNormalized},
           ${body.role}, ${baseId ? "base" : "workspace"}, ${baseId ?? workspaceId},
-          ${tokenHash}, ${user.id}, ${expiresAt}
+          ${tokenHash}, ${user.id}, ${expiresAt}, ${extraBaseIds}::uuid[]
         )
       `.execute(ctx.db);
 
@@ -196,7 +209,7 @@ export async function registerInvitationRoutes(
         action: "invite.created",
         targetType: "invitation",
         targetId: inviteId,
-        metadata: { email: emailNormalized, role: body.role, baseId },
+        metadata: { email: emailNormalized, role: body.role, baseId, extraBaseIds },
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
       });
@@ -207,6 +220,7 @@ export async function registerInvitationRoutes(
           email: body.email,
           workspaceId: pid("wsp", workspaceId),
           baseId: baseId ? pid("bas", baseId) : null,
+          baseIds: baseId ? [baseId, ...extraBaseIds].map((id) => pid("bas", id)) : [],
           role: body.role,
           status: "pending",
           expiresAt: expiresAt.toISOString(),
@@ -380,7 +394,7 @@ export async function registerInvitationRoutes(
 
       const invite = await sql<InviteRow>`
         SELECT id, org_id, workspace_id, base_id, email, email_normalized, role, status,
-               expires_at, invited_by, created_at
+               expires_at, invited_by, created_at, extra_base_ids
         FROM core.invitations
         WHERE token_hash = ${tokenHash}
         LIMIT 1
@@ -417,32 +431,40 @@ export async function registerInvitationRoutes(
 
         if (row.base_id) {
           const baseRole = row.role as BaseRole;
-          const existing = await sql<{ id: string; role: string }>`
-            SELECT id, role FROM core.access_grants
-            WHERE resource_type = 'base' AND resource_id = ${row.base_id}
-              AND principal_type = 'user' AND principal_id = ${user.id}
-            LIMIT 1
-          `.execute(trx);
-          const cur = existing.rows[0];
-          if (!cur) {
-            await sql`
-              INSERT INTO core.access_grants (
-                id, org_id, resource_type, resource_id, workspace_id, base_id,
-                principal_type, principal_id, role, source, granted_by
-              ) VALUES (
-                ${generateUuidV7()}, ${row.org_id}, 'base', ${row.base_id}, ${row.workspace_id}, ${row.base_id},
-                'user', ${user.id}, ${baseRole}, 'invite', ${row.invited_by}
-              )
+          for (const bid of [row.base_id, ...(row.extra_base_ids ?? [])]) {
+            const dir = await sql<{ workspace_id: string }>`
+              SELECT workspace_id FROM core.base_directory
+              WHERE base_id = ${bid} AND org_id = ${row.org_id} AND deleted_at IS NULL LIMIT 1
             `.execute(trx);
-          } else if (BASE_ROLE_RANK[baseRole] > (BASE_ROLE_RANK[cur.role as BaseRole] ?? 0)) {
+            const wsId = dir.rows[0]?.workspace_id;
+            if (!wsId) continue;
+            const existing = await sql<{ id: string; role: string }>`
+              SELECT id, role FROM core.access_grants
+              WHERE resource_type = 'base' AND resource_id = ${bid}
+                AND principal_type = 'user' AND principal_id = ${user.id}
+              LIMIT 1
+            `.execute(trx);
+            const cur = existing.rows[0];
+            if (!cur) {
+              await sql`
+                INSERT INTO core.access_grants (
+                  id, org_id, resource_type, resource_id, workspace_id, base_id,
+                  principal_type, principal_id, role, source, granted_by
+                ) VALUES (
+                  ${generateUuidV7()}, ${row.org_id}, 'base', ${bid}, ${wsId}, ${bid},
+                  'user', ${user.id}, ${baseRole}, 'invite', ${row.invited_by}
+                )
+              `.execute(trx);
+            } else if (BASE_ROLE_RANK[baseRole] > (BASE_ROLE_RANK[cur.role as BaseRole] ?? 0)) {
+              await sql`
+                UPDATE core.access_grants SET role = ${baseRole}, updated_at = now() WHERE id = ${cur.id}
+              `.execute(trx);
+            }
             await sql`
-              UPDATE core.access_grants SET role = ${baseRole}, updated_at = now() WHERE id = ${cur.id}
+              UPDATE data.base_runtime SET perm_epoch = perm_epoch + 1, updated_at = now()
+              WHERE base_id = ${bid}
             `.execute(trx);
           }
-          await sql`
-            UPDATE data.base_runtime SET perm_epoch = perm_epoch + 1, updated_at = now()
-            WHERE base_id = ${row.base_id}
-          `.execute(trx);
         } else if (row.workspace_id) {
           const wsRole = row.role as WorkspaceRole;
           const existing = await sql<{ id: string; role: string }>`

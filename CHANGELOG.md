@@ -8,6 +8,33 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-15
+
+### Added
+- **Access per base.** In Members & access a base's own role now overrides the role inherited from
+  its workspace (higher, lower, or **No access to this base**); **Reset** returns to the workspace
+  role. Workspace owners always keep full access. Migration `0079_base_access_overrides.sql`
+  allows the base role `none`.
+- **Invite to several bases at once.** "Selected bases only" with a tick list per workspace; one
+  invitation (and one email) opens all of them (`POST /v1/invitations` accepts `baseIds`).
+- **Change many rows at once** in a member's access table: tick rows, pick a role or No access,
+  Apply to selected.
+- **Notifications on the Home page** and **desktop notifications**: the bell is on Home too, checks
+  every 15 seconds, and after "Turn on" new notifications also appear as desktop notifications
+  (old ones are never replayed).
+
+### Fixed
+- **Help → Back stepped through every topic you read.** Topics replace each other in the history,
+  so Back returns to the page you opened Help from.
+- **Importing a CSV with columns named like existing fields** (Notes, Attachments, Record ID)
+  stopped with "New field names must be unique". Matching columns are now highlighted (with a
+  banner naming them) and each one gets its own choice: import into the existing field, import
+  as a new field with a name you choose, **replace** the existing field (it is deleted, and
+  Undo brings it back), don't import it, or pick a different field. Options that can't work are
+  greyed out with the reason (an attachment field can't take text; the primary field can't be
+  deleted). **Rename them for me** still fixes every name clash at once.
+- The base collaborator list counted expired grants.
+
 ## [0.10.0] - 2026-10-14
 
 ### Added

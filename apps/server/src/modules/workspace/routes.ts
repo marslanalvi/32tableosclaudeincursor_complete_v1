@@ -48,6 +48,7 @@ export async function registerWorkspaceRoutes(
               WHERE g.principal_type = 'user' AND g.principal_id = ${user.id}
                 AND g.workspace_id = w.id
                 AND g.resource_type IN ('workspace', 'base')
+                AND g.role <> 'none'
                 AND (g.expires_at IS NULL OR g.expires_at > now())
             )
           )

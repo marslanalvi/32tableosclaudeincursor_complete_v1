@@ -3,6 +3,8 @@ import { request } from "../api.ts";
 /** Owner-only access administration: members, roles, devices, API tokens. */
 
 export type GrantRole = "creator" | "editor" | "commenter" | "viewer";
+/** On a base only: block it although the workspace role would open it. */
+export type BaseGrantRole = GrantRole | "none";
 export type TokenScope = "read" | "write" | "delete";
 
 export interface OrgSummary {
@@ -47,7 +49,7 @@ export interface OrgAccess {
   org: { id: string; name: string; requireDeviceApproval: boolean };
   workspaces: { id: string; name: string; bases: { id: string; name: string }[] }[];
   members: OrgMember[];
-  invitations: { id: string; email: string; role: string; workspaceId: string | null; baseId: string | null; expiresAt: string }[];
+  invitations: { id: string; email: string; role: string; workspaceId: string | null; baseId: string | null; baseIds?: string[]; expiresAt: string }[];
   pendingDevices: number;
 }
 
@@ -89,7 +91,7 @@ export const adminApi = {
   setGrant(
     orgId: string,
     userId: string,
-    body: { workspaceId?: string; baseId?: string; role: GrantRole | null; expiresAt?: string | null },
+    body: { workspaceId?: string; baseId?: string; role: BaseGrantRole | null; expiresAt?: string | null },
   ) {
     return request<{ ok: true }>(`${org(orgId)}/members/${encodeURIComponent(userId)}/grants`, { method: "PUT", json: body });
   },
