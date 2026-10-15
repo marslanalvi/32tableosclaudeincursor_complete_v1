@@ -1,6 +1,6 @@
 import { Link, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
-import { Button, Input, Label } from "@tabula/ui";
+import { Button, Input, Label, PasswordInput } from "@tabula/ui";
 import { authErrorMessage, useSignup } from "../features/auth/use-auth.ts";
 import authStyles from "../features/auth/auth-layout.module.css";
 import { AuthTopNav } from "./login.tsx";
@@ -53,9 +53,8 @@ export function SignupPage() {
             </div>
             <div className={authStyles.field}>
               <Label htmlFor="password">Password</Label>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 autoComplete="new-password"
                 required
                 minLength={8}

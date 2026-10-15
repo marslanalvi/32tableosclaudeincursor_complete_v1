@@ -8,6 +8,16 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-15
+
+### Added
+- **Show password.** Sign in, sign up and the account's change-password fields have an eye button
+  that shows or hides what you typed (`PasswordInput` in `@tabula/ui`).
+
+### Changed
+- **CORS preflight cache:** the API answers preflight requests with `Access-Control-Max-Age: 7200`,
+  so browsers repeat them at most every 2 hours.
+
 ## [0.12.1] - 2026-10-15
 
 ### Fixed

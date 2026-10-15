@@ -8,6 +8,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.13.0",
+    date: "2026-10-15",
+    title: "Show your password while typing it.",
+    items: [
+      "Password fields (sign in, sign up, change password) have an eye button to show or hide the password.",
+      "Browsers now remember the API’s cross-origin check (CORS preflight) for 2 hours instead of repeating it.",
+    ],
+  },
+  {
     version: "0.12.1",
     date: "2026-10-15",
     title: "Faster syncs when many values don’t fit.",

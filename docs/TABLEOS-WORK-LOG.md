@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.12.1**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.13.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,12 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.13.0: show password, CORS max-age
+
+* `packages/ui/src/PasswordInput.tsx`: an input with an eye button (`aria-label` "Show password"/"Hide password", `type="button"` so Enter still submits). Used in `routes/login.tsx`, `routes/signup.tsx` and `AccountPage` (keeps its own `className`). `@tabula/ui` must be built (`--filter @tabula/ui build`) for the web typecheck; Vite reads its source.
+* `apps/server/src/http/app.ts`: `@fastify/cors` gets `maxAge: 7200`, so preflights return `Access-Control-Max-Age: 7200`.
+* Test: `.data/r2-shell/r14-ui.mjs`.
 
 ## v0.12.1: fast syncs with invalid values
 
