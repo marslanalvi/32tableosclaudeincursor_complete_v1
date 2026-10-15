@@ -8,6 +8,14 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-15
+
+### Fixed
+- **Syncs with many invalid values were very slow** (live Airtable syncs crawled for minutes):
+  each failing batch was retried one record at a time. Values are now checked against their field
+  while the source is read, so invalid ones are set aside up front and batches write normally
+  (2,000 records with invalid phones: about 4 seconds).
+
 ## [0.12.0] - 2026-10-15
 
 ### Fixed
