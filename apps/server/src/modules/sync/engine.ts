@@ -15,6 +15,7 @@ import { loadConnection, openCredentials, type ConnectionRow } from "../integrat
 import { gmailSource, gmailTokenProvider, parseGmailConfig } from "../integrations/gmail.js";
 import { hubspotSource, parseHubSpotConfig, SearchTooLarge } from "../integrations/hubspot.js";
 import { hasRejectedPushes, heldRecordIds, prunePushes, pushHubSpotEdits } from "../integrations/hubspot-push.js";
+import { FieldValidationError, getFieldType, isFieldTypeKey, type FieldConfig } from "@tabula/fields";
 import { ApiError } from "../../http/errors.js";
 import { SyncBusyError, SyncCancelledError, SyncError, type Conv, type MappedField, type SourceField, type SyncSource } from "./source.js";
 
@@ -598,6 +599,39 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
   `.execute(db);
   const known = new Map(mapRows.rows.map((r) => [r.source_record_id, r]));
 
+  // Values are checked against their destination field before writing, so a bad value (e.g. an
+  // invalid phone number) is set aside here instead of failing a whole batch.
+  const issues: SyncIssue[] = [];
+  const destToSrc = new Map(Object.entries(fieldMap).map(([s, d]) => [d, s]));
+  const primaryDest = srcFields[0] ? fieldMap[srcFields[0].id] : undefined;
+  const nameOfSrc = (srcFieldId: string) => srcFields.find((f) => f.id === srcFieldId)?.name ?? "a field";
+  const destFieldRows = new Map((await loadTableFieldRows(db, sync.table_id)).map((f) => [f.id, f]));
+  const precheck = (srcId: string, fields: Record<string, unknown>) => {
+    for (const [destId, v] of Object.entries(fields)) {
+      if (v === null || v === undefined) continue;
+      const f = destFieldRows.get(destId);
+      if (!f || f.type === "link" || f.type === "contact" || !isFieldTypeKey(f.type)) continue;
+      const def = getFieldType(f.type);
+      if (def.readOnly) continue;
+      try {
+        def.normalize(v, f.config as FieldConfig, { typecast: true, createOption: () => "opt_precheck" });
+      } catch (e) {
+        if (!(e instanceof FieldValidationError)) continue;
+        const srcFieldId = destToSrc.get(destId) ?? destId;
+        issues.push({
+          srcId,
+          destId: null,
+          sourceFieldId: srcFieldId,
+          fieldName: nameOfSrc(srcFieldId),
+          label: primaryDest ? wireText(fields[primaryDest]) : "",
+          value: wireText(v) || null,
+          message: e.message,
+        });
+        fields[destId] = null;
+      }
+    }
+  };
+
   const live = new Set<string>();
   const toCreate: Array<{ srcId: string; fields: Record<string, unknown>; hash: string }> = [];
   const toUpdate: Array<{ srcId: string; destId: string; fields: Record<string, unknown>; hash: string }> = [];
@@ -618,8 +652,13 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
       }
       const hash = createHash("sha1").update(JSON.stringify(fields)).digest("hex");
       const prev = known.get(key);
-      if (!prev) toCreate.push({ srcId: key, fields, hash });
-      else if (prev.content_hash !== hash) toUpdate.push({ srcId: key, destId: prev.dest_record_id, fields, hash });
+      if (!prev) {
+        precheck(key, fields);
+        toCreate.push({ srcId: key, fields, hash });
+      } else if (prev.content_hash !== hash) {
+        precheck(key, fields);
+        toUpdate.push({ srcId: key, destId: prev.dest_record_id, fields, hash });
+      }
     }
   }
   // Records edited here recently (or waiting to go out) keep their local values for now.
@@ -679,10 +718,6 @@ async function syncOnce(deps: SyncDeps, sync: SyncRow, since: Date | null): Prom
 
   // A value that doesn't fit its field (e.g. an invalid phone number) no longer fails the run:
   // the batch is retried record by record, the bad value is left empty and listed as an issue.
-  const issues: SyncIssue[] = [];
-  const destToSrc = new Map(Object.entries(fieldMap).map(([s, d]) => [d, s]));
-  const primaryDest = srcFields[0] ? fieldMap[srcFields[0].id] : undefined;
-  const nameOfSrc = (srcFieldId: string) => srcFields.find((f) => f.id === srcFieldId)?.name ?? "a field";
   const rejectedField = (err: unknown): string | null => {
     if (!(err instanceof ApiError) || err.code !== "FIELD_VALIDATION_FAILED") return null;
     const ref = err.meta?.["field"];

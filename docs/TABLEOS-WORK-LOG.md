@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.12.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.12.1**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,10 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.12.1: fast syncs with invalid values
+
+* After the 0.12.0 deploy, the live Airtable syncs (about 4,400 records each) crawled: batches full of invalid phone numbers fell back to one transaction per record. `syncOnce` now runs each new or changed value through `getFieldType(type).normalize` (typecast, stub `createOption`) while reading. A `FieldValidationError` becomes an issue and a null value up front, so batches don't fail. The record-by-record fallback stays for anything else. Measured locally: 2,000 records, all with invalid phones, in 4.1 s (`.data/r13-perf.mjs`).
 
 ## v0.12.0: sync issues and control, import stop and invalid entries, devices log, grouped history
 

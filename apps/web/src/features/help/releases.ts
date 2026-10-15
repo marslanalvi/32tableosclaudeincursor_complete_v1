@@ -8,6 +8,12 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.12.1",
+    date: "2026-10-15",
+    title: "Faster syncs when many values don’t fit.",
+    items: ["Syncs with lots of invalid values (for example phone numbers) now run at normal speed."],
+  },
+  {
     version: "0.12.0",
     date: "2026-10-15",
     title: "Reliable syncs you can stop, clearer imports, device and history logs.",
