@@ -89,6 +89,8 @@ export async function buildFastify(ctx: AppContext) {
     credentials: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     exposedHeaders: ["idempotent-replayed", "x-request-id", "retry-after", "x-tableos-version"],
+    // Browsers may cache the preflight answer for 2 hours.
+    maxAge: 7200,
   });
 
   await app.register(cookie, {

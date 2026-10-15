@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { accountApi, type SessionInfo } from "../../lib/api-areas/account.ts";
+import { PasswordInput } from "@tabula/ui";
 import { ApiProblemError } from "../../lib/api.ts";
 import { authQueryKey } from "../auth/use-auth.ts";
 import { qrSvg } from "./qr.ts";
@@ -107,15 +108,15 @@ function PasswordSection({ hasPassword }: { hasPassword: boolean }) {
       <form className={styles.form} onSubmit={submit}>
         <label className={styles.label}>
           Current password
-          <input className={styles.input} type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
+          <PasswordInput className={styles.input} autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} />
         </label>
         <label className={styles.label}>
           New password
-          <input className={styles.input} type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
+          <PasswordInput className={styles.input} autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} />
         </label>
         <label className={styles.label}>
           Confirm new password
-          <input className={styles.input} type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <PasswordInput className={styles.input} autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
         <div className={styles.actions}>
           <button type="submit" className={styles.primary} disabled={!current || !next || change.isPending}>
