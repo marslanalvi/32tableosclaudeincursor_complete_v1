@@ -46,7 +46,7 @@
   <h1>TableOS — Roles, Permissions &amp; Access</h1>
   <div class="sub">How accounts, organizations, workspaces, bases and roles work today, every rule in the code, the gaps, and a recommended model</div>
   <div class="meta">
-    Document version <b>2</b> — roles <b>R2</b>, TableOS <b>0.14.0</b> (version 1 described 0.13.0, commit <code>c2f239a</code>)<br />
+    Document version <b>3</b> — roles <b>R3</b>, TableOS <b>0.15.0</b> (version 1 described 0.13.0, commit <code>c2f239a</code>)<br />
     Prepared: 19 October 2026<br />
     Source: the TableOS code base (server permission checks, database schema, web screens) and tests run on a local copy of the system.
     Statements marked <span class="tested">tested</span> were reproduced on the local test system while writing this document.
@@ -73,12 +73,12 @@
 
 <!-- ============================================================ history -->
 <h2 class="pb" id="history">0. Version history and gap status</h2>
-<p>This document is updated with every release that changes who can do what. Sections 1–11 describe the system as it was in <b>0.13.0</b> (roles R1), and the evidence for each gap. This section says what has changed since. The running history is in <code>docs/roles-and-permissions/ROLES-CHANGELOG.md</code>.</p>
+<p>This document is updated with every release that changes who can do what. Sections 1–11 describe the system as it was in <b>0.13.0</b> (roles R1), and the evidence for each gap. This section says what has changed since; where it disagrees with sections 1–11, this section is current. The running history is in <code>docs/roles-and-permissions/ROLES-CHANGELOG.md</code>.</p>
 <table>
   <tr><th>Document</th><th>Roles</th><th>TableOS</th><th>What it describes</th></tr>
   <tr><td>1</td><td>R1</td><td>0.13.0</td><td>Starting point: open sign-up, a personal organization for everyone, anyone could create workspaces, copy or export bases.</td></tr>
-  <tr><td><b>2</b></td><td><b>R2</b></td><td><b>0.14.0</b></td><td><b>Phase 1 of the questionnaire</b>: sign-up by invitation or allowed email domain; no personal organizations; Owners and Admins create workspaces and bases, duplicate and export; contacts need a workspace role.</td></tr>
-  <tr><td>—</td><td>R3</td><td>phase 2</td><td>Planned: Owner, Admin, Member only; several Owners and transfer; Admins only get what they're assigned and manage people; one invite dialog.</td></tr>
+  <tr><td>2</td><td>R2</td><td>0.14.0</td><td>Phase 1 of the questionnaire: sign-up by invitation or allowed email domain; no personal organizations; Owners and Admins create workspaces and bases, duplicate and export; contacts need a workspace role.</td></tr>
+  <tr><td><b>3</b></td><td><b>R3</b></td><td><b>0.15.0</b></td><td><b>Phase 2</b>: three account types (Owner, Admin, Member); several Owners and Transfer ownership; Admins manage Members but open only what an Owner gives them; invitations with an account type; Workspace Owner role can be given; one invite form.</td></tr>
   <tr><td>—</td><td>R4</td><td>phase 3</td><td>Planned: two-factor for everyone, 30-day sessions, share-link rules, activity log, remaining gaps.</td></tr>
 </table>
 
@@ -95,20 +95,33 @@
   <tr><td>Deleted organizations</td><td>Still listed</td><td>Hidden from every list</td></tr>
 </table>
 
+<h3 id="changes-015">What changed in 0.15.0</h3>
+<table>
+  <tr><th>Area</th><th>Before (R2)</th><th>Now (R3)</th></tr>
+  <tr><td>Account types</td><td>Owner, Admin, Billing admin, Member, Guest (only Owner and Member in use)</td><td><b>Owner, Admin, Member.</b> Billing admin and Guest removed.</td></tr>
+  <tr><td>Owners</td><td>Exactly one, no transfer</td><td>One or more. Only Owners change account types. <b>Transfer ownership</b>: the other person becomes Owner, you become Admin. At least one Owner always remains.</td></tr>
+  <tr><td>Admins: data</td><td>Automatic Owner of every workspace</td><td>Only the workspaces and bases an Owner gives them.</td></tr>
+  <tr><td>Admins: people</td><td>Nothing</td><td>Invite Members; change their roles, end dates and No access; suspend or remove them; approve or revoke their devices. Only where the Admin is Creator, and never above the Admin's own role. Never Owners, other Admins or themselves.</td></tr>
+  <tr><td>Admins: organization</td><td>Create workspaces and bases</td><td>Create workspaces; rename or delete any workspace; create API tokens (their own only); change security settings; see the device log. No billing.</td></tr>
+  <tr><td>Invitations</td><td>Owner only; always to a workspace or base; always Member</td><td>Owners and Admins. Owners can invite Admins and Owners, with or without a workspace. Accepting never lowers an account type.</td></tr>
+  <tr><td>Workspace Owner role</td><td>Couldn't be given</td><td>Owners and Admins can give it.</td></tr>
+  <tr><td>Invite screens</td><td>Home Share always gave the whole workspace</td><td>One form everywhere: whole workspace or selected bases.</td></tr>
+</table>
+
 <h3>Gap status</h3>
 <table>
   <tr><th>Gap</th><th>Status</th><th>Note</th></tr>
-  <tr><td>G1 personal organizations</td><td><span class="closed">closed 0.14.0</span></td><td>No new ones. The 13 existing ones on live (25 empty or near-empty workspaces, 3 small bases) are removed after your approval, reversibly.</td></tr>
+  <tr><td>G1 personal organizations</td><td><span class="closed">closed 0.14.0</span></td><td>No new ones. The 13 existing ones on live were removed on 19 Oct 2026 (reversible).</td></tr>
   <tr><td>G2 duplicate copies data out</td><td><span class="closed">closed 0.14.0</span></td><td>Live check: no base had been copied into another organization.</td></tr>
   <tr><td>G3 everyone creates workspaces</td><td><span class="closed">closed 0.14.0</span></td><td></td></tr>
   <tr><td>G4 export can't be restricted</td><td><span class="closed">closed 0.14.0</span></td><td>Owners and Admins only.</td></tr>
-  <tr><td>G5 open sign-up</td><td><span class="closed">closed 0.14.0</span></td><td>Invitation or allowed domain (@bluecascade.org, @gmail.com to be set on live).</td></tr>
-  <tr><td>G6 single Owner</td><td><span class="planned">phase 2</span></td><td>Several Owners, transfer.</td></tr>
-  <tr><td>G7 half-built Admin, unused roles</td><td><span class="planned">phase 2</span></td><td>Owner, Admin, Member only.</td></tr>
-  <tr><td>G8 delegated invites</td><td><span class="planned">phase 2</span></td><td>Admins invite; workspace Owner role assignable.</td></tr>
+  <tr><td>G5 open sign-up</td><td><span class="closed">closed 0.14.0</span></td><td>Invitation or allowed domain (@bluecascade.org and @gmail.com on live).</td></tr>
+  <tr><td>G6 single Owner</td><td><span class="closed">closed 0.15.0</span></td><td>Several Owners, transfer.</td></tr>
+  <tr><td>G7 half-built Admin, unused roles</td><td><span class="closed">closed 0.15.0</span></td><td>Owner, Admin, Member only; Admin as in B3.</td></tr>
+  <tr><td>G8 delegated invites</td><td><span class="closed">closed 0.15.0</span></td><td>Admins invite; Workspace Owner role can be given.</td></tr>
   <tr><td>G9 contacts open to all</td><td><span class="closed">closed 0.14.0</span></td><td></td></tr>
   <tr><td>G10 interface-only</td><td><span class="planned">postponed</span></td><td>Keep roles minimal for now (B12).</td></tr>
-  <tr><td>G11 two invite screens</td><td><span class="planned">phase 2</span></td><td></td></tr>
+  <tr><td>G11 two invite screens</td><td><span class="closed">closed 0.15.0</span></td><td>One form everywhere.</td></tr>
   <tr><td>G12–G20</td><td><span class="planned">phase 3</span></td><td>Sessions, two-factor, share links, field permissions, Runs as, notifications, move base, member emails, activity log.</td></tr>
 </table>
 
@@ -417,12 +430,12 @@ Mahad signs up and accepts:
   <tr><td>G3</td><td><span class="sev h">High</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Everyone can create workspaces.</b> The server only requires being Owner of <i>an</i> organization, which everyone is (G1); <i>+ Create workspace</i> is shown to everybody and silently creates it in the person's own organization. There is no setting "Who can create workspaces". <span class="tested">tested</span></td><td><code>workspace/routes.ts</code> 70–118; Home sidebar</td></tr>
   <tr><td>G4</td><td><span class="sev h">High</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Export cannot be restricted.</b> Viewer and Commenter can download every table as CSV/Excel (and see all data through the base's API with a token if they are Owner). Airtable lets owners restrict export to Creators. <span class="tested">tested</span></td><td><code>permissions/authorize.ts</code> (viewer has <code>export.data</code>); <code>import-export/routes.ts</code> 292, 354</td></tr>
   <tr><td>G5</td><td><span class="sev h">High</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Open sign-up.</b> Anyone who reaches the site can create an account and an organization; there is no invite-only mode or allowed-email-domain rule.</td><td><code>auth/routes.ts</code> signup (public)</td></tr>
-  <tr><td>G6</td><td><span class="sev h">High</span></td><td><b>Single point of control.</b> Only the organization Owner can invite, change roles, approve devices or create tokens. Ownership can't be transferred and there can't be a second Owner. If the Owner is away or leaves, nobody can manage access.</td><td><code>members/routes.ts</code> <code>ownerOrg</code> 68–75; <code>invitations/routes.ts</code></td></tr>
-  <tr><td>G7</td><td><span class="sev m">Medium</span></td><td><b>Admin role half-built.</b> Admin gets Owner-level data access (Owner of every workspace) but cannot manage people, and no screen or API can assign it. Billing admin and Guest are unused.</td><td><code>access/workspace-access.ts</code> 29–31; no assigning route</td></tr>
-  <tr><td>G8</td><td><span class="sev m">Medium</span></td><td><b>No delegated invites.</b> Workspace Owners and base Creators can't invite collaborators (Airtable allows it). The workspace Owner role can't be given to anyone else.</td><td><code>invitations/routes.ts</code> 120–137</td></tr>
+  <tr><td>G6</td><td><span class="sev h">High</span><br /><span class="closed">closed 0.15.0</span></td><td><b>Single point of control.</b> Only the organization Owner can invite, change roles, approve devices or create tokens. Ownership can't be transferred and there can't be a second Owner. If the Owner is away or leaves, nobody can manage access.</td><td><code>members/routes.ts</code> <code>ownerOrg</code> 68–75; <code>invitations/routes.ts</code></td></tr>
+  <tr><td>G7</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.15.0</span></td><td><b>Admin role half-built.</b> Admin gets Owner-level data access (Owner of every workspace) but cannot manage people, and no screen or API can assign it. Billing admin and Guest are unused.</td><td><code>access/workspace-access.ts</code> 29–31; no assigning route</td></tr>
+  <tr><td>G8</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.15.0</span></td><td><b>No delegated invites.</b> Workspace Owners and base Creators can't invite collaborators (Airtable allows it). The workspace Owner role can't be given to anyone else.</td><td><code>invitations/routes.ts</code> 120–137</td></tr>
   <tr><td>G9</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Contacts directory is open to every organization member</b>, including people invited to one base only.</td><td><code>contacts/routes.ts</code> 48–51; <code>access/helpers.ts</code> 6–27</td></tr>
   <tr><td>G10</td><td><span class="sev m">Medium</span></td><td><b>No interface-only access.</b> To use an interface a person needs a role on the whole base. The <code>interface_only</code> role exists but isn't offered.</td><td><code>permissions/roles.ts</code>; <code>interfaces/routes.ts</code></td></tr>
-  <tr><td>G11</td><td><span class="sev m">Medium</span></td><td><b>Two invite screens behave differently.</b> Home → workspace <i>Share</i> always gives the whole workspace; Members &amp; access offers selected bases. This caused "I gave one base and they got the whole workspace" on live.</td><td><code>routes/home.tsx</code> share dialog</td></tr>
+  <tr><td>G11</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.15.0</span></td><td><b>Two invite screens behave differently.</b> Home → workspace <i>Share</i> always gives the whole workspace; Members &amp; access offers selected bases. This caused "I gave one base and they got the whole workspace" on live.</td><td><code>routes/home.tsx</code> share dialog</td></tr>
   <tr><td>G12</td><td><span class="sev m">Medium</span></td><td><b>Sessions never expire.</b> An unattended or stolen browser stays signed in until signed out, password changed, device revoked or member removed. No organization policy for session length.</td><td>migration <code>0076_sessions_no_expiry.sql</code></td></tr>
   <tr><td>G13</td><td><span class="sev m">Medium</span></td><td><b>Owner account is the softest high-value target.</b> It is exempt from lockout and device approval and MFA is optional; nobody can require MFA.</td><td><code>auth/lockout.ts</code> 74–81; <code>access/devices.ts</code></td></tr>
   <tr><td>G14</td><td><span class="sev m">Medium</span></td><td><b>Public share links need no approval.</b> Any Editor can publish a view or the whole base on a public link; no organization switch to disable public links or require passwords. "Allow copy" isn't enforced by the server.</td><td><code>share/routes.ts</code> 198–290</td></tr>

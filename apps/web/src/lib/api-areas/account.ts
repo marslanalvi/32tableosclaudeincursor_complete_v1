@@ -33,6 +33,9 @@ export interface InvitationPreview {
   workspaceName: string | null;
   baseName: string | null;
   inviterName: string | null;
+  /** Account type after accepting: member, admin or owner. */
+  orgRole?: string;
+  organizationName?: string | null;
 }
 
 /** Login either signs in (`user`) or asks for the second factor. */
@@ -92,7 +95,15 @@ export const accountApi = {
       { method: "POST", json: { token } },
     );
   },
-  createInvitation(body: { email: string; role: string; workspaceId?: string; baseId?: string; baseIds?: string[] }) {
+  createInvitation(body: {
+    email: string;
+    role?: string;
+    workspaceId?: string;
+    baseId?: string;
+    baseIds?: string[];
+    orgRole?: "member" | "admin" | "owner";
+    organizationId?: string;
+  }) {
     return request<{ invitation: InvitationPreview & { acceptUrl: string } }>("/v1/invitations", {
       method: "POST",
       json: body,

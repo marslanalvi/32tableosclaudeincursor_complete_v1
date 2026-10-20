@@ -9,8 +9,8 @@ import { LimitsService } from "./limits-service.js";
 import { resolveBillingOrgId } from "./resolve-org.js";
 import { upgradeOrgToTeamPlan } from "./subscription.js";
 
-/** Only org owners and billing admins may change the plan. */
-const BILLING_ROLES = new Set(["owner", "billing_admin"]);
+/** Only org Owners may change the plan (Admins don't see billing, questionnaire B3). */
+const BILLING_ROLES = new Set(["owner"]);
 
 const upgradeBody = z.object({
   organizationId: z.string().optional(),

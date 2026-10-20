@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { api, type BaseSummary, type Workspace } from "../lib/api.ts";
 import { shellApi } from "../lib/api-areas/shell.ts";
 import { adminApi, type OrgSummary } from "../lib/api-areas/admin.ts";
+import { InviteForm } from "../features/admin/AdminPage.tsx";
 import { useMe } from "../features/auth/use-auth.ts";
 import { AccountMenu } from "../features/base/AccountMenu.tsx";
 import { NotificationsBell } from "../features/notifications/NotificationsBell.tsx";
@@ -241,68 +242,31 @@ function MembersDialog({
     queryKey: ["workspaces", workspace.id, "members"],
     queryFn: () => shellApi.workspaceMembers(workspace.id),
   });
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("editor");
-  const [inviteLink, setInviteLink] = useState<string | null>(null);
-  const invite = useMutation({
-    mutationFn: () => shellApi.invite(workspace.id, email.trim(), role),
-    onSuccess: (res) => {
-      toast.success(`Invitation sent to ${res.invitation.email}`);
-      setEmail("");
-      if (res.invitation.acceptToken) {
-        setInviteLink(
-          `${window.location.origin}/invite/${encodeURIComponent(res.invitation.acceptToken)}`,
-        );
-      }
-      void queryClient.invalidateQueries({ queryKey: ["workspaces", workspace.id, "members"] });
-    },
+  // One invite form everywhere: the Members & access form, starting on this workspace.
+  const orgId = workspace.organizationId ?? "";
+  const manager = workspace.orgRole === "owner" || workspace.orgRole === "admin";
+  const accessQuery = useQuery({
+    queryKey: ["admin", "access", orgId],
+    queryFn: () => adminApi.access(orgId),
+    enabled: manager && Boolean(orgId),
   });
+  const here = accessQuery.data?.workspaces.find((w) => w.id === workspace.id);
   return (
     <Dialog title={`Share “${workspace.name}”`} onClose={onClose} wide>
-      <form
-        className={styles.inviteRow}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (email.trim()) invite.mutate();
-        }}
-      >
-        <input
-          className={uiStyles.input}
-          type="email"
-          placeholder="Invite by email"
-          value={email}
-          required
-          onChange={(e) => setEmail(e.target.value)}
+      {manager && accessQuery.data && here ? (
+        <InviteForm
+          orgId={orgId}
+          data={accessQuery.data}
+          defaultScope={here.manageable !== false ? `wsp:${workspace.id}` : "bases"}
+          onInvited={() => void queryClient.invalidateQueries({ queryKey: ["workspaces", workspace.id, "members"] })}
         />
-        <select
-          className={uiStyles.select}
-          style={{ width: 140 }}
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          aria-label="Role"
-        >
-          <option value="creator">Creator</option>
-          <option value="editor">Editor</option>
-          <option value="commenter">Commenter</option>
-          <option value="viewer">Read only</option>
-        </select>
-        <button
-          type="submit"
-          className={uiStyles.btnPrimary}
-          disabled={!email.trim() || invite.isPending}
-        >
-          {invite.isPending ? "Inviting…" : "Invite"}
-        </button>
-      </form>
-      {invite.isError ? <p className={uiStyles.error}>{errorMessage(invite.error)}</p> : null}
-      {inviteLink ? (
-        <p className={styles.inviteLink}>
-          Invite link (share it if email isn’t configured):{" "}
-          <input className={uiStyles.input} readOnly value={inviteLink} onFocus={(e) => e.currentTarget.select()} />
-        </p>
+      ) : manager && accessQuery.isLoading ? (
+        <p className={uiStyles.muted}>Loading…</p>
       ) : null}
       <p className={uiStyles.muted}>
-        Only the owner can invite people. To give someone access to a single base, set an end date, approve their devices or remove them, open{" "}
+        {manager && here
+          ? "Choose the whole workspace or selected bases. To change roles, set end dates, approve devices or remove people, open "
+          : "Owners and Admins invite people. They manage access in "}
         <a href="/admin">Members &amp; access</a>.
       </p>
       <h3 className={styles.membersTitle}>Workspace members</h3>
@@ -505,7 +469,7 @@ function WorkspaceSection({
               </button>
             )}
             items={[
-              ...(workspace.workspaceRole === "owner"
+              ...(workspace.workspaceRole === "owner" || workspace.orgRole === "admin"
                 ? [{ key: "rename", label: "Rename workspace", icon: "✎", onSelect: () => setRenamingWs(true) }]
                 : []),
               { key: "members", label: "Members and invites", icon: "👥", onSelect: () => setSharing(true) },

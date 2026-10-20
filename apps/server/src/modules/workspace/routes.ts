@@ -21,12 +21,15 @@ export async function registerWorkspaceRoutes(
   app: FastifyInstance,
   ctx: AppContext,
 ): Promise<void> {
-  /** `workspace.manage` (rename, delete) is owner-only (architecture/19 §20.2.2). */
+  /**
+   * Rename and delete: workspace owners, plus the organization's Admins on any workspace
+   * (questionnaire B3), even ones they can't open.
+   */
   async function assertWorkspaceOwner(userId: string, workspaceId: string): Promise<void> {
     const access = await getWorkspaceAccess(ctx.db, userId, workspaceId);
-    if (!access?.workspaceRole) throw new ApiError(404, "NOT_FOUND", "Workspace not found");
-    if (access.workspaceRole !== "owner") {
-      throw new ApiError(403, "FORBIDDEN", "Only workspace owners can rename or delete a workspace");
+    if (!access || (!access.workspaceRole && access.orgRole !== "admin")) throw new ApiError(404, "NOT_FOUND", "Workspace not found");
+    if (access.workspaceRole !== "owner" && access.orgRole !== "admin") {
+      throw new ApiError(403, "FORBIDDEN", "Only workspace owners and Admins can rename or delete a workspace");
     }
   }
 
@@ -70,10 +73,11 @@ export async function registerWorkspaceRoutes(
           name: r.name,
           organizationId: pid("org", r.org_id),
           organizationName: r.org_name,
-          /** Owner/Admin may create bases here, duplicate and export. */
-          canManage: isOrgManagerRole(r.org_role),
-          /** null = only reaches some bases here (no workspace role: no rename, no contacts). */
-          workspaceRole: isOrgManagerRole(r.org_role) ? "owner" : r.ws_role,
+          orgRole: r.org_role,
+          /** May create bases here: Owners, and Admins who are Creator or Owner of this workspace. */
+          canManage: r.org_role === "owner" || (isOrgManagerRole(r.org_role) && (r.ws_role === "owner" || r.ws_role === "creator")),
+          /** null = only reaches some bases here (no workspace role: no contacts). */
+          workspaceRole: r.org_role === "owner" ? "owner" : r.ws_role,
         })),
       });
     } catch (err) {
@@ -264,12 +268,12 @@ export async function registerWorkspaceRoutes(
         }
         void reply.send({
           members: rows.rows
-            .filter((r) => r.ws_role || r.org_role === "owner" || r.org_role === "admin")
+            .filter((r) => r.ws_role || r.org_role === "owner")
             .map((r) => ({
             id: pid("usr", r.id),
             name: r.display_name || r.email,
             email: r.email,
-            role: r.ws_role ?? (r.org_role === "owner" || r.org_role === "admin" ? "owner" : r.org_role),
+            role: r.org_role === "owner" ? "owner" : r.ws_role,
           })),
           invitations,
         });

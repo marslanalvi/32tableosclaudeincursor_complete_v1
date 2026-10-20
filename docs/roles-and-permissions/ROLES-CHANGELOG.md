@@ -10,57 +10,62 @@ each change: `Roles-Decisions-Questionnaire.md`.
 | Roles version | App version | Status | Summary |
 |---|---|---|---|
 | R1 | up to 0.13.0 | had | Anyone could sign up and got their own organization; everyone could create workspaces; anyone who could open a base could copy or export it. |
-| **R2** | **0.14.0** | **have (phase 1)** | Sign-up by invitation or allowed domain; Owners and Admins run workspaces, bases, duplicates and exports. |
-| R3 | phase 2 | planned | Three account types (Owner, Admin, Member); several Owners; Admins only get what they're assigned; one invite dialog. |
+| R2 | 0.14.0 | had (phase 1) | Sign-up by invitation or allowed domain; Owners and Admins run workspaces, bases, duplicates and exports. |
+| **R3** | **0.15.0** | **have (phase 2)** | Three account types (Owner, Admin, Member); several Owners and transfer; Admins manage Members but only reach what they're given; one invite form. |
 | R4 | phase 3 | planned | Two-factor for everyone, 30-day sessions, share-link rules, activity log and the remaining gaps. |
 
 ## Account types
 
 Account types are the **organization role**: they decide what someone can run in the organization.
-Data roles (Creator, Editor, Commenter, Viewer) decide what they can do inside a workspace or base.
+Data roles (Workspace Owner, Creator, Editor, Commenter, Viewer) decide what they can do inside a
+workspace or base.
 
-| Account type | R1 (had) | R2 (have, 0.14.0) | R3 (planned) |
+| Account type | R1 (had) | R2 (0.14.0) | R3 (have, 0.15.0) |
 |---|---|---|---|
-| Owner | One per organization, the person who signed up. Everything, plus Members & access. | Same. The only one who manages people (Members & access). | One or more Owners; ownership can be transferred. Only Owners create Admins and Owners. Planned Owners: ai.deptbcc@bluecascade.org, ai.departmentbluecascade@gmail.com. |
-| Admin | Defined but nobody could be made Admin. Implicit owner of every workspace. | Same as R1, plus may create workspaces, bases, duplicate and export. Still nobody can be made Admin from the UI. | Invite people; change roles, dates and "No access"; suspend or remove members (not Owners); approve devices; create, rename and delete workspaces; API tokens; security settings; audit log. Data access only where assigned. No billing. First Admin: awais.ahmed@bluecascade.org. |
-| Member | Everyone else. Could create workspaces and had their own organization. | Can only open what they're given. No workspaces, bases, duplicates or exports. | Same as R2. |
-| Billing admin | Defined, unused. | Defined, unused. | Removed. |
-| Guest | Defined, unused. | Defined, unused. | Removed. |
+| Owner | One per organization, the person who signed up. Everything, plus Members & access. | Same. The only one who manages people. | **One or more.** Everything: every workspace and base, all people including Admins and Owners, billing. Only Owners change account types. **Transfer ownership** makes someone Owner and you Admin; at least one Owner always remains. |
+| Admin | Defined but nobody could be made Admin. Implicit owner of every workspace. | Same as R1, plus create workspaces, bases, duplicate and export. Nobody could be made Admin. | **Assigned by Owners.** Invites and manages **Members** (roles, end dates, No access, suspend, remove, devices); creates workspaces; renames or deletes any workspace; creates API tokens (sees only their own); changes security settings; sees the device log. **Opens only what an Owner gives them**, hands out access only where they're Creator, never above their own role. No billing. Can't act on Owners, other Admins or themselves. |
+| Member | Everyone else. Could create workspaces and had their own organization. | Opens only what they're given. No workspaces, bases, duplicates or exports. | Same as R2. |
+| Billing admin | Defined, unused. | Defined, unused. | **Removed.** |
+| Guest | Defined, unused. | Defined, unused. | **Removed.** |
 
 ## Who can do what
 
-| Action | R1 (had) | R2 (have, 0.14.0) | Planned |
-|---|---|---|---|
-| Create an account | Anyone | Only with a pending invitation, or an email at an allowed domain (set per organization in Security; joins as Member with no access, Owners and Admins are notified) | — |
-| Get an organization of your own | Everyone, on sign-up | Nobody (only the very first account on a new installation) | — |
-| Create a workspace | Everyone | Owners and Admins; they choose the organization if they run several | Same |
-| Create a base | Workspace Creators and up | Owners and Admins | Same |
-| Duplicate a base | Anyone who could open it, into any workspace (even another organization) | Owners and Admins, same organization only | Same |
-| Export CSV / Excel | Anyone who could open the table | Owners and Admins (copy and paste in the grid still works) | Same |
-| Workspace contacts directory | Anyone who could reach any base in the workspace | Only people with a role on the workspace | Same |
-| Rename / delete a workspace | Workspace owners | Same (menu hidden for others) | Owners and Admins |
-| Invite people | Owner | Owner | Owners and Admins, one invite dialog everywhere; the workspace Owner role can be given |
-| Change roles and access dates | Owner | Owner | Owners and Admins (Admins can't change Owners) |
-| Share links | Creators and up (Viewers refused) | Same | Creators and up; "allow copy" enforced |
-| Two-factor sign-in | Optional | Optional | Required for everyone |
-| Session length | Never expires | Same | 30 days |
-| Lockout and device approval | Everyone except the Owner | Same | Same (Owner stays exempt) |
+| Action | R1 (had) | R2 (0.14.0) | R3 (have, 0.15.0) | Planned |
+|---|---|---|---|---|
+| Create an account | Anyone | Invitation, or an email at an allowed domain | Same | — |
+| Own organization on sign-up | Everyone | Nobody | Same | — |
+| Create a workspace | Everyone | Owners and Admins (choose the organization) | Same | — |
+| Create a base | Workspace Creators and up | Owners and Admins | Owners; Admins in workspaces where they're Creator or Workspace Owner | — |
+| Duplicate a base / export | Anyone who could open it | Owners and Admins | Owners; Admins on bases they can open | — |
+| Rename / delete a workspace | Workspace owners | Same | Workspace Owners, and Admins (any workspace) | — |
+| Invite people | Owner | Owner | **Owners and Admins** (Admins: Members only, within their reach). One form on Members & access and Home Share. Owners can invite Admins and Owners directly. | — |
+| Give the Workspace Owner role | Nobody | Nobody | **Owners and Admins** (Admins only where they are Workspace Owner) | — |
+| Change roles, end dates, No access | Owner | Owner | Owners; Admins for Members, within their reach | — |
+| Suspend / remove people | Owner | Owner | Owners (anyone but themselves); Admins (Members) | — |
+| Approve / revoke devices | Owner | Owner | Owners; Admins for Members' devices (not their own) | — |
+| API tokens | Owner | Owner | Owners (see all) and Admins (their own; a token reaches only what its creator can) | — |
+| Security settings | Owner | Owner | Owners and Admins | — |
+| Billing | Owner, Billing admin | Same | Owners | — |
+| Share links | Creators and up | Same | Same | Creators and up; "allow copy" enforced |
+| Two-factor sign-in | Optional | Optional | Optional | Required for everyone |
+| Session length | Never expires | Same | Same | 30 days |
+| Lockout and device approval | Everyone except the Owner | Same | Everyone except Owners | Same |
 
 ## Gaps (from the PDF)
 
 | Gap | What | Status |
 |---|---|---|
-| G1 | Everyone gets a personal organization | **Closed in 0.14.0** (code). Live clean-up of 13 personal organizations is waiting for approval. |
+| G1 | Everyone gets a personal organization | **Closed in 0.14.0.** The 13 personal organizations on live were removed on 2026-10-19 (reversible). |
 | G2 | Duplicate copies data out of the organization | **Closed in 0.14.0.** Live check: no cross-organization copies found. |
 | G3 | Everyone can create workspaces | **Closed in 0.14.0** |
 | G4 | Anyone who can read can export | **Closed in 0.14.0** |
 | G5 | Open sign-up | **Closed in 0.14.0** (invitation or allowed domain) |
-| G6 | Only one Owner, no transfer | Planned, phase 2 |
-| G7 | Unused billing_admin and guest roles | Planned, phase 2 |
-| G8 | Only the Owner can invite | Planned, phase 2 |
+| G6 | Only one Owner, no transfer | **Closed in 0.15.0** (several Owners, transfer) |
+| G7 | Half-built Admin; unused Billing admin and Guest | **Closed in 0.15.0** (Admin completed, the two roles removed) |
+| G8 | Only the Owner can invite; Workspace Owner can't be given | **Closed in 0.15.0** (Owners and Admins, per B3/B5) |
 | G9 | Contacts visible with only a base role | **Closed in 0.14.0** |
 | G10 | Interface-only access | Postponed (keep roles minimal, B12) |
-| G11 | Two different invite dialogs | Planned, phase 2 |
+| G11 | Two different invite dialogs | **Closed in 0.15.0** (one form) |
 | G12 | Sessions never expire | Planned, phase 3 |
 | G13 | Two-factor optional | Planned, phase 3 |
 | G14 | Share links and "allow copy" | Planned, phase 3 |
@@ -69,17 +74,27 @@ Data roles (Creator, Editor, Commenter, Viewer) decide what they can do inside a
 | G17 | Notifications from bases you can't open | Planned, phase 3 |
 | G18 | Can't move a base to another workspace | Planned, phase 3 |
 | G19 | Member emails visible to everyone | Planned, phase 3 |
-| G20 | No activity log for access changes | Planned, phase 3 |
+| G20 | No activity log for access changes | Planned, phase 3 (Admins already see the device log) |
 
 ## Release notes
+
+### R3 — 0.15.0 (2026-10-20)
+- Three account types: Owner, Admin, Member. Billing admin and Guest removed (nobody on live held them).
+- Several Owners; Transfer ownership; at least one Owner always remains.
+- Admins as defined in B3, limited to what an Owner gives them; Admins no longer get automatic access.
+- Invitations carry an account type; Admin/Owner invitations can come without any workspace.
+- Workspace Owner role can be given; Home Share uses the Members & access invite form.
+- Pending your approval on live: invite ai.deptbcc@bluecascade.org and ai.departmentbluecascade@gmail.com
+  as Owners and awais.ahmed@bluecascade.org as Admin (none of them has an account yet).
 
 ### R2 — 0.14.0 (2026-10-19)
 - Sign-up restricted to invitations and allowed email domains; no personal organizations.
 - Allowed sign-up domains in Members & access → Security.
 - Workspaces, bases, duplicating and exporting limited to Owners and Admins.
 - Contacts directory limited to people with a workspace role.
-- Pending your approval: removing the 13 personal organizations on live (report in
-  `.data/r16-live-cleanup-report.json`; reversible).
+- Live, approved and done on 2026-10-19: the 13 personal organizations were removed (soft delete:
+  25 workspaces and 3 small test bases trashed; backup `.data/r16-removed-orgs-live-1792482088001.json`
+  restores them). Allowed sign-up domains on the company organization: @bluecascade.org, @gmail.com.
 
 ### R1 — up to 0.13.0
 - Starting point described in `TableOS-Roles-and-Permissions.pdf` (version 1).

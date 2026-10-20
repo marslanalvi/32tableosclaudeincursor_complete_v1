@@ -171,8 +171,10 @@ export interface Workspace {
   name: string;
   organizationId?: string;
   organizationName?: string;
-  /** Owner/Admin of the workspace's organization: may create and duplicate bases and export. */
+  /** May create bases here: Owners, and Admins who are Creator or Owner of this workspace. */
   canManage?: boolean;
+  /** Account type in the workspace's organization: owner, admin or member. */
+  orgRole?: string;
   /** null when the person only has roles on some bases in this workspace. */
   workspaceRole?: string | null;
 }

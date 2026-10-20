@@ -90,7 +90,7 @@ export const HELP_TOPICS: HelpTopic[] = [
           <li>Type straight into cells, or <To topic="import-export">import a CSV or Excel file</To>.</li>
           <li>Add more tables with the <b>+</b> next to the table tabs, and connect them with <To topic="linking">link fields</To>.</li>
           <li>Create <To topic="views">views</To> for the ways your team looks at the data.</li>
-          <li>Ask the owner to <To topic="access">invite your colleagues</To>.</li>
+          <li>Ask an Owner or Admin to <To topic="access">invite your colleagues</To>.</li>
         </ol>
         <h2>Popular topics</h2>
         <div className={s.cards}>
@@ -600,7 +600,7 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
           <li><b>Expiration date</b>: the link stops working afterwards.</li>
           <li><b>Allow copying data</b>: lets visitors copy or download records.</li>
         </ul>
-        <p>Turn the link off at any time to stop sharing. To give someone access they can sign in with, ask the owner to invite them.</p>
+        <p>Turn the link off at any time to stop sharing. To give someone access they can sign in with, ask an Owner or Admin to invite them.</p>
       </>
     ),
   },
@@ -630,19 +630,32 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
     id: "access",
     group: "Admin & security",
     title: "Members, roles & privileges",
-    summary: "Only the owner invites people and decides what each person can do, per workspace or per base.",
-    keywords: "members roles privileges permissions owner creator editor commenter viewer read only interface invite remove suspend access expire",
+    summary: "Owners and Admins invite people and decide what each person can do, per workspace or per base.",
+    keywords: "members roles privileges permissions owner admin member account type transfer ownership creator editor commenter viewer read only interface invite remove suspend access expire",
     body: () => (
       <>
         <p>
-          Each organization has one <b>owner</b>. Only the owner can invite people, change roles, set access end dates, approve devices and create
-          API tokens. Everyone else sees what they’ve been given access to and nothing more. Open <b>Members &amp; access</b> from the account menu.
+          Every person has an <b>account type</b> in the organization, and a <b>role</b> on the workspaces and bases they’re given. Open{" "}
+          <b>Members &amp; access</b> from the account menu.
+        </p>
+        <h2>Account types</h2>
+        <Table
+          head={["Account type", "Can do"]}
+          rows={[
+            ["Owner", "Everything: every workspace and base, all people (including Admins and other Owners), devices, API tokens, security and billing. An organization can have several Owners."],
+            ["Admin", "Invites and manages Members (roles, end dates, suspend, remove, devices), creates workspaces, renames or deletes any workspace, creates API tokens, changes security settings. Opens only the workspaces and bases an Owner gives them, and hands out access only where they are Creator, up to their own role. No billing."],
+            ["Member", "Opens only what they’re given."],
+          ]}
+        />
+        <p>
+          Only Owners change account types. To hand the organization over, use <b>Transfer ownership</b> on a person: they become Owner and you
+          become Admin. An organization always keeps at least one Owner.
         </p>
         <h2>Roles</h2>
         <Table
           head={["Role", "Can do"]}
           rows={[
-            ["Owner", "Everything, including managing members, devices, API tokens and security settings. There is one owner per organization."],
+            ["Workspace Owner", "Creator on every base in the workspace, and may rename or delete it. Given by Owners and Admins."],
             ["Creator", "Everything in the base: tables, fields, views, automations, interfaces, sharing, plus all record changes."],
             ["Editor", "Add, edit and delete records; create and edit views. Can’t change tables or fields."],
             ["Commenter", "Read everything and comment on records."],
@@ -661,7 +674,8 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
         <h2>Inviting people</h2>
         <ol>
           <li>Open <b>Members &amp; access → People</b>.</li>
-          <li>Enter an email, choose <b>Selected bases only</b> and tick one or more bases (or pick a whole workspace), choose a role, and send the invitation. People invited to selected bases don’t see the other bases.</li>
+          <li>Enter an email, choose <b>Selected bases only</b> and tick one or more bases (or pick a whole workspace), choose a role, and send the invitation. People invited to selected bases don’t see the other bases. <b>Share</b> on a workspace on Home opens the same form.</li>
+          <li>Owners also pick the account type. An Admin or Owner can be invited without any workspace or base yet.</li>
           <li>If email isn’t set up, copy the invite link and send it yourself. Pending invitations can be cancelled.</li>
         </ol>
         <h2>Changing or removing access</h2>
@@ -679,28 +693,28 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
     id: "devices",
     group: "Admin & security",
     title: "Device approval",
-    summary: "Limit access to devices the owner has approved.",
+    summary: "Limit access to devices an Owner or Admin has approved.",
     keywords: "device approval mac address computer laptop restrict trusted approve revoke security",
     body: () => (
       <>
         <p>
-          With device approval on, members can only use TableOS from devices the owner has approved. This replaces restricting access by MAC address:
+          With device approval on, members can only use TableOS from devices an Owner or Admin has approved. This replaces restricting access by MAC address:
           web browsers can’t read a computer’s MAC address, so TableOS registers each browser as a named device instead.
         </p>
         <h2>Turning it on or off</h2>
         <p>
-          Device approval is on by default. The owner can change it in <b>Members &amp; access → Security → Require device approval</b>. The owner’s
-          own devices are always allowed, so you can’t lock yourself out.
+          Device approval is on by default. Owners and Admins can change it in <b>Members &amp; access → Security → Require device approval</b>. Owners’
+          own devices are always allowed, so they can’t lock themselves out.
         </p>
         <h2>What members see</h2>
         <ol>
-          <li>A member signs in on a new device. TableOS registers it and shows “Waiting for the owner to approve this device”.</li>
+          <li>A member signs in on a new device. TableOS registers it and shows that the device is waiting for approval.</li>
           <li>Until it is approved, they can’t see any data in that organization.</li>
-          <li>Once the owner approves it, the page unlocks automatically.</li>
+          <li>Once an Owner or Admin approves it, the page unlocks automatically.</li>
         </ol>
         <h2>Managing devices</h2>
         <p>
-          In <b>Members &amp; access → Devices</b> the owner sees pending devices (with browser, system, IP address and when they were last seen) and
+          In <b>Members &amp; access → Devices</b> Owners and Admins see pending devices (with browser, system, IP address and when they were last seen) and
           can <b>Approve</b>, <b>Deny</b>, <b>Revoke</b> a previously approved device, <b>rename</b> it (e.g. “Front desk PC”) or <b>forget</b> it.
         </p>
         <Warn>
@@ -771,12 +785,12 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
     id: "api-tokens",
     group: "Developers",
     title: "API access tokens",
-    summary: "The owner creates tokens with read, write or delete permission, for all or chosen bases.",
+    summary: "Owners and Admins create tokens with read, write or delete permission, for all or chosen bases.",
     keywords: "api token access token personal access token bearer read write delete scope generate revoke",
     body: () => (
       <>
         <p>
-          Programs use an access token to call the <To topic="api">TableOS API</To>. Only the owner can create tokens, in{" "}
+          Programs use an access token to call the <To topic="api">TableOS API</To>. Owners and Admins create tokens, in{" "}
           <b>Members &amp; access → API tokens</b>.
         </p>
         <h2>Creating a token</h2>
@@ -909,7 +923,7 @@ const { records, nextCursor } = await res.json();`}</Pre>
           <code>x-tableos-version</code> header. See <To topic="releases">Release notes</To>.
         </p>
         <Note>
-          A token acts with the owner’s permissions, limited further by its token types and bases. Changes made through the API show up in record
+          A token acts with the permissions of the person who created it (an Admin’s token only reaches what that Admin was given), limited further by its token types and bases. Changes made through the API show up in record
           history as made via the API.
         </Note>
       </>
