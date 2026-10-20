@@ -139,7 +139,7 @@ export async function blockedOrgsForDevice(
   return blocked;
 }
 
-/** Bell notification to the org owners (who approve devices); never blocks the request. */
+/** Bell notification to the org Owners and Admins (who approve devices); never blocks the request. */
 async function notifyDeviceRequest(
   db: TabulaDb,
   orgId: string,
@@ -151,9 +151,12 @@ async function notifyDeviceRequest(
     const who = await sql<{ email: string; display_name: string | null }>`
       SELECT email, display_name FROM core.users WHERE id = ${userId}
     `.execute(db);
+    // Admins only decide on Members' devices, so an Admin's new device goes to the Owners.
     const owners = await sql<{ user_id: string }>`
       SELECT user_id FROM core.organization_members
-      WHERE org_id = ${orgId} AND role = 'owner' AND status = 'active' AND user_id <> ${userId}
+      WHERE org_id = ${orgId} AND status = 'active' AND user_id <> ${userId}
+        AND (role = 'owner' OR (role = 'admin' AND
+          (SELECT role FROM core.organization_members WHERE org_id = ${orgId} AND user_id = ${userId}) = 'member'))
     `.execute(db);
     if (owners.rows.length === 0) return;
     const u = who.rows[0];

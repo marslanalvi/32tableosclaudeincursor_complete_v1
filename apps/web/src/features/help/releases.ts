@@ -8,6 +8,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.15.0",
+    date: "2026-10-20",
+    title: "Owners, Admins and Members.",
+    items: [
+      "Three account types: Owner, Admin and Member. An organization can have several Owners, and ownership can be transferred.",
+      "Admins invite and manage Members, approve their devices, create workspaces and API tokens, and change security settings. They open only what an Owner gives them.",
+      "Only Owners make someone an Admin or Owner, including straight from an invitation.",
+      "Workspaces can have more than one Workspace Owner.",
+      "Share on Home now uses the same invite form as Members & access: whole workspace or selected bases.",
+    ],
+  },
+  {
     version: "0.14.0",
     date: "2026-10-19",
     title: "Accounts by invitation; Owners and Admins run workspaces.",

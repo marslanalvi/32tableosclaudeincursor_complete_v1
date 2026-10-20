@@ -85,7 +85,7 @@ export async function listBaseCollaborators(
       existing.base = row.grant_role === NO_ACCESS_ROLE ? (existing.base ?? NO_ACCESS_ROLE) : higherRole(existing.base === NO_ACCESS_ROLE ? null : existing.base, row.grant_role);
     }
     if (row.grant_role && row.grant_scope === "workspace") existing.workspace = higherRole(existing.workspace, row.grant_role);
-    if (row.org_role === "owner" || row.org_role === "admin") existing.orgOwner = true;
+    if (row.org_role === "owner") existing.orgOwner = true;
     byUser.set(row.user_id, existing);
   }
 

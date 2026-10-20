@@ -23,14 +23,18 @@ import { compileForUser, invalidateUserSnapshotCache } from "../access/compile.j
 import {
   BASE_ROLE_RANK,
   WORKSPACE_ROLE_RANK,
+  getOrgRole,
   getWorkspaceAccess,
-  isOrgOwner,
+  isOrgManagerRole,
 } from "../access/workspace-access.js";
+import { grantCeiling, roleRank } from "../access/delegation.js";
 import { sendEmail } from "../automations/mailer.js";
 import { invalidateDeviceCache } from "../access/devices.js";
 
-const WORKSPACE_ROLES = ["creator", "editor", "commenter", "viewer"] as const;
+/** "owner" is the workspace Owner role (questionnaire B5: Owners and Admins may give it). */
+const WORKSPACE_ROLES = ["owner", "creator", "editor", "commenter", "viewer"] as const;
 const BASE_ROLES = ["creator", "editor", "commenter", "viewer"] as const;
+const ORG_ROLE_ORDER = ["member", "admin", "owner"] as const;
 
 const createInviteBody = z
   .object({
@@ -39,11 +43,21 @@ const createInviteBody = z
     baseId: z.string().optional(),
     /** Several bases in one invitation (same organization). */
     baseIds: z.array(z.string()).min(1).max(100).optional(),
-    role: z.enum(WORKSPACE_ROLES),
+    /** Workspace or base role; not needed for an Admin/Owner invitation without data access. */
+    role: z.enum(WORKSPACE_ROLES).optional(),
+    /** Account type after accepting. Admin and Owner: only Owners may invite them. */
+    orgRole: z.enum(ORG_ROLE_ORDER).optional(),
+    /** For an Admin/Owner invitation that gives no workspace or base yet. */
+    organizationId: z.string().optional(),
   })
-  .refine((b) => [b.workspaceId, b.baseId, b.baseIds].filter(Boolean).length === 1, {
-    message: "Provide exactly one of workspaceId, baseId or baseIds",
-  });
+  .refine(
+    (b) => {
+      const targets = [b.workspaceId, b.baseId, b.baseIds].filter(Boolean).length;
+      if (targets === 0) return Boolean(b.organizationId) && (b.orgRole === "admin" || b.orgRole === "owner");
+      return targets === 1 && Boolean(b.role);
+    },
+    { message: "Provide a role and exactly one of workspaceId, baseId or baseIds (or an organization for an Admin/Owner invitation)" },
+  );
 
 const acceptBody = z.object({
   token: z.string().min(16).max(512),
@@ -66,6 +80,7 @@ interface InviteRow {
   invited_by: string | null;
   created_at: Date;
   extra_base_ids?: string[] | null;
+  org_role?: string;
 }
 
 function inviteDto(row: InviteRow) {
@@ -75,6 +90,7 @@ function inviteDto(row: InviteRow) {
     workspaceId: row.workspace_id ? pid("wsp", row.workspace_id) : null,
     baseId: row.base_id ? pid("bas", row.base_id) : null,
     role: row.role,
+    orgRole: row.org_role ?? "member",
     status: row.status === "pending" && row.expires_at < new Date() ? "expired" : row.status,
     expiresAt: row.expires_at.toISOString(),
     createdAt: row.created_at.toISOString(),
@@ -98,16 +114,32 @@ export async function registerInvitationRoutes(
         return;
       }
       const body = createInviteBody.parse(request.body);
+      const orgRole = body.orgRole ?? "member";
 
       let orgId!: string;
-      let workspaceId!: string;
+      let workspaceId: string | null = null;
       let baseId: string | null = null;
       let extraBaseIds: string[] = [];
       let targetName!: string;
+      // Owners and Admins invite; Admins only where they are Creator, never above their own role.
+      const mayInvite = async (org: string): Promise<boolean> => {
+        const inviterRole = await getOrgRole(ctx.db, user.id, org);
+        if (!isOrgManagerRole(inviterRole)) {
+          forbidden(request, reply, "Only Owners and Admins can invite people");
+          return false;
+        }
+        if (orgRole !== "member" && inviterRole !== "owner") {
+          forbidden(request, reply, "Only Owners can invite Admins and Owners");
+          return false;
+        }
+        return true;
+      };
+      const tooHigh = () =>
+        forbidden(request, reply, "Admins can only invite to workspaces and bases where they are Creator, and not above their own role");
 
       const basePids = body.baseIds ?? (body.baseId ? [body.baseId] : null);
       if (basePids) {
-        if (!(BASE_ROLES as readonly string[]).includes(body.role)) {
+        if (!(BASE_ROLES as readonly string[]).includes(body.role!)) {
           validationProblem(request, reply, `Role "${body.role}" is not a base role`);
           return;
         }
@@ -125,41 +157,52 @@ export async function registerInvitationRoutes(
             return;
           }
           if (!orgId) {
-            if (!(await isOrgOwner(ctx.db, user.id, d.org_id))) {
-              forbidden(request, reply, "Only the owner can invite people");
-              return;
-            }
+            if (!(await mayInvite(d.org_id))) return;
             orgId = d.org_id;
             workspaceId = d.workspace_id;
+          }
+          const ceiling = await grantCeiling(ctx.db, user.id, await getOrgRole(ctx.db, user.id, orgId), { baseId: id });
+          if (ceiling < roleRank("base", body.role)) {
+            tooHigh();
+            return;
           }
           names.push(d.name);
         }
         baseId = ids[0]!;
         extraBaseIds = ids.slice(1);
         targetName = names.length > 3 ? `${names.slice(0, 3).join(", ")} and ${names.length - 3} more bases` : names.join(", ");
-      } else {
-        workspaceId = parsePid(body.workspaceId!, "wsp");
-        const access = await getWorkspaceAccess(ctx.db, user.id, workspaceId);
+      } else if (body.workspaceId) {
+        const wsId = parsePid(body.workspaceId, "wsp");
+        workspaceId = wsId;
+        const access = await getWorkspaceAccess(ctx.db, user.id, wsId);
         if (!access || !access.workspaceRole) {
           notFound(request, reply, "Workspace not found");
           return;
         }
-        if (access.orgRole !== "owner") {
-          forbidden(request, reply, "Only the owner can invite people");
+        if (!(await mayInvite(access.orgId))) return;
+        orgId = access.orgId;
+        if ((await grantCeiling(ctx.db, user.id, access.orgRole, { workspaceId: wsId })) < roleRank("workspace", body.role)) {
+          tooHigh();
           return;
         }
-        orgId = access.orgId;
         const ws = await sql<{ name: string }>`
-          SELECT name FROM core.workspaces WHERE id = ${workspaceId}
+          SELECT name FROM core.workspaces WHERE id = ${wsId}
         `.execute(ctx.db);
         targetName = ws.rows[0]?.name ?? "a workspace";
+      } else {
+        orgId = parsePid(body.organizationId!, "org");
+        if (!(await mayInvite(orgId))) return;
+        const o = await sql<{ name: string }>`SELECT name FROM core.organizations WHERE id = ${orgId}`.execute(ctx.db);
+        targetName = o.rows[0]?.name ?? "the organization";
       }
 
+      const role = body.role ?? orgRole;
       const emailNormalized = body.email.toLowerCase();
       const pending = await sql<{ id: string }>`
         SELECT id FROM core.invitations
         WHERE email_normalized = ${emailNormalized} AND status = 'pending' AND expires_at > now()
-          AND workspace_id = ${workspaceId}
+          AND org_id = ${orgId}
+          AND workspace_id IS NOT DISTINCT FROM ${workspaceId}::uuid
           AND base_id IS NOT DISTINCT FROM ${baseId}::uuid
         LIMIT 1
       `.execute(ctx.db);
@@ -179,20 +222,21 @@ export async function registerInvitationRoutes(
       await sql`
         INSERT INTO core.invitations (
           id, org_id, workspace_id, base_id, email, email_normalized, role,
-          resource_type, resource_id, token_hash, invited_by, expires_at, extra_base_ids
+          resource_type, resource_id, token_hash, invited_by, expires_at, extra_base_ids, org_role
         ) VALUES (
           ${inviteId}, ${orgId}, ${workspaceId}, ${baseId}, ${body.email}, ${emailNormalized},
-          ${body.role}, ${baseId ? "base" : "workspace"}, ${baseId ?? workspaceId},
-          ${tokenHash}, ${user.id}, ${expiresAt}, ${extraBaseIds}::uuid[]
+          ${role}, ${baseId ? "base" : workspaceId ? "workspace" : "org"}, ${baseId ?? workspaceId ?? orgId},
+          ${tokenHash}, ${user.id}, ${expiresAt}, ${extraBaseIds}::uuid[], ${orgRole}
         )
       `.execute(ctx.db);
 
       const acceptUrl = `${ctx.env.APP_URL}/invite/${token}`;
+      const asText = orgRole === "member" ? role : body.role ? `${orgRole === "owner" ? "an Owner" : "an Admin"} (${role})` : orgRole === "owner" ? "an Owner" : "an Admin";
       try {
         await sendEmail(ctx.db, {
           to: [body.email],
           subject: `${user.displayName} invited you to ${targetName} on TableOS`,
-          text: `${user.displayName} (${user.email}) invited you to join "${targetName}" as ${body.role}.\n\nAccept the invitation: ${acceptUrl}\n\nThis link expires on ${expiresAt.toUTCString()}.`,
+          text: `${user.displayName} (${user.email}) invited you to join "${targetName}" as ${asText}.\n\nAccept the invitation: ${acceptUrl}\n\nThis link expires on ${expiresAt.toUTCString()}.`,
           orgId,
           workspaceId,
           source: "invitation",
@@ -209,7 +253,7 @@ export async function registerInvitationRoutes(
         action: "invite.created",
         targetType: "invitation",
         targetId: inviteId,
-        metadata: { email: emailNormalized, role: body.role, baseId, extraBaseIds },
+        metadata: { email: emailNormalized, role, orgRole, baseId, extraBaseIds },
         ip: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
       });
@@ -218,10 +262,11 @@ export async function registerInvitationRoutes(
         invitation: {
           id: pid("inv", inviteId),
           email: body.email,
-          workspaceId: pid("wsp", workspaceId),
+          workspaceId: workspaceId ? pid("wsp", workspaceId) : null,
           baseId: baseId ? pid("bas", baseId) : null,
           baseIds: baseId ? [baseId, ...extraBaseIds].map((id) => pid("bas", id)) : [],
-          role: body.role,
+          role,
+          orgRole,
           status: "pending",
           expiresAt: expiresAt.toISOString(),
           acceptToken: token,
@@ -254,14 +299,14 @@ export async function registerInvitationRoutes(
           const dir = await sql<{ org_id: string }>`
             SELECT org_id FROM core.base_directory WHERE base_id = ${baseId} LIMIT 1
           `.execute(ctx.db);
-          if (!dir.rows[0] || !(await isOrgOwner(ctx.db, user.id, dir.rows[0].org_id))) {
-            forbidden(request, reply, "Only the owner can view invitations");
+          if (!dir.rows[0] || !isOrgManagerRole(await getOrgRole(ctx.db, user.id, dir.rows[0].org_id))) {
+            forbidden(request, reply, "Only Owners and Admins can view invitations");
             return;
           }
           rows = (
             await sql<InviteRow>`
               SELECT id, org_id, workspace_id, base_id, email, email_normalized, role, status,
-                     expires_at, invited_by, created_at
+                     expires_at, invited_by, created_at, org_role
               FROM core.invitations WHERE base_id = ${baseId}
               ORDER BY created_at DESC LIMIT 200
             `.execute(ctx.db)
@@ -273,14 +318,14 @@ export async function registerInvitationRoutes(
             notFound(request, reply, "Workspace not found");
             return;
           }
-          if (access.orgRole !== "owner") {
-            forbidden(request, reply, "Only the owner can view invitations");
+          if (!isOrgManagerRole(access.orgRole)) {
+            forbidden(request, reply, "Only Owners and Admins can view invitations");
             return;
           }
           rows = (
             await sql<InviteRow>`
               SELECT id, org_id, workspace_id, base_id, email, email_normalized, role, status,
-                     expires_at, invited_by, created_at
+                     expires_at, invited_by, created_at, org_role
               FROM core.invitations WHERE workspace_id = ${workspaceId}
               ORDER BY created_at DESC LIMIT 200
             `.execute(ctx.db)
@@ -309,7 +354,7 @@ export async function registerInvitationRoutes(
         const id = parsePid(request.params.invitationId, "inv");
         const res = await sql<InviteRow>`
           SELECT id, org_id, workspace_id, base_id, email, email_normalized, role, status,
-                 expires_at, invited_by, created_at
+                 expires_at, invited_by, created_at, org_role
           FROM core.invitations WHERE id = ${id} LIMIT 1
         `.execute(ctx.db);
         const row = res.rows[0];
@@ -317,8 +362,13 @@ export async function registerInvitationRoutes(
           notFound(request, reply, "Invitation not found");
           return;
         }
-        if (!(await isOrgOwner(ctx.db, user.id, row.org_id))) {
+        const revokerRole = await getOrgRole(ctx.db, user.id, row.org_id);
+        if (!isOrgManagerRole(revokerRole)) {
           notFound(request, reply, "Invitation not found");
+          return;
+        }
+        if (revokerRole !== "owner" && row.org_role !== "member") {
+          forbidden(request, reply, "Only Owners can cancel invitations for Admins and Owners");
           return;
         }
         await sql`
@@ -351,11 +401,13 @@ export async function registerInvitationRoutes(
           notFound(request, reply, "Invitation not found");
           return;
         }
-        const res = await sql<InviteRow & { workspace_name: string | null; base_name: string | null; inviter_name: string | null }>`
+        const res = await sql<InviteRow & { workspace_name: string | null; base_name: string | null; inviter_name: string | null; org_name: string | null }>`
           SELECT i.id, i.org_id, i.workspace_id, i.base_id, i.email, i.email_normalized, i.role,
-                 i.status, i.expires_at, i.invited_by, i.created_at,
-                 w.name AS workspace_name, bd.name AS base_name, u.display_name AS inviter_name
+                 i.status, i.expires_at, i.invited_by, i.created_at, i.org_role,
+                 w.name AS workspace_name, bd.name AS base_name, u.display_name AS inviter_name,
+                 o.name AS org_name
           FROM core.invitations i
+          LEFT JOIN core.organizations o ON o.id = i.org_id
           LEFT JOIN core.workspaces w ON w.id = i.workspace_id
           LEFT JOIN core.base_directory bd ON bd.base_id = i.base_id
           LEFT JOIN core.users u ON u.id = i.invited_by
@@ -373,6 +425,7 @@ export async function registerInvitationRoutes(
             ...dto,
             workspaceName: row.workspace_name,
             baseName: row.base_name,
+            organizationName: row.org_name,
             inviterName: row.inviter_name,
           },
         });
@@ -394,7 +447,7 @@ export async function registerInvitationRoutes(
 
       const invite = await sql<InviteRow>`
         SELECT id, org_id, workspace_id, base_id, email, email_normalized, role, status,
-               expires_at, invited_by, created_at, extra_base_ids
+               expires_at, invited_by, created_at, extra_base_ids, org_role
         FROM core.invitations
         WHERE token_hash = ${tokenHash}
         LIMIT 1
@@ -425,8 +478,15 @@ export async function registerInvitationRoutes(
       await ctx.db.transaction().execute(async (trx) => {
         await sql`
           INSERT INTO core.organization_members (org_id, user_id, role, source)
-          VALUES (${row.org_id}, ${user.id}, 'member', 'invite')
-          ON CONFLICT (org_id, user_id) DO UPDATE SET status = 'active', updated_at = now()
+          VALUES (${row.org_id}, ${user.id}, ${row.org_role ?? "member"}, 'invite')
+          ON CONFLICT (org_id, user_id) DO UPDATE SET
+            status = 'active',
+            updated_at = now(),
+            -- An invitation can raise the account type, never lower it.
+            role = CASE
+              WHEN array_position(${[...ORG_ROLE_ORDER]}::text[], EXCLUDED.role)
+                 > array_position(${[...ORG_ROLE_ORDER]}::text[], core.organization_members.role)
+              THEN EXCLUDED.role ELSE core.organization_members.role END
         `.execute(trx);
 
         if (row.base_id) {

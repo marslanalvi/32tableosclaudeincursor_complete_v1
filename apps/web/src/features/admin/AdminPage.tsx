@@ -8,7 +8,9 @@ import {
   type GrantRole,
   type OrgAccess,
   type OrgMember,
+  type OrgRole,
   type TokenScope,
+  type WorkspaceGrantRole,
 } from "../../lib/api-areas/admin.ts";
 import { accountApi } from "../../lib/api-areas/account.ts";
 import { ApiProblemError } from "../../lib/api.ts";
@@ -22,6 +24,15 @@ const ROLES: { value: GrantRole; label: string; hint: string }[] = [
   { value: "commenter", label: "Commenter", hint: "Read everything and add comments" },
   { value: "viewer", label: "Viewer", hint: "Read only" },
 ];
+/** Workspaces only: everything a Creator can do, plus rename or delete the workspace. */
+const WS_OWNER = { value: "owner" as const, label: "Workspace Owner", hint: "Creator on every base, and may rename or delete the workspace" };
+
+const ACCOUNT_TYPES: { value: OrgRole; label: string; hint: string }[] = [
+  { value: "member", label: "Member", hint: "Opens only what they're given" },
+  { value: "admin", label: "Admin", hint: "Manages Members and the workspaces and bases they're given; no billing" },
+  { value: "owner", label: "Owner", hint: "Everything, including Admins, Owners and billing" },
+];
+const accountLabel = (r: string) => ACCOUNT_TYPES.find((a) => a.value === r)?.label ?? r;
 
 export type AdminTab = "people" | "devices" | "tokens" | "settings";
 
@@ -64,26 +75,50 @@ function useInvalidateAccess(orgId: string) {
 
 /* ------------------------------------------------------------------ people */
 
-function InviteForm({ orgId, data }: { orgId: string; data: OrgAccess }) {
+/**
+ * The one invite form (Members & access → People, and Share on Home). Owners also choose the
+ * account type; Admins invite Members to what they manage.
+ */
+export function InviteForm({
+  orgId,
+  data,
+  defaultScope = "bases",
+  onInvited,
+}: {
+  orgId: string;
+  data: OrgAccess;
+  /** "bases", or `wsp:<id>` to start with that whole workspace. */
+  defaultScope?: string;
+  onInvited?: () => void;
+}) {
   const refresh = useInvalidateAccess(orgId);
+  const isOwner = data.me?.role === "owner";
   const [email, setEmail] = useState("");
-  /** "bases" = only the ticked bases; `wsp:<id>` = the whole workspace. */
-  const [scope, setScope] = useState<string>("bases");
+  /** "bases" = only the ticked bases; `wsp:<id>` = the whole workspace; "org" = no data yet. */
+  const [scope, setScope] = useState<string>(defaultScope);
   const [picked, setPicked] = useState<Set<string>>(new Set());
-  const [role, setRole] = useState<GrantRole>("editor");
+  const [role, setRole] = useState<WorkspaceGrantRole>("editor");
+  const [orgRole, setOrgRole] = useState<OrgRole>("member");
   const [link, setLink] = useState<string | null>(null);
+  const isWorkspace = scope.startsWith("wsp:");
   const invite = useMutation({
     mutationFn: () =>
       accountApi.createInvitation({
         email: email.trim(),
-        role,
-        ...(scope === "bases" ? { baseIds: [...picked] } : { workspaceId: scope.slice(4) }),
+        ...(orgRole !== "member" ? { orgRole } : {}),
+        ...(scope === "org"
+          ? { organizationId: orgId }
+          : {
+              role: !isWorkspace && role === "owner" ? "creator" : role,
+              ...(scope === "bases" ? { baseIds: [...picked] } : { workspaceId: scope.slice(4) }),
+            }),
       }),
     onSuccess: (res) => {
       setLink(res.invitation.acceptUrl);
       setEmail("");
       setPicked(new Set());
       refresh();
+      onInvited?.();
     },
   });
   const toggle = (ids: string[], on: boolean) =>
@@ -93,25 +128,54 @@ function InviteForm({ orgId, data }: { orgId: string; data: OrgAccess }) {
       return next;
     });
   const ready = Boolean(email.trim()) && (scope !== "bases" || picked.size > 0);
+  const roleChoices = isWorkspace ? [WS_OWNER, ...ROLES] : ROLES;
   return (
     <form
-      className={styles.inviteRow}
+      className={`${styles.inviteRow} ${isOwner ? styles.inviteRowOwner : ""}`}
       onSubmit={(e) => {
         e.preventDefault();
         if (ready) invite.mutate();
       }}
     >
       <input className={account.input} type="email" required placeholder="name@company.com" value={email} onChange={(e) => setEmail(e.target.value)} aria-label="Email" />
+      {isOwner ? (
+        <select
+          className={account.input}
+          value={orgRole}
+          onChange={(e) => {
+            const v = e.target.value as OrgRole;
+            setOrgRole(v);
+            if (v === "member" && scope === "org") setScope("bases");
+          }}
+          aria-label="Account type"
+          title="Members open only what they're given. Admins manage Members. Owners manage everything."
+        >
+          {ACCOUNT_TYPES.map((a) => (
+            <option key={a.value} value={a.value} title={a.hint}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+      ) : null}
       <select className={account.input} value={scope} onChange={(e) => setScope(e.target.value)} aria-label="Give access to">
+        {orgRole !== "member" ? <option value="org">No workspace or base yet</option> : null}
         <option value="bases">Selected bases only</option>
-        {data.workspaces.map((w) => (
-          <option key={w.id} value={`wsp:${w.id}`}>
-            Workspace · {w.name} (all its bases)
-          </option>
-        ))}
+        {data.workspaces
+          .filter((w) => w.manageable !== false)
+          .map((w) => (
+            <option key={w.id} value={`wsp:${w.id}`}>
+              Workspace · {w.name} (all its bases)
+            </option>
+          ))}
       </select>
-      <select className={account.input} value={role} onChange={(e) => setRole(e.target.value as GrantRole)} aria-label="Role">
-        {ROLES.map((r) => (
+      <select
+        className={account.input}
+        value={!isWorkspace && role === "owner" ? "creator" : role}
+        disabled={scope === "org"}
+        onChange={(e) => setRole(e.target.value as WorkspaceGrantRole)}
+        aria-label="Role"
+      >
+        {roleChoices.map((r) => (
           <option key={r.value} value={r.value} title={r.hint}>
             {r.label}
           </option>
@@ -168,6 +232,7 @@ function AccessRow({
   inherited,
   selected,
   onSelect,
+  manageable = true,
 }: {
   orgId: string;
   member: OrgMember;
@@ -177,6 +242,8 @@ function AccessRow({
   inherited: string | null;
   selected: boolean;
   onSelect: (on: boolean) => void;
+  /** False: an Admin who may manage bases in this workspace but not the workspace itself. */
+  manageable?: boolean;
 }) {
   const refresh = useInvalidateAccess(orgId);
   const isBase = "baseId" in scope;
@@ -190,21 +257,22 @@ function AccessRow({
   return (
     <tr className={selected ? styles.rowSelected : undefined}>
       <td className={styles.pickCell}>
-        <input type="checkbox" checked={selected} onChange={(e) => onSelect(e.target.checked)} aria-label={`Select ${label}`} />
+        <input type="checkbox" checked={selected} disabled={!manageable} onChange={(e) => onSelect(e.target.checked)} aria-label={`Select ${label}`} />
       </td>
       <td className={indent ? styles.indent : styles.strong}>{label}</td>
       <td>
         <select
           className={`${account.input} ${styles.compact}`}
           value={grant?.role ?? ""}
-          disabled={save.isPending}
+          disabled={save.isPending || !manageable}
+          title={manageable ? undefined : "You can't change access to this whole workspace"}
           onChange={(e) =>
             save.mutate({ role: (e.target.value || null) as BaseGrantRole | null, expiresAt: e.target.value === "none" ? null : (grant?.expiresAt ?? null) })
           }
           aria-label={`Role on ${label}`}
         >
           <option value="">{inherited ? `Inherit (${inherited})` : "No access"}</option>
-          {ROLES.map((r) => (
+          {(isBase ? ROLES : [WS_OWNER, ...ROLES]).map((r) => (
             <option key={r.value} value={r.value}>
               {r.label}
             </option>
@@ -216,7 +284,7 @@ function AccessRow({
         <input
           type="date"
           className={`${account.input} ${styles.compact}`}
-          disabled={!grant || blocked || save.isPending}
+          disabled={!grant || blocked || save.isPending || !manageable}
           value={toDateInput(grant?.expiresAt ?? null)}
           min={new Date().toISOString().slice(0, 10)}
           onChange={(e) => grant && save.mutate({ role: grant.role as GrantRole, expiresAt: fromDateInput(e.target.value) })}
@@ -237,7 +305,7 @@ function AccessRow({
         ) : (
           ""
         )}
-        {grant ? (
+        {grant && manageable ? (
           <button
             type="button"
             className={styles.linkBtn}
@@ -320,13 +388,24 @@ function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember;
     onSettled: refresh,
   });
   const remove = useMutation({ mutationFn: () => adminApi.removeMember(orgId, member.id), onSettled: refresh });
+  const qc = useQueryClient();
+  const afterRole = () => {
+    refresh();
+    void qc.invalidateQueries({ queryKey: ["admin", "orgs"] });
+    void qc.invalidateQueries({ queryKey: ["workspaces"] });
+  };
+  const setRole = useMutation({ mutationFn: (r: OrgRole) => adminApi.setOrgRole(orgId, member.id, r), onSettled: afterRole });
+  const transfer = useMutation({ mutationFn: () => adminApi.transferOwnership(orgId, member.id), onSettled: afterRole });
+  const iAmOwner = data.me?.role === "owner";
   const pending = member.devices.filter((d) => d.status === "pending").length;
   const approved = member.devices.filter((d) => d.status === "approved").length;
   const summary = member.isOwner
     ? "Owner · full access to everything"
     : member.grants.length === 0
-      ? "No access yet"
-      : `${member.grants.length} access rule${member.grants.length === 1 ? "" : "s"}`;
+      ? member.orgRole === "admin"
+        ? "Admin · no workspaces or bases given yet"
+        : "No access yet"
+      : `${member.orgRole === "admin" ? "Admin · " : ""}${member.grants.length} access rule${member.grants.length === 1 ? "" : "s"}`;
   return (
     <li className={styles.member}>
       <div className={styles.memberHead}>
@@ -334,6 +413,8 @@ function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember;
           <span className={account.sessionName}>
             {member.name || member.email}
             {member.isOwner ? <span className={account.badgeOn}>Owner</span> : null}
+            {member.orgRole === "admin" ? <span className={styles.roleBadge}>Admin</span> : null}
+            {member.isMe ? <span className={styles.roleBadge}>You</span> : null}
             {member.status === "suspended" ? <span className={styles.badgeWarn}>Suspended</span> : null}
             {pending ? <span className={styles.badgeWarn}>{pending} device{pending === 1 ? "" : "s"} waiting</span> : null}
           </span>
@@ -342,7 +423,40 @@ function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember;
             {!member.isOwner ? ` · ${approved} approved device${approved === 1 ? "" : "s"}` : ""}
           </span>
         </div>
-        {!member.isOwner ? (
+        {iAmOwner ? (
+          <div className={account.actions}>
+            <select
+              className={`${account.input} ${styles.compact}`}
+              value={member.orgRole}
+              disabled={setRole.isPending}
+              aria-label={`Account type of ${member.name || member.email}`}
+              onChange={(e) => {
+                const r = e.target.value as OrgRole;
+                const who = member.isMe ? "yourself" : member.name || member.email;
+                if (window.confirm(`Make ${who} ${accountLabel(r)}?`)) setRole.mutate(r);
+              }}
+            >
+              {ACCOUNT_TYPES.map((a) => (
+                <option key={a.value} value={a.value} title={a.hint}>
+                  {a.label}
+                </option>
+              ))}
+            </select>
+            {!member.isMe && !member.isOwner && member.status === "active" ? (
+              <button
+                type="button"
+                className={styles.linkBtn}
+                disabled={transfer.isPending}
+                onClick={() => {
+                  if (window.confirm(`Hand ownership to ${member.name || member.email}? They become Owner and you become Admin.`)) transfer.mutate();
+                }}
+              >
+                Transfer ownership
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {member.canManage && !member.isOwner ? (
           <div className={account.actions}>
             <button type="button" className={account.secondary} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
               {open ? "Done" : "Edit access"}
@@ -370,6 +484,8 @@ function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember;
       </div>
       {status.isError ? <div className={account.error}>{errorText(status.error)}</div> : null}
       {remove.isError ? <div className={account.error}>{errorText(remove.error)}</div> : null}
+      {setRole.isError ? <div className={account.error}>{errorText(setRole.error)}</div> : null}
+      {transfer.isError ? <div className={account.error}>{errorText(transfer.error)}</div> : null}
       {open ? (
         <>
           {selected.size ? (
@@ -410,6 +526,7 @@ function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember;
                     inherited={null}
                     selected={selected.has(`wsp:${w.id}`)}
                     onSelect={pick(`wsp:${w.id}`)}
+                    manageable={w.manageable !== false}
                   />,
                   ...w.bases.map((b) => (
                     <AccessRow
@@ -448,7 +565,11 @@ function PeopleSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
     <>
       <Section
         title="Invite people"
-        description="Only you, the owner, can invite people. Give them a role on a whole workspace or on a single base; you can change it, set an end date or remove it at any time."
+        description={
+          data.me?.role === "owner"
+            ? "Owners and Admins invite people. Give them a role on a whole workspace or on selected bases; you can change it, set an end date or remove it at any time. Only Owners invite Admins and Owners."
+            : "As an Admin you invite Members to the workspaces and bases where you are Creator, up to your own role there."
+        }
       >
         <InviteForm orgId={orgId} data={data} />
         {data.invitations.length ? (
@@ -458,7 +579,9 @@ function PeopleSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
                 <div className={account.sessionText}>
                   <span className={account.sessionName}>{i.email}</span>
                   <span className={account.muted}>
-                    Invited as {i.role} to {nameOf(i)} · link expires {new Date(i.expiresAt).toLocaleDateString()}
+                    {i.orgRole && i.orgRole !== "member" ? `${accountLabel(i.orgRole)} · ` : ""}
+                    {i.workspaceId || i.baseId ? `invited as ${i.role} to ${nameOf(i)}` : "no workspace or base yet"} · link expires{" "}
+                    {new Date(i.expiresAt).toLocaleDateString()}
                   </span>
                 </div>
                 <button type="button" className={account.secondary} onClick={() => revoke.mutate(i.id)} disabled={revoke.isPending}>
@@ -471,7 +594,7 @@ function PeopleSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
       </Section>
       <Section
         title="Members"
-        description="A workspace role applies to every base in that workspace. A base role gives access to that base only. People only see what you give them."
+        description="Account types: Owners have everything; Admins manage Members and open only what they're given; Members open only what they're given. A workspace role applies to every base in that workspace; a base role to that base only."
       >
         <ul className={styles.memberList}>
           {data.members.map((m) => (
@@ -512,7 +635,9 @@ function DevicesSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
     return wa - wb || (a.isOwner ? 1 : 0) - (b.isOwner ? 1 : 0) || (a.name || a.email).localeCompare(b.name || b.email);
   });
 
-  const deviceRow = (d: DeviceLogMember["devices"][number]) => (
+  /** Admins decide on Members' devices only; Owners on everyone's but their own. */
+  const mayDecide = (personId: string) => data.members.find((x) => x.id === personId)?.canManage ?? data.me?.role === "owner";
+  const deviceRow = (d: DeviceLogMember["devices"][number], manage = true) => (
     <li key={d.id} className={account.sessionItem} data-testid="device-row">
       <div className={account.sessionText}>
         <span className={account.sessionName}>
@@ -526,6 +651,7 @@ function DevicesSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
           {d.decidedAt ? ` · ${d.status === "approved" ? "approved" : "revoked"} ${fmt(d.decidedAt)}${d.decidedBy ? ` by ${d.decidedBy}` : ""}` : ""}
         </span>
       </div>
+      {manage ? (
       <div className={account.actions}>
         <button
           type="button"
@@ -552,6 +678,7 @@ function DevicesSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
           </button>
         )}
       </div>
+      ) : null}
     </li>
   );
 
@@ -590,21 +717,21 @@ function DevicesSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
               </summary>
               <div className={styles.deviceGroupBody}>
                 <span className={account.muted}>{m.email}</span>
-                {m.isOwner ? <p className={account.muted}>The owner’s devices never need approval.</p> : null}
+                {m.isOwner ? <p className={account.muted}>Owners’ devices never need approval.</p> : null}
                 {waiting.length ? (
                   <>
                     <h4 className={styles.deviceSub}>Waiting for approval ({waiting.length})</h4>
-                    <ul className={account.sessionList}>{waiting.map(deviceRow)}</ul>
+                    <ul className={account.sessionList}>{waiting.map((d) => deviceRow(d, mayDecide(m.id)))}</ul>
                   </>
                 ) : null}
                 {!m.isOwner ? (
                   <>
                     <h4 className={styles.deviceSub}>Approved devices ({approved.length})</h4>
-                    {approved.length ? <ul className={account.sessionList}>{approved.map(deviceRow)}</ul> : <p className={account.muted}>None.</p>}
+                    {approved.length ? <ul className={account.sessionList}>{approved.map((d) => deviceRow(d, mayDecide(m.id)))}</ul> : <p className={account.muted}>None.</p>}
                     {revoked.length ? (
                       <>
                         <h4 className={styles.deviceSub}>Revoked or denied ({revoked.length})</h4>
-                        <ul className={account.sessionList}>{revoked.map(deviceRow)}</ul>
+                        <ul className={account.sessionList}>{revoked.map((d) => deviceRow(d, mayDecide(m.id)))}</ul>
                       </>
                     ) : null}
                   </>
@@ -696,7 +823,7 @@ function TokensSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
   };
   const baseName = (id: string) => allBases.find((b) => b.id === id)?.name ?? id;
   const describe = (t: ApiTokenInfo) =>
-    `${t.scopes.join(" + ")} · ${t.baseIds ? t.baseIds.map(baseName).join(", ") : "all bases"} · ${t.expiresAt ? `expires ${new Date(t.expiresAt).toLocaleDateString()}` : "never expires"} · last used ${t.lastUsedAt ? fmt(t.lastUsedAt) : "never"}`;
+    `${data.me?.role === "owner" && t.createdBy ? `by ${t.createdBy} · ` : ""}${t.scopes.join(" + ")} · ${t.baseIds ? t.baseIds.map(baseName).join(", ") : "all bases"} · ${t.expiresAt ? `expires ${new Date(t.expiresAt).toLocaleDateString()}` : "never expires"} · last used ${t.lastUsedAt ? fmt(t.lastUsedAt) : "never"}`;
   return (
     <>
       <Section
@@ -830,7 +957,7 @@ function SettingsSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
     if (d && !domains.includes(d)) saveDomains.mutate([...domains, d]);
   };
   return (
-    <Section title="Security" description="These rules apply to everyone except you, the owner.">
+    <Section title="Security" description="These rules apply to everyone except the Owners.">
       <div className={styles.signupDomains}>
         <strong>Allowed sign-up domains</strong>
         <span className={account.muted}>
@@ -893,7 +1020,7 @@ function SettingsSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
 
 export function AdminPage({ tab, onTab, onBack }: { tab: AdminTab; onTab: (t: AdminTab) => void; onBack: () => void }) {
   const orgs = useQuery({ queryKey: ["admin", "orgs"], queryFn: () => adminApi.orgs() });
-  const owned = orgs.data?.orgs.filter((o) => o.isOwner) ?? [];
+  const owned = orgs.data?.orgs.filter((o) => o.canManage ?? o.isOwner) ?? [];
   const [orgId, setOrgId] = useState<string>("");
   useEffect(() => {
     if (!orgId && owned[0]) setOrgId(owned[0].id);
@@ -927,8 +1054,8 @@ export function AdminPage({ tab, onTab, onBack }: { tab: AdminTab; onTab: (t: Ad
         {orgs.isLoading ? <p className={account.muted}>Loading…</p> : null}
         {orgs.data && owned.length === 0 ? (
           <div className={account.section}>
-            <h2 className={account.sectionTitle}>Only the owner can manage access</h2>
-            <p className={account.muted}>Ask the owner of your workspace to invite people, change roles or approve devices.</p>
+            <h2 className={account.sectionTitle}>Only Owners and Admins can manage access</h2>
+            <p className={account.muted}>Ask an Owner or Admin of your organization to invite people, change roles or approve devices.</p>
           </div>
         ) : null}
         {data ? (

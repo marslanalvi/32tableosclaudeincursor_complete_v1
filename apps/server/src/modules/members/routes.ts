@@ -7,7 +7,15 @@ import { parsePid, pid } from "../../lib/public-ids.js";
 import { ApiError, handleRouteError } from "../../http/errors.js";
 import { writeAuditEvent } from "../audit/write.js";
 import { invalidateBaseSnapshotCache, invalidateUserSnapshotCache } from "../access/compile.js";
-import { isOrgOwner } from "../access/workspace-access.js";
+import {
+  ORG_ROLES,
+  canManageMember,
+  getOrgRole,
+  isOrgManagerRole,
+  type OrgRole,
+} from "../access/workspace-access.js";
+import { grantCeiling, roleRank } from "../access/delegation.js";
+import { requestMayAccess } from "../../kernel/request-context.js";
 import { allowedDomainsOf } from "../auth/signup-policy.js";
 import {
   DEVICE_COOKIE,
@@ -19,12 +27,13 @@ import {
 import { TOKEN_SCOPES, generateApiToken } from "../access/api-tokens.js";
 
 /**
- * Owner-only access administration: who is in the organization, what role they
- * have on each workspace/base, until when, from which approved devices, plus
- * API tokens. Everyone else gets 403 here.
+ * Access administration for Owners and Admins: who is in the organization, what role they
+ * have on each workspace/base, until when, from which approved devices, plus API tokens.
+ * Owners manage everyone; Admins manage Members, and only on workspaces and bases where they
+ * are Creator themselves. Only Owners change account types. Members get 403 here.
  */
 
-const WORKSPACE_GRANT_ROLES = ["creator", "editor", "commenter", "viewer"] as const;
+const WORKSPACE_GRANT_ROLES = ["owner", "creator", "editor", "commenter", "viewer"] as const;
 /** `none` blocks a base that the member's workspace role would otherwise open. */
 const BASE_GRANT_ROLES = ["creator", "editor", "commenter", "viewer", "none"] as const;
 
@@ -39,6 +48,8 @@ const grantBody = z
   .refine((b) => Boolean(b.workspaceId) !== Boolean(b.baseId), { message: "Provide exactly one of workspaceId or baseId" });
 
 const memberPatch = z.object({ status: z.enum(["active", "suspended"]) });
+const rolePatch = z.object({ role: z.enum(ORG_ROLES as [OrgRole, ...OrgRole[]]) });
+const transferBody = z.object({ userId: z.string() });
 const devicePatch = z.object({ status: z.enum(["approved", "revoked"]).optional(), label: z.string().trim().max(100).optional() });
 const DOMAIN_RE = /^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 const settingsPatch = z.object({
@@ -75,13 +86,50 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
     return request.user;
   }
 
-  async function ownerOrg(request: FastifyRequest<{ Params: OrgParams }>): Promise<{ userId: string; orgId: string }> {
+  type Actor = { userId: string; orgId: string; role: OrgRole };
+
+  async function managerOrg(request: FastifyRequest<{ Params: OrgParams }>): Promise<Actor> {
     const user = me(request);
     const orgId = parsePid(request.params.orgId, "org");
-    if (!(await isOrgOwner(ctx.db, user.id, orgId))) {
-      throw new ApiError(403, "FORBIDDEN", "Only the owner can manage access");
+    const role = requestMayAccess(orgId) ? await getOrgRole(ctx.db, user.id, orgId) : null;
+    if (!role || !isOrgManagerRole(role)) {
+      throw new ApiError(403, "FORBIDDEN", "Only Owners and Admins can manage access");
     }
-    return { userId: user.id, orgId };
+    return { userId: user.id, orgId, role };
+  }
+
+  async function ownerOrg(request: FastifyRequest<{ Params: OrgParams }>): Promise<Actor> {
+    const actor = await managerOrg(request);
+    if (actor.role !== "owner") throw new ApiError(403, "FORBIDDEN", "Only Owners can change account types or ownership");
+    return actor;
+  }
+
+  async function activeOwnerCount(orgId: string): Promise<number> {
+    const r = await sql<{ n: number }>`
+      SELECT count(*)::int AS n FROM core.organization_members WHERE org_id = ${orgId} AND role = 'owner' AND status = 'active'
+    `.execute(ctx.db);
+    return r.rows[0]?.n ?? 0;
+  }
+
+  /** Admins approve, revoke and forget Members' devices only, never their own. */
+  async function assertDeviceManageable(actor: Actor, deviceId: string) {
+    const r = await sql<{ user_id: string; role: string | null }>`
+      SELECT d.user_id, m.role FROM core.org_devices d
+      LEFT JOIN core.organization_members m ON m.org_id = d.org_id AND m.user_id = d.user_id
+      WHERE d.id = ${deviceId} AND d.org_id = ${actor.orgId}
+    `.execute(ctx.db);
+    const d = r.rows[0];
+    if (!d) throw new ApiError(404, "NOT_FOUND", "Device not found");
+    if (!canManageMember(actor.role, d.role ?? "member", d.user_id === actor.userId)) {
+      throw new ApiError(403, "FORBIDDEN", "Only Owners decide on the devices of Owners and Admins, and nobody approves their own");
+    }
+  }
+
+  /** Everything cached about one person's access, after their org role or status changed. */
+  async function refreshPerson(orgId: string, userId: string) {
+    await bumpBases(await orgBaseIds(orgId));
+    invalidateUserSnapshotCache(userId);
+    invalidateDeviceCache(userId);
   }
 
   async function bumpBases(baseIds: string[]) {
@@ -100,14 +148,19 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
     return r.rows.map((x) => x.base_id);
   }
 
-  async function targetMember(orgId: string, userPid: string) {
+  /** The person being changed; Admins may only change Members, nobody changes themselves. */
+  async function targetMember(actor: Actor, userPid: string) {
     const userId = parsePid(userPid, "usr");
     const r = await sql<{ role: string; status: string }>`
-      SELECT role, status FROM core.organization_members WHERE org_id = ${orgId} AND user_id = ${userId}
+      SELECT role, status FROM core.organization_members
+      WHERE org_id = ${actor.orgId} AND user_id = ${userId} AND status <> 'deactivated'
     `.execute(ctx.db);
     const m = r.rows[0];
     if (!m) throw new ApiError(404, "NOT_FOUND", "Member not found");
-    if (m.role === "owner") throw new ApiError(409, "CONFLICT", "The owner's access can't be changed");
+    if (userId === actor.userId) throw new ApiError(409, "CONFLICT", "You can't change your own access here");
+    if (!canManageMember(actor.role, m.role, false)) {
+      throw new ApiError(403, "FORBIDDEN", "Only Owners can change the access of Owners and Admins");
+    }
     return { userId, ...m };
   }
 
@@ -123,7 +176,14 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
         ORDER BY (m.role = 'owner') DESC, o.created_at
       `.execute(ctx.db);
       void reply.send({
-        orgs: r.rows.map((o) => ({ id: pid("org", o.id), name: o.name, role: o.role, isOwner: o.role === "owner" })),
+        orgs: r.rows.map((o) => ({
+          id: pid("org", o.id),
+          name: o.name,
+          role: o.role,
+          isOwner: o.role === "owner",
+          /** Owners and Admins open Members & access. */
+          canManage: isOrgManagerRole(o.role),
+        })),
       });
     }),
   );
@@ -156,11 +216,12 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
     }),
   );
 
-  /** Everything the owner's "Members & access" screen needs. */
+  /** Everything the "Members & access" screen needs (Admins: only what they may manage). */
   app.get<{ Params: OrgParams }>(
     "/v1/orgs/:orgId/access",
     wrap<OrgParams>(async (request, reply) => {
-      const { orgId } = await ownerOrg(request);
+      const actor = await managerOrg(request);
+      const { orgId } = actor;
       const [org, members, grants, workspaces, bases, devices, invites] = await Promise.all([
         sql<{ name: string; settings: unknown }>`SELECT name, settings FROM core.organizations WHERE id = ${orgId}`.execute(ctx.db),
         sql<{ user_id: string; email: string; display_name: string; role: string; status: string; joined_at: Date | null }>`
@@ -185,11 +246,20 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
           SELECT id, user_id, label, user_agent, host(last_ip) AS last_ip, status, first_seen_at, last_seen_at, decided_at
           FROM core.org_devices WHERE org_id = ${orgId} ORDER BY last_seen_at DESC
         `.execute(ctx.db),
-        sql<{ id: string; email: string; role: string; workspace_id: string | null; base_id: string | null; extra_base_ids: string[] | null; expires_at: Date; created_at: Date }>`
-          SELECT id, email, role, workspace_id, base_id, extra_base_ids, expires_at, created_at FROM core.invitations
+        sql<{ id: string; email: string; role: string; org_role: string; workspace_id: string | null; base_id: string | null; extra_base_ids: string[] | null; expires_at: Date; created_at: Date }>`
+          SELECT id, email, role, org_role, workspace_id, base_id, extra_base_ids, expires_at, created_at FROM core.invitations
           WHERE org_id = ${orgId} AND status = 'pending' AND expires_at > now() ORDER BY created_at DESC
         `.execute(ctx.db),
       ]);
+      // Owners see and manage everything. Admins see the workspaces and bases where they may
+      // hand out access (Creator or workspace Owner there) and nothing else.
+      const wsManage = new Map<string, boolean>();
+      const baseManage = new Map<string, boolean>();
+      for (const w of workspaces.rows) wsManage.set(w.id, (await grantCeiling(ctx.db, actor.userId, actor.role, { workspaceId: w.id })) > 0);
+      for (const b of bases.rows) baseManage.set(b.base_id, (await grantCeiling(ctx.db, actor.userId, actor.role, { baseId: b.base_id })) > 0);
+      const visibleBases = bases.rows.filter((b) => baseManage.get(b.base_id));
+      const visibleWs = workspaces.rows.filter((w) => wsManage.get(w.id) || visibleBases.some((b) => b.workspace_id === w.id));
+      const visibleIds = new Set([...visibleWs.map((w) => w.id), ...visibleBases.map((b) => b.base_id)]);
       const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
       void reply.send({
         org: {
@@ -198,10 +268,13 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
           requireDeviceApproval: requiresDeviceApproval(org.rows[0]?.settings),
           allowedSignupDomains: allowedDomainsOf(org.rows[0]?.settings),
         },
-        workspaces: workspaces.rows.map((w) => ({
+        me: { id: pid("usr", actor.userId), role: actor.role },
+        workspaces: visibleWs.map((w) => ({
           id: pid("wsp", w.id),
           name: w.name,
-          bases: bases.rows.filter((b) => b.workspace_id === w.id).map((b) => ({ id: pid("bas", b.base_id), name: b.name })),
+          /** False: an Admin may manage some bases here but not the whole workspace. */
+          manageable: wsManage.get(w.id) ?? false,
+          bases: visibleBases.filter((b) => b.workspace_id === w.id).map((b) => ({ id: pid("bas", b.base_id), name: b.name })),
         })),
         members: members.rows.map((m) => ({
           id: pid("usr", m.user_id),
@@ -209,10 +282,13 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
           name: m.display_name,
           orgRole: m.role,
           isOwner: m.role === "owner",
+          isMe: m.user_id === actor.userId,
+          /** Whether I may change this person's access, suspend or remove them. */
+          canManage: canManageMember(actor.role, m.role, m.user_id === actor.userId),
           status: m.status,
           joinedAt: iso(m.joined_at),
           grants: grants.rows
-            .filter((g) => g.principal_id === m.user_id)
+            .filter((g) => g.principal_id === m.user_id && visibleIds.has(g.resource_id))
             .map((g) => ({
               resourceType: g.resource_type,
               resourceId: pid(g.resource_type === "workspace" ? "wsp" : "bas", g.resource_id),
@@ -233,16 +309,27 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
               decidedAt: iso(d.decided_at),
             })),
         })),
-        invitations: invites.rows.map((i) => ({
+        invitations: invites.rows
+          .filter((i) =>
+            actor.role === "owner" ||
+            (i.org_role === "member" &&
+              (i.base_id ? [i.base_id, ...(i.extra_base_ids ?? [])].every((b) => visibleIds.has(b)) : Boolean(i.workspace_id && wsManage.get(i.workspace_id)))),
+          )
+          .map((i) => ({
           id: pid("inv", i.id),
           email: i.email,
           role: i.role,
+          orgRole: i.org_role,
           workspaceId: i.workspace_id && !i.base_id ? pid("wsp", i.workspace_id) : null,
           baseId: i.base_id ? pid("bas", i.base_id) : null,
           baseIds: i.base_id ? [i.base_id, ...(i.extra_base_ids ?? [])].map((b) => pid("bas", b)) : [],
           expiresAt: iso(i.expires_at),
         })),
-        pendingDevices: devices.rows.filter((d) => d.status === "pending").length,
+        pendingDevices: devices.rows.filter((d) => {
+          if (d.status !== "pending") return false;
+          const owner = members.rows.find((m) => m.user_id === d.user_id);
+          return Boolean(owner && canManageMember(actor.role, owner.role, owner.user_id === actor.userId));
+        }).length,
       });
     }),
   );
@@ -254,7 +341,7 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.get<{ Params: OrgParams }>(
     "/v1/orgs/:orgId/device-log",
     wrap<OrgParams>(async (request, reply) => {
-      const { orgId } = await ownerOrg(request);
+      const { orgId } = await managerOrg(request);
       const [members, devices, sessions, events] = await Promise.all([
         sql<{ user_id: string; email: string; display_name: string; role: string; status: string }>`
           SELECT m.user_id, u.email, u.display_name, m.role, m.status
@@ -343,7 +430,7 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.patch<{ Params: OrgParams }>(
     "/v1/orgs/:orgId/settings",
     wrap<OrgParams>(async (request, reply) => {
-      const { userId, orgId } = await ownerOrg(request);
+      const { userId, orgId } = await managerOrg(request);
       const body = settingsPatch.parse(request.body);
       if (body.requireDeviceApproval !== undefined) {
         await sql`
@@ -376,8 +463,9 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.put<{ Params: OrgParams & { userId: string } }>(
     "/v1/orgs/:orgId/members/:userId/grants",
     wrap<OrgParams & { userId: string }>(async (request, reply) => {
-      const { userId: actor, orgId } = await ownerOrg(request);
-      const target = await targetMember(orgId, request.params.userId);
+      const who = await managerOrg(request);
+      const { userId: actor, orgId } = who;
+      const target = await targetMember(who, request.params.userId);
       const body = grantBody.parse(request.body);
       const expiresAt = body.expiresAt ? new Date(body.expiresAt) : null;
       if (expiresAt && expiresAt <= new Date()) throw new ApiError(422, "VALIDATION_FAILED", "Access end date must be in the future");
@@ -413,6 +501,23 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
         if (body.role !== null && !(WORKSPACE_GRANT_ROLES as readonly string[]).includes(body.role)) {
           throw new ApiError(422, "VALIDATION_FAILED", `Workspace roles are ${WORKSPACE_GRANT_ROLES.join(", ")}`);
         }
+      }
+
+      // Admins: only where they are Creator themselves, never above their own role, and they
+      // can't take away a role higher than their own.
+      const existing = await sql<{ role: string }>`
+        SELECT role FROM core.access_grants
+        WHERE principal_type = 'user' AND principal_id = ${target.userId}
+          AND resource_type = ${resourceType} AND resource_id = ${resourceId}
+      `.execute(ctx.db);
+      const ceiling = await grantCeiling(ctx.db, actor, who.role, baseId ? { baseId } : { workspaceId });
+      const needed = Math.max(1, roleRank(resourceType, body.role), ...existing.rows.map((g) => roleRank(resourceType, g.role)));
+      if (ceiling < needed) {
+        throw new ApiError(
+          403,
+          "FORBIDDEN",
+          "Admins can only give access where they are Creator themselves, and not above their own role",
+        );
       }
 
       await ctx.db.transaction().execute(async (trx) => {
@@ -453,8 +558,9 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.patch<{ Params: OrgParams & { userId: string } }>(
     "/v1/orgs/:orgId/members/:userId",
     wrap<OrgParams & { userId: string }>(async (request, reply) => {
-      const { userId: actor, orgId } = await ownerOrg(request);
-      const target = await targetMember(orgId, request.params.userId);
+      const who = await managerOrg(request);
+      const { userId: actor, orgId } = who;
+      const target = await targetMember(who, request.params.userId);
       const body = memberPatch.parse(request.body);
       await sql`
         UPDATE core.organization_members SET status = ${body.status}, updated_at = now()
@@ -472,8 +578,9 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.delete<{ Params: OrgParams & { userId: string } }>(
     "/v1/orgs/:orgId/members/:userId",
     wrap<OrgParams & { userId: string }>(async (request, reply) => {
-      const { userId: actor, orgId } = await ownerOrg(request);
-      const target = await targetMember(orgId, request.params.userId);
+      const who = await managerOrg(request);
+      const { userId: actor, orgId } = who;
+      const target = await targetMember(who, request.params.userId);
       await ctx.db.transaction().execute(async (trx) => {
         await sql`DELETE FROM core.access_grants WHERE org_id = ${orgId} AND principal_type = 'user' AND principal_id = ${target.userId}`.execute(trx);
         await sql`DELETE FROM core.org_devices WHERE org_id = ${orgId} AND user_id = ${target.userId}`.execute(trx);
@@ -490,12 +597,87 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
     }),
   );
 
+  /**
+   * Account type (Owner, Admin, Member). Only Owners change it (questionnaire B14). An Owner
+   * may step down when another active Owner remains.
+   */
+  app.put<{ Params: OrgParams & { userId: string } }>(
+    "/v1/orgs/:orgId/members/:userId/role",
+    wrap<OrgParams & { userId: string }>(async (request, reply) => {
+      const actor = await ownerOrg(request);
+      const userId = parsePid(request.params.userId, "usr");
+      const { role } = rolePatch.parse(request.body);
+      const cur = await sql<{ role: string; status: string }>`
+        SELECT role, status FROM core.organization_members
+        WHERE org_id = ${actor.orgId} AND user_id = ${userId} AND status <> 'deactivated'
+      `.execute(ctx.db);
+      const m = cur.rows[0];
+      if (!m) throw new ApiError(404, "NOT_FOUND", "Member not found");
+      if (m.role === role) {
+        void reply.send({ role });
+        return;
+      }
+      if (m.role === "owner" && m.status === "active" && (await activeOwnerCount(actor.orgId)) <= 1) {
+        throw new ApiError(409, "CONFLICT", "The organization needs at least one Owner. Make someone else Owner first.");
+      }
+      if (role === "owner" && m.status !== "active") {
+        throw new ApiError(409, "CONFLICT", "Reactivate this person before making them Owner");
+      }
+      await sql`
+        UPDATE core.organization_members SET role = ${role}, updated_at = now()
+        WHERE org_id = ${actor.orgId} AND user_id = ${userId}
+      `.execute(ctx.db);
+      await refreshPerson(actor.orgId, userId);
+      await writeAuditEvent(ctx.db, {
+        orgId: actor.orgId,
+        actorUserId: actor.userId,
+        action: "member.role_changed",
+        targetType: "user",
+        targetId: userId,
+        metadata: { from: m.role, to: role },
+        ip: request.ip,
+      });
+      void reply.send({ role });
+    }),
+  );
+
+  /** Hand ownership to someone: they become Owner, you become Admin (questionnaire B2). */
+  app.post<{ Params: OrgParams }>(
+    "/v1/orgs/:orgId/transfer-ownership",
+    wrap<OrgParams>(async (request, reply) => {
+      const actor = await ownerOrg(request);
+      const userId = parsePid(transferBody.parse(request.body).userId, "usr");
+      if (userId === actor.userId) throw new ApiError(409, "CONFLICT", "You already own this organization");
+      const t = await sql<{ status: string }>`
+        SELECT status FROM core.organization_members WHERE org_id = ${actor.orgId} AND user_id = ${userId}
+      `.execute(ctx.db);
+      if (t.rows[0]?.status !== "active") throw new ApiError(404, "NOT_FOUND", "Active member not found");
+      await ctx.db.transaction().execute(async (trx) => {
+        await sql`UPDATE core.organization_members SET role = 'owner', updated_at = now() WHERE org_id = ${actor.orgId} AND user_id = ${userId}`.execute(trx);
+        await sql`UPDATE core.organization_members SET role = 'admin', updated_at = now() WHERE org_id = ${actor.orgId} AND user_id = ${actor.userId}`.execute(trx);
+      });
+      await refreshPerson(actor.orgId, userId);
+      await refreshPerson(actor.orgId, actor.userId);
+      await writeAuditEvent(ctx.db, {
+        orgId: actor.orgId,
+        actorUserId: actor.userId,
+        action: "org.ownership_transferred",
+        targetType: "user",
+        targetId: userId,
+        ip: request.ip,
+      });
+      void reply.send({ ok: true });
+    }),
+  );
+
   app.patch<{ Params: OrgParams & { deviceId: string } }>(
     "/v1/orgs/:orgId/devices/:deviceId",
     wrap<OrgParams & { deviceId: string }>(async (request, reply) => {
-      const { userId: actor, orgId } = await ownerOrg(request);
+      const who = await managerOrg(request);
+      const { userId: actor, orgId } = who;
       const body = devicePatch.parse(request.body);
       const id = parsePid(request.params.deviceId, "dev");
+      await assertDeviceManageable(who, id);
       const r = await sql<{ user_id: string; status: string }>`
         UPDATE core.org_devices
         SET status = coalesce(${body.status ?? null}, status),
@@ -518,8 +700,10 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.delete<{ Params: OrgParams & { deviceId: string } }>(
     "/v1/orgs/:orgId/devices/:deviceId",
     wrap<OrgParams & { deviceId: string }>(async (request, reply) => {
-      const { userId: actor, orgId } = await ownerOrg(request);
+      const who = await managerOrg(request);
+      const { userId: actor, orgId } = who;
       const id = parsePid(request.params.deviceId, "dev");
+      await assertDeviceManageable(who, id);
       const r = await sql<{ user_id: string }>`DELETE FROM core.org_devices WHERE id = ${id} AND org_id = ${orgId} RETURNING user_id`.execute(ctx.db);
       if (!r.rows[0]) throw new ApiError(404, "NOT_FOUND", "Device not found");
       invalidateDeviceCache(r.rows[0].user_id);
@@ -533,16 +717,22 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.get<{ Params: OrgParams }>(
     "/v1/orgs/:orgId/api-tokens",
     wrap<OrgParams>(async (request, reply) => {
-      const { orgId } = await ownerOrg(request);
-      const r = await sql<{ id: string; name: string; token_prefix: string; scopes: string[]; base_ids: string[] | null; expires_at: Date | null; last_used_at: Date | null; revoked_at: Date | null; created_at: Date }>`
-        SELECT id, name, token_prefix, scopes, base_ids, expires_at, last_used_at, revoked_at, created_at
-        FROM core.api_tokens WHERE org_id = ${orgId} ORDER BY created_at DESC LIMIT 200
+      const { orgId, userId, role } = await managerOrg(request);
+      // Owners see every token; Admins only their own (a token acts with its creator's access).
+      const onlyMine = role !== "owner";
+      const r = await sql<{ id: string; name: string; token_prefix: string; scopes: string[]; base_ids: string[] | null; expires_at: Date | null; last_used_at: Date | null; revoked_at: Date | null; created_at: Date; created_by: string | null }>`
+        SELECT t.id, t.name, t.token_prefix, t.scopes, t.base_ids, t.expires_at, t.last_used_at, t.revoked_at, t.created_at,
+               nullif(u.display_name, '') AS created_by
+        FROM core.api_tokens t LEFT JOIN core.users u ON u.id = t.user_id
+        WHERE t.org_id = ${orgId} AND (${!onlyMine} OR t.user_id = ${userId})
+        ORDER BY t.created_at DESC LIMIT 200
       `.execute(ctx.db);
       const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
       void reply.send({
         tokens: r.rows.map((t) => ({
           id: pid("tok", t.id),
           name: t.name,
+          createdBy: t.created_by,
           prefix: t.token_prefix,
           scopes: t.scopes,
           baseIds: t.base_ids ? t.base_ids.map((b) => pid("bas", b)) : null,
@@ -559,7 +749,7 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.post<{ Params: OrgParams }>(
     "/v1/orgs/:orgId/api-tokens",
     wrap<OrgParams>(async (request, reply) => {
-      const { userId, orgId } = await ownerOrg(request);
+      const { userId, orgId } = await managerOrg(request);
       const body = tokenBody.parse(request.body);
       let baseIds: string[] | null = null;
       if (body.baseIds) {
@@ -599,10 +789,12 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
   app.delete<{ Params: OrgParams & { tokenId: string } }>(
     "/v1/orgs/:orgId/api-tokens/:tokenId",
     wrap<OrgParams & { tokenId: string }>(async (request, reply) => {
-      const { userId, orgId } = await ownerOrg(request);
+      const { userId, orgId, role } = await managerOrg(request);
       const id = parsePid(request.params.tokenId, "tok");
       const r = await sql<{ id: string }>`
-        UPDATE core.api_tokens SET revoked_at = coalesce(revoked_at, now()) WHERE id = ${id} AND org_id = ${orgId} RETURNING id
+        UPDATE core.api_tokens SET revoked_at = coalesce(revoked_at, now())
+        WHERE id = ${id} AND org_id = ${orgId} AND (${role === "owner"} OR user_id = ${userId})
+        RETURNING id
       `.execute(ctx.db);
       if (!r.rows[0]) throw new ApiError(404, "NOT_FOUND", "Token not found");
       await writeAuditEvent(ctx.db, { orgId, actorUserId: userId, action: "api_token.revoked", targetType: "api_token", targetId: id, ip: request.ip });

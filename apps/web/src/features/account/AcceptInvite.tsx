@@ -50,7 +50,8 @@ export function AcceptInvite({
   const inv = preview.data?.invitation;
   const myEmail = me.data?.email ?? "";
   const signedIn = Boolean(me.data);
-  const target = inv?.baseName ?? inv?.workspaceName ?? "a workspace";
+  const target = inv?.baseName ?? inv?.workspaceName ?? inv?.organizationName ?? "a workspace";
+  const accountType = inv?.orgRole === "owner" ? "Owner" : inv?.orgRole === "admin" ? "Admin" : null;
   const wrongAccount = signedIn && inv && myEmail.toLowerCase() !== inv.email.toLowerCase();
 
   return (
@@ -69,7 +70,21 @@ export function AcceptInvite({
               {inv.inviterName ? `${inv.inviterName} invited you` : "You’ve been invited"} to {target}
             </h1>
             <p className={styles.muted}>
-              {inv.baseName ? "Base" : "Workspace"} access as <strong>{ROLE_LABEL[inv.role] ?? inv.role}</strong> · sent to {inv.email}
+              {accountType ? (
+                <>
+                  You’ll join as <strong>{accountType}</strong>
+                  {inv.baseName || inv.workspaceName ? (
+                    <>
+                      {" "}with {inv.baseName ? "base" : "workspace"} access as <strong>{ROLE_LABEL[inv.role] ?? inv.role}</strong>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {inv.baseName ? "Base" : "Workspace"} access as <strong>{ROLE_LABEL[inv.role] ?? inv.role}</strong>
+                </>
+              )}{" "}
+              · sent to {inv.email}
             </p>
             {inv.status !== "pending" ? (
               <div role="alert" className={styles.error}>

@@ -1,8 +1,11 @@
 import { request } from "../api.ts";
 
-/** Owner-only access administration: members, roles, devices, API tokens. */
+/** Access administration for Owners and Admins: members, account types, roles, devices, API tokens. */
 
 export type GrantRole = "creator" | "editor" | "commenter" | "viewer";
+/** On a workspace only: workspace Owner. */
+export type WorkspaceGrantRole = GrantRole | "owner";
+export type OrgRole = "owner" | "admin" | "member";
 /** On a base only: block it although the workspace role would open it. */
 export type BaseGrantRole = GrantRole | "none";
 export type TokenScope = "read" | "write" | "delete";
@@ -12,6 +15,8 @@ export interface OrgSummary {
   name: string;
   role: string;
   isOwner: boolean;
+  /** Owner or Admin: may open Members & access. */
+  canManage?: boolean;
 }
 
 export interface MemberGrant {
@@ -39,6 +44,9 @@ export interface OrgMember {
   name: string;
   orgRole: string;
   isOwner: boolean;
+  isMe?: boolean;
+  /** Whether I may change this person's access, suspend or remove them. */
+  canManage?: boolean;
   status: "active" | "suspended";
   joinedAt: string | null;
   grants: MemberGrant[];
@@ -47,15 +55,18 @@ export interface OrgMember {
 
 export interface OrgAccess {
   org: { id: string; name: string; requireDeviceApproval: boolean; allowedSignupDomains?: string[] };
-  workspaces: { id: string; name: string; bases: { id: string; name: string }[] }[];
+  me?: { id: string; role: OrgRole };
+  /** manageable = false: an Admin may manage some bases here, not the whole workspace. */
+  workspaces: { id: string; name: string; manageable?: boolean; bases: { id: string; name: string }[] }[];
   members: OrgMember[];
-  invitations: { id: string; email: string; role: string; workspaceId: string | null; baseId: string | null; baseIds?: string[]; expiresAt: string }[];
+  invitations: { id: string; email: string; role: string; orgRole?: string; workspaceId: string | null; baseId: string | null; baseIds?: string[]; expiresAt: string }[];
   pendingDevices: number;
 }
 
 export interface ApiTokenInfo {
   id: string;
   name: string;
+  createdBy?: string | null;
   prefix: string;
   scopes: TokenScope[];
   baseIds: string[] | null;
@@ -103,12 +114,18 @@ export const adminApi = {
   setGrant(
     orgId: string,
     userId: string,
-    body: { workspaceId?: string; baseId?: string; role: BaseGrantRole | null; expiresAt?: string | null },
+    body: { workspaceId?: string; baseId?: string; role: BaseGrantRole | WorkspaceGrantRole | null; expiresAt?: string | null },
   ) {
     return request<{ ok: true }>(`${org(orgId)}/members/${encodeURIComponent(userId)}/grants`, { method: "PUT", json: body });
   },
   setMemberStatus(orgId: string, userId: string, status: "active" | "suspended") {
     return request<{ status: string }>(`${org(orgId)}/members/${encodeURIComponent(userId)}`, { method: "PATCH", json: { status } });
+  },
+  setOrgRole(orgId: string, userId: string, role: OrgRole) {
+    return request<{ role: OrgRole }>(`${org(orgId)}/members/${encodeURIComponent(userId)}/role`, { method: "PUT", json: { role } });
+  },
+  transferOwnership(orgId: string, userId: string) {
+    return request<{ ok: true }>(`${org(orgId)}/transfer-ownership`, { method: "POST", json: { userId } });
   },
   removeMember(orgId: string, userId: string) {
     return request<void>(`${org(orgId)}/members/${encodeURIComponent(userId)}`, { method: "DELETE" });

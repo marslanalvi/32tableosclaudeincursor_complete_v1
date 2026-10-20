@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.14.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.15.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,19 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.15.0: roles phase 2 (Owner, Admin, Member)
+
+Implements phase 2 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.md` (G6, G7, G8, G11; B2, B3, B5, B14). Where the questionnaire conflicted, B3 (Admins invite) and B14 (three account types, so no Guest) won.
+
+* **Migration `0082_three_org_roles.sql`:** `billing_admin`/`guest` members become `member`; `organization_members_role_check` and the org part of `access_grants_role_check` allow only `owner`, `admin`, `member`; `core.invitations.org_role` (default `member`).
+* **Access:** `orgRoleGrantsWorkspaceOwner` is Owner-only, so Admins get workspaces/bases only through grants (`compile.ts`, `getWorkspaceAccess`, workspace members list, base collaborators). `canManageMember(actor, target, self)` in `workspace-access.ts`: Owners manage everyone, Admins manage Members, nobody themselves. `access/delegation.ts` `grantCeiling`: Owners unlimited; Admins only where their own role is Creator (base) or Creator/Owner (workspace), up to that rank; `roleRank` puts `none`/removal at 0.
+* **Members & access (`members/routes.ts`):** `managerOrg` (Owner/Admin) replaces the Owner-only guard; `ownerOrg` stays for account types and transfer. `GET …/access` returns `me`, per-member `isMe`/`canManage`, and for Admins only the workspaces/bases they manage (`manageable` per workspace), their grants and invitations. Grants: Admins checked against `grantCeiling` for both the new and the existing role; workspace grants accept `owner`. Suspend/remove/devices go through `targetMember`/`assertDeviceManageable`. New `PUT /v1/orgs/:orgId/members/:userId/role` (Owners; keeps one active Owner) and `POST /v1/orgs/:orgId/transfer-ownership` (target Owner, actor Admin). Tokens: Admins create, list and revoke only their own; Owners see all with `createdBy`; `resolveApiToken` accepts Owner or Admin creators (the token acts as its creator). `/v1/orgs` returns `canManage`.
+* **Invitations:** Owners and Admins invite (`mayInvite`); Admins limited by `grantCeiling`; `orgRole` admin/owner only by Owners; `organizationId` without workspace/base for Admin/Owner invites (`resource_type 'org'`). Accept inserts the member with `org_role` and on conflict only raises it. Revoking Admin/Owner invitations: Owners. Public preview returns `orgRole` and `organizationName`.
+* **Elsewhere:** Admins rename/delete any workspace (`assertWorkspaceOwner`); workspace list adds `orgRole`, `canManage` = Owner or Admin with Creator/Owner there; device approval notifications go to Owners, plus Admins for Members' devices; billing is Owner-only.
+* **Web:** `InviteForm` is exported and used by Home Share (`MembersDialog`, starts on `wsp:<id>`); Owners get an Account type select (Member/Admin/Owner, "No workspace or base yet" for Admin/Owner) and "Workspace Owner" on workspace scopes. Member cards: Admin/You badges, account type select and Transfer ownership for Owners, actions only when `canManage`, access rows disabled where an Admin may not manage the workspace. Devices: decide buttons only where allowed. Accept page shows "You'll join as Admin/Owner". Help → Members, roles & privileges, Device approval and API tokens describe the three account types.
+* **Live (read-only, `.data/r17-live-roles-report.mjs`):** nobody holds Billing admin, Guest or Admin, so the migration changes no live rows; the planned Owners (ai.deptbcc@bluecascade.org, ai.departmentbluecascade@gmail.com) and Admin (awais.ahmed@bluecascade.org) have no accounts yet.
+* Tests: `.data/verify-r17-phase2.mjs` (47 checks), `.data/r17-seed.mjs` + `.data/r2-shell/r17-ui.mjs` (24 checks, screenshots `r17-*.png`).
 
 ## v0.14.0: roles phase 1 (sign-up, workspaces, bases, duplicate, export, contacts)
 

@@ -8,6 +8,28 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-10-20
+
+Roles and permissions, phase 2 of the decisions questionnaire (roles R3; history in
+`docs/roles-and-permissions/ROLES-CHANGELOG.md`).
+
+### Changed
+- **Three account types: Owner, Admin, Member** (G7, B14). Billing admin and Guest are gone
+  (migration 0082; anyone holding them becomes Member).
+- **Several Owners, and Transfer ownership** (G6, B2). Only Owners change account types; an
+  organization always keeps at least one Owner. Transfer makes the other person Owner and you Admin.
+- **Admins** (B3) invite and manage Members (roles, end dates, No access, suspend, remove, devices),
+  create workspaces, rename or delete any workspace, create API tokens, change security settings and
+  see the device log. They open only the workspaces and bases an Owner gives them, hand out access
+  only where they are Creator (never above their own role), and see only their own API tokens. They
+  no longer get automatic access to every workspace. No billing.
+- **Invitations carry an account type** (Owners only for Admin/Owner) and an Admin or Owner can be
+  invited without any workspace yet. Accepting never lowers an account type.
+- **Workspace Owner role** can be given by Owners and Admins (G8).
+- **One invite form everywhere** (G11): Share on Home uses the Members & access form, starting on that
+  workspace, with "whole workspace or selected bases".
+- Device approval requests go to Owners, and to Admins for Members' devices.
+
 ## [0.14.0] - 2026-10-19
 
 Roles and permissions, phase 1 of the decisions questionnaire

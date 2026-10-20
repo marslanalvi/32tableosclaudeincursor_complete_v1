@@ -50,8 +50,22 @@
   gap: var(--tabula-space-2);
   align-items: center;
 }
+.inviteRowOwner {
+  grid-template-columns: minmax(180px, 1.2fr) 110px minmax(200px, 1.4fr) 150px auto;
+}
 .full {
   grid-column: 1 / -1;
+}
+.roleBadge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #eef1f5;
+  color: #3d4555;
+  vertical-align: 1px;
 }
 .linkBtn {
   font: inherit;

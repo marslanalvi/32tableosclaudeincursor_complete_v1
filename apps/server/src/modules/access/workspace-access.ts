@@ -7,7 +7,9 @@ import {
 import { sql } from "kysely";
 import { requestMayAccess } from "../../kernel/request-context.js";
 
-export type OrgRole = "owner" | "admin" | "billing_admin" | "member" | "guest";
+/** The three account types (questionnaire B14). */
+export type OrgRole = "owner" | "admin" | "member";
+export const ORG_ROLES: readonly OrgRole[] = ["owner", "admin", "member"];
 
 export const WORKSPACE_ROLE_RANK: Record<WorkspaceRole, number> = {
   owner: 50,
@@ -25,15 +27,18 @@ export const BASE_ROLE_RANK: Record<BaseRole, number> = {
   interface_only: 5,
 };
 
-/** Org owners/admins manage every workspace in their org. */
+/**
+ * Owners open every workspace in their org. Admins only get the workspaces and bases they've
+ * been given (questionnaire B3).
+ */
 export function orgRoleGrantsWorkspaceOwner(role: string | null | undefined): boolean {
-  return role === "owner" || role === "admin";
+  return role === "owner";
 }
 
 export interface WorkspaceAccess {
   orgId: string;
   orgRole: OrgRole;
-  /** Effective workspace role (explicit grant, or `owner` for org owner/admin). Null = no workspace access. */
+  /** Effective workspace role (explicit grant, or `owner` for org owners). Null = no workspace access. */
   workspaceRole: WorkspaceRole | null;
 }
 
@@ -85,10 +90,7 @@ export async function getOrgRole(
   return (res.rows[0]?.role as OrgRole | undefined) ?? null;
 }
 
-/**
- * Only the organization owner invites people, changes their roles, approves
- * devices and issues API tokens.
- */
+/** Owners only: create Admins and Owners, transfer ownership. */
 export async function isOrgOwner(db: TabulaDb, userId: string, orgId: string): Promise<boolean> {
   return requestMayAccess(orgId) && (await getOrgRole(db, userId, orgId)) === "owner";
 }
@@ -100,6 +102,16 @@ export function isOrgManagerRole(role: string | null | undefined): boolean {
 
 export async function isOrgManager(db: TabulaDb, userId: string, orgId: string): Promise<boolean> {
   return requestMayAccess(orgId) && isOrgManagerRole(await getOrgRole(db, userId, orgId));
+}
+
+/**
+ * Whether someone with org role `actor` may manage a person with org role `target`:
+ * Owners manage everyone, Admins manage Members only, nobody manages their own access.
+ */
+export function canManageMember(actor: OrgRole | null, target: string, self: boolean): boolean {
+  if (self || !actor) return false;
+  if (actor === "owner") return true;
+  return actor === "admin" && target === "member";
 }
 
 /** Workspace roles can manage members when they are owner or creator. */

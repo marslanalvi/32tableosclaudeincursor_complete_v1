@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { TabulaDb } from "@tabula/db";
 import { sql } from "kysely";
 
-/** Personal access tokens issued by an org owner (`Authorization: Bearer tos_…`). */
+/** Personal access tokens issued by an org Owner or Admin (`Authorization: Bearer tos_…`). */
 export const API_TOKEN_PREFIX = "tos_";
 
 export type TokenScope = "read" | "write" | "delete";
@@ -27,7 +27,10 @@ export interface ResolvedApiToken {
   baseIds: string[] | null;
 }
 
-/** Valid only while unrevoked, unexpired, and its creator is still an active owner of the org. */
+/**
+ * Valid only while unrevoked, unexpired, and its creator is still an active Owner or Admin of
+ * the org. It acts with the creator's own access (Admins: only what they've been given).
+ */
 export async function resolveApiToken(db: TabulaDb, raw: string, ip: string | null): Promise<ResolvedApiToken | null> {
   if (!raw.startsWith(API_TOKEN_PREFIX) || raw.length > 200) return null;
   const res = await sql<{
@@ -44,7 +47,7 @@ export async function resolveApiToken(db: TabulaDb, raw: string, ip: string | nu
     FROM core.api_tokens t
     INNER JOIN core.users u ON u.id = t.user_id AND u.status = 'active'
     INNER JOIN core.organization_members m
-      ON m.org_id = t.org_id AND m.user_id = t.user_id AND m.status = 'active' AND m.role = 'owner'
+      ON m.org_id = t.org_id AND m.user_id = t.user_id AND m.status = 'active' AND m.role IN ('owner', 'admin')
     WHERE t.token_hash = ${hashApiToken(raw)}
       AND t.revoked_at IS NULL
       AND (t.expires_at IS NULL OR t.expires_at > now())
