@@ -46,7 +46,7 @@
   <h1>TableOS — Roles, Permissions &amp; Access</h1>
   <div class="sub">How accounts, organizations, workspaces, bases and roles work today, every rule in the code, the gaps, and a recommended model</div>
   <div class="meta">
-    Document version <b>3</b> — roles <b>R3</b>, TableOS <b>0.15.0</b> (version 1 described 0.13.0, commit <code>c2f239a</code>)<br />
+    Document version <b>4</b> — roles <b>R4</b>, TableOS <b>0.16.0</b> (version 1 described 0.13.0, commit <code>c2f239a</code>)<br />
     Prepared: 19 October 2026<br />
     Source: the TableOS code base (server permission checks, database schema, web screens) and tests run on a local copy of the system.
     Statements marked <span class="tested">tested</span> were reproduced on the local test system while writing this document.
@@ -78,8 +78,9 @@
   <tr><th>Document</th><th>Roles</th><th>TableOS</th><th>What it describes</th></tr>
   <tr><td>1</td><td>R1</td><td>0.13.0</td><td>Starting point: open sign-up, a personal organization for everyone, anyone could create workspaces, copy or export bases.</td></tr>
   <tr><td>2</td><td>R2</td><td>0.14.0</td><td>Phase 1 of the questionnaire: sign-up by invitation or allowed email domain; no personal organizations; Owners and Admins create workspaces and bases, duplicate and export; contacts need a workspace role.</td></tr>
-  <tr><td><b>3</b></td><td><b>R3</b></td><td><b>0.15.0</b></td><td><b>Phase 2</b>: three account types (Owner, Admin, Member); several Owners and Transfer ownership; Admins manage Members but open only what an Owner gives them; invitations with an account type; Workspace Owner role can be given; one invite form.</td></tr>
-  <tr><td>—</td><td>R4</td><td>phase 3</td><td>Planned: two-factor for everyone, 30-day sessions, share-link rules, activity log, remaining gaps.</td></tr>
+  <tr><td>3</td><td>R3</td><td>0.15.0</td><td>Phase 2: three account types (Owner, Admin, Member); several Owners and Transfer ownership; Admins manage Members but open only what an Owner gives them; invitations with an account type; Workspace Owner role can be given; one invite form.</td></tr>
+  <tr><td><b>4</b></td><td><b>R4</b></td><td><b>0.16.0</b></td><td><b>Phase 3</b>: two-factor required for everyone; sessions end after 30 days without activity; share links for Creators with "allow copy" enforced; Owners and Creators always edit fields; automation "Runs as"; hidden notifications for closed bases; move a base to another workspace; member emails for managers only; Activity log.</td></tr>
+  <tr><td>—</td><td>—</td><td>later</td><td>Interface-only role (G10), postponed (B12).</td></tr>
 </table>
 
 <h3>What changed in 0.14.0</h3>
@@ -93,6 +94,20 @@
   <tr><td>Export CSV / Excel</td><td>Anyone who could open the table</td><td>Owners and Admins (copy and paste in the grid still works)</td></tr>
   <tr><td>Contacts directory</td><td>Every organization member</td><td>People with a role on that workspace</td></tr>
   <tr><td>Deleted organizations</td><td>Still listed</td><td>Hidden from every list</td></tr>
+</table>
+
+<h3 id="changes-016">What changed in 0.16.0</h3>
+<table>
+  <tr><th>Area</th><th>Before (R3)</th><th>Now (R4)</th></tr>
+  <tr><td>Two-factor sign-in</td><td>Optional</td><td><b>Required for everyone.</b> Without it, a signed-in person only sees "Set up two-factor sign-in"; it can't be turned off. Owners stay exempt from lockout and device approval. Automations and API tokens are unaffected.</td></tr>
+  <tr><td>Sessions</td><td>Never expired</td><td>End after <b>30 days without activity</b>; each visit restarts the 30 days.</td></tr>
+  <tr><td>Share links</td><td>Editors and up; "allow copy" only hid a button</td><td><b>Creators and up.</b> With copy off: no copy, cut, drag or right-click on the shared page, attachments without download links, 50 records per request.</td></tr>
+  <tr><td>Field permission "Nobody"</td><td>Locked out the Owner and Creators too</td><td>Owners and Creators can always edit.</td></tr>
+  <tr><td>Automations</td><td>Ran as whoever saved them last</td><td><b>"Runs as …"</b> is shown and a Creator picks another Creator; saving doesn't change it.</td></tr>
+  <tr><td>Notifications</td><td>Stayed after losing access</td><td>Hidden for bases you can't open.</td></tr>
+  <tr><td>Moving bases</td><td>Not possible</td><td><b>Move to workspace…</b> (same organization; Owners, Admins, or Workspace Owner of both). Everything moves; roles from the old workspace stop applying.</td></tr>
+  <tr><td>Member emails</td><td>Visible to every member</td><td>Owners, Admins and Workspace Owners only; others see names.</td></tr>
+  <tr><td>Audit log</td><td>Device log only</td><td><b>Activity</b> tab for Owners and Admins, with filters.</td></tr>
 </table>
 
 <h3 id="changes-015">What changed in 0.15.0</h3>
@@ -122,7 +137,15 @@
   <tr><td>G9 contacts open to all</td><td><span class="closed">closed 0.14.0</span></td><td></td></tr>
   <tr><td>G10 interface-only</td><td><span class="planned">postponed</span></td><td>Keep roles minimal for now (B12).</td></tr>
   <tr><td>G11 two invite screens</td><td><span class="closed">closed 0.15.0</span></td><td>One form everywhere.</td></tr>
-  <tr><td>G12–G20</td><td><span class="planned">phase 3</span></td><td>Sessions, two-factor, share links, field permissions, Runs as, notifications, move base, member emails, activity log.</td></tr>
+  <tr><td>G12 sessions never expire</td><td><span class="closed">closed 0.16.0</span></td><td>30 days without activity.</td></tr>
+  <tr><td>G13 two-factor optional</td><td><span class="closed">closed 0.16.0</span></td><td>Required for everyone; Owners keep the lockout/device exemption (B11).</td></tr>
+  <tr><td>G14 share links</td><td><span class="closed">closed 0.16.0</span></td><td>Creators and up; "allow copy" enforced.</td></tr>
+  <tr><td>G15 "Nobody" locks out Owners</td><td><span class="closed">closed 0.16.0</span></td><td>Owners and Creators always edit.</td></tr>
+  <tr><td>G16 Runs as</td><td><span class="closed">closed 0.16.0</span></td><td>Shown; Creators choose.</td></tr>
+  <tr><td>G17 old notifications</td><td><span class="closed">closed 0.16.0</span></td><td>Hidden after losing access.</td></tr>
+  <tr><td>G18 move base</td><td><span class="closed">closed 0.16.0</span></td><td>Move to workspace…</td></tr>
+  <tr><td>G19 member emails</td><td><span class="closed">closed 0.16.0</span></td><td>Managers only.</td></tr>
+  <tr><td>G20 audit screen</td><td><span class="closed">closed 0.16.0</span></td><td>Activity tab.</td></tr>
 </table>
 
 <!-- ============================================================ 1 -->
@@ -436,15 +459,15 @@ Mahad signs up and accepts:
   <tr><td>G9</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Contacts directory is open to every organization member</b>, including people invited to one base only.</td><td><code>contacts/routes.ts</code> 48–51; <code>access/helpers.ts</code> 6–27</td></tr>
   <tr><td>G10</td><td><span class="sev m">Medium</span></td><td><b>No interface-only access.</b> To use an interface a person needs a role on the whole base. The <code>interface_only</code> role exists but isn't offered.</td><td><code>permissions/roles.ts</code>; <code>interfaces/routes.ts</code></td></tr>
   <tr><td>G11</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.15.0</span></td><td><b>Two invite screens behave differently.</b> Home → workspace <i>Share</i> always gives the whole workspace; Members &amp; access offers selected bases. This caused "I gave one base and they got the whole workspace" on live.</td><td><code>routes/home.tsx</code> share dialog</td></tr>
-  <tr><td>G12</td><td><span class="sev m">Medium</span></td><td><b>Sessions never expire.</b> An unattended or stolen browser stays signed in until signed out, password changed, device revoked or member removed. No organization policy for session length.</td><td>migration <code>0076_sessions_no_expiry.sql</code></td></tr>
-  <tr><td>G13</td><td><span class="sev m">Medium</span></td><td><b>Owner account is the softest high-value target.</b> It is exempt from lockout and device approval and MFA is optional; nobody can require MFA.</td><td><code>auth/lockout.ts</code> 74–81; <code>access/devices.ts</code></td></tr>
-  <tr><td>G14</td><td><span class="sev m">Medium</span></td><td><b>Public share links need no approval.</b> Any Editor can publish a view or the whole base on a public link; no organization switch to disable public links or require passwords. "Allow copy" isn't enforced by the server.</td><td><code>share/routes.ts</code> 198–290</td></tr>
-  <tr><td>G15</td><td><span class="sev l">Low</span></td><td><b>Field permission "Nobody" also locks out the Owner</b> and Creators until changed.</td><td><code>schema/field-permissions.ts</code> 35</td></tr>
-  <tr><td>G16</td><td><span class="sev l">Low</span></td><td><b>Automations change identity when someone else saves them</b>: they then run with that person's access and connected accounts.</td><td><code>automations/engine.ts</code> 742</td></tr>
-  <tr><td>G17</td><td><span class="sev l">Low</span></td><td><b>Old notifications stay visible</b> after someone loses access to a base (title and preview text).</td><td><code>notifications/routes.ts</code></td></tr>
-  <tr><td>G18</td><td><span class="sev l">Low</span></td><td><b>No "move base to another workspace".</b> Only duplicate (which leaves the original and has gap G2).</td><td><code>base/manage-routes.ts</code></td></tr>
-  <tr><td>G19</td><td><span class="sev l">Low</span></td><td><b>Workspace member lists show every member's email</b> to all workspace members (also Viewers).</td><td><code>workspace/routes.ts</code> 190–250</td></tr>
-  <tr><td>G20</td><td><span class="sev l">Low</span></td><td><b>No audit screen.</b> Role changes, invitations and share links are logged but only the device log can be viewed.</td><td><code>audit.audit_events</code></td></tr>
+  <tr><td>G12</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.16.0</span></td><td><b>Sessions never expire.</b> An unattended or stolen browser stays signed in until signed out, password changed, device revoked or member removed. No organization policy for session length.</td><td>migration <code>0076_sessions_no_expiry.sql</code></td></tr>
+  <tr><td>G13</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.16.0</span></td><td><b>Owner account is the softest high-value target.</b> It is exempt from lockout and device approval and MFA is optional; nobody can require MFA.</td><td><code>auth/lockout.ts</code> 74–81; <code>access/devices.ts</code></td></tr>
+  <tr><td>G14</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.16.0</span></td><td><b>Public share links need no approval.</b> Any Editor can publish a view or the whole base on a public link; no organization switch to disable public links or require passwords. "Allow copy" isn't enforced by the server.</td><td><code>share/routes.ts</code> 198–290</td></tr>
+  <tr><td>G15</td><td><span class="sev l">Low</span><br /><span class="closed">closed 0.16.0</span></td><td><b>Field permission "Nobody" also locks out the Owner</b> and Creators until changed.</td><td><code>schema/field-permissions.ts</code> 35</td></tr>
+  <tr><td>G16</td><td><span class="sev l">Low</span><br /><span class="closed">closed 0.16.0</span></td><td><b>Automations change identity when someone else saves them</b>: they then run with that person's access and connected accounts.</td><td><code>automations/engine.ts</code> 742</td></tr>
+  <tr><td>G17</td><td><span class="sev l">Low</span><br /><span class="closed">closed 0.16.0</span></td><td><b>Old notifications stay visible</b> after someone loses access to a base (title and preview text).</td><td><code>notifications/routes.ts</code></td></tr>
+  <tr><td>G18</td><td><span class="sev l">Low</span><br /><span class="closed">closed 0.16.0</span></td><td><b>No "move base to another workspace".</b> Only duplicate (which leaves the original and has gap G2).</td><td><code>base/manage-routes.ts</code></td></tr>
+  <tr><td>G19</td><td><span class="sev l">Low</span><br /><span class="closed">closed 0.16.0</span></td><td><b>Workspace member lists show every member's email</b> to all workspace members (also Viewers).</td><td><code>workspace/routes.ts</code> 190–250</td></tr>
+  <tr><td>G20</td><td><span class="sev l">Low</span><br /><span class="closed">closed 0.16.0</span></td><td><b>No audit screen.</b> Role changes, invitations and share links are logged but only the device log can be viewed.</td><td><code>audit.audit_events</code></td></tr>
 </table>
 
 <!-- ============================================================ 11 -->

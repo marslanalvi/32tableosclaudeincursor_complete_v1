@@ -10,7 +10,8 @@ export class PostgresFtsBackend implements SearchBackend {
       INSERT INTO data.search_documents (
         workspace_id, base_id, doc_type, ref_id, title, body, updated_at
       ) VALUES (
-        ${doc.workspaceId},
+        -- The base's current workspace: an event queued before the base moved still carries the old one.
+        coalesce((SELECT workspace_id FROM data.bases WHERE id = ${doc.baseId}), ${doc.workspaceId}),
         ${doc.baseId},
         ${doc.docType},
         ${doc.refId},
@@ -20,6 +21,7 @@ export class PostgresFtsBackend implements SearchBackend {
       )
       ON CONFLICT (base_id, doc_type, ref_id)
       DO UPDATE SET
+        workspace_id = EXCLUDED.workspace_id,
         title = EXCLUDED.title,
         body = EXCLUDED.body,
         updated_at = now()

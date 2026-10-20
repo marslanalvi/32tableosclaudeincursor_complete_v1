@@ -4,7 +4,9 @@ import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import { ApiError, handleRouteError, notFound } from "../../http/errors.js";
-import { isOrgManager } from "../access/workspace-access.js";
+import { getWorkspaceAccess, isOrgManager, isOrgManagerRole } from "../access/workspace-access.js";
+import { invalidateBaseSnapshotCache } from "../access/compile.js";
+import { writeAuditEvent } from "../audit/write.js";
 import { resolveBaseContext } from "../access/helpers.js";
 import { assertCan } from "../access/assert.js";
 import { compileForUser, compileForWorkspace } from "../access/compile.js";
@@ -127,7 +129,13 @@ export async function registerBaseManageRoutes(
           base.workspaceId,
           base.orgId,
         );
-        void reply.send({ collaborators });
+        // Emails: only Owners, Admins and Workspace Owners (questionnaire G19).
+        const ws = await getWorkspaceAccess(ctx.db, user.id, base.workspaceId);
+        const seeEmails = Boolean(ws && (isOrgManagerRole(ws.orgRole) || ws.workspaceRole === "owner"));
+        const me = pid("usr", user.id);
+        void reply.send({
+          collaborators: seeEmails ? collaborators : collaborators.map((c) => (c.id === me ? c : { ...c, email: "" })),
+        });
       } catch (err) {
         handleRouteError(request, reply, err);
       }
@@ -190,4 +198,119 @@ export async function registerBaseManageRoutes(
       }
     },
   );
+
+  /**
+   * Move a base to another workspace of the same organization (questionnaire G18). Owners and
+   * Admins, or someone who is Workspace Owner of both workspaces; they must be Creator of the
+   * base and may create bases in the target. Roles given on the old workspace no longer apply.
+   */
+  app.post<{ Params: { baseId: string } }>(
+    "/v1/bases/:baseId/move",
+    async (request, reply) => {
+      try {
+        const user = request.user;
+        if (!user) {
+          notFound(request, reply);
+          return;
+        }
+        const baseId = parsePid(request.params.baseId, "bas");
+        const body = moveBody.parse(request.body);
+        const base = await resolveBaseContext(ctx.db, user.id, baseId);
+        if (!base.ok) {
+          notFound(request, reply, "Base not found");
+          return;
+        }
+        assertCan(await compileForUser(ctx.db, user.id, baseId), "base.manage_schema");
+        const target = parsePid(body.workspaceId, "wsp");
+        if (target === base.workspaceId) {
+          void reply.send({ ok: true, workspaceId: pid("wsp", target) });
+          return;
+        }
+        const t = await sql<{ org_id: string }>`
+          SELECT org_id FROM core.workspaces WHERE id = ${target} AND deleted_at IS NULL AND status = 'active'
+        `.execute(ctx.db);
+        if (t.rows[0]?.org_id !== base.orgId) {
+          throw new ApiError(403, "FORBIDDEN", "A base can only move to a workspace of the same organization");
+        }
+        assertCan(await compileForWorkspace(ctx.db, user.id, target), "base.manage_schema");
+        const [from, to] = await Promise.all([
+          getWorkspaceAccess(ctx.db, user.id, base.workspaceId),
+          getWorkspaceAccess(ctx.db, user.id, target),
+        ]);
+        const manager = await isOrgManager(ctx.db, user.id, base.orgId);
+        if (!manager && !(from?.workspaceRole === "owner" && to?.workspaceRole === "owner")) {
+          throw new ApiError(403, "FORBIDDEN", "Only Owners, Admins and Workspace Owners of both workspaces can move a base");
+        }
+
+        await ctx.db.transaction().execute(async (trx) => {
+          for (const table of MOVE_TABLES) {
+            await sql`UPDATE ${sql.table(table)} SET workspace_id = ${target} WHERE base_id = ${baseId}`.execute(trx);
+          }
+          await sql`UPDATE data.bases SET workspace_id = ${target}, updated_at = now() WHERE id = ${baseId}`.execute(trx);
+          await sql`
+            UPDATE core.public_link_directory SET workspace_id = ${target}
+            WHERE share_link_id IN (SELECT id FROM data.share_links WHERE base_id = ${baseId})
+          `.execute(trx);
+          await sql`UPDATE core.base_directory SET updated_at = now() WHERE base_id = ${baseId}`.execute(trx);
+          await sql`UPDATE data.base_runtime SET perm_epoch = perm_epoch + 1, updated_at = now() WHERE base_id = ${baseId}`.execute(trx);
+        });
+        invalidateBaseSnapshotCache(baseId);
+        await writeAuditEvent(ctx.db, {
+          orgId: base.orgId,
+          workspaceId: target,
+          actorUserId: user.id,
+          action: "base.moved",
+          targetType: "base",
+          targetId: baseId,
+          metadata: { from: base.workspaceId, to: target, name: base.name },
+          ip: request.ip,
+        });
+        void reply.send({ ok: true, workspaceId: pid("wsp", target) });
+      } catch (err) {
+        handleRouteError(request, reply, err);
+      }
+    },
+  );
 }
+
+const moveBody = z.object({ workspaceId: z.string() });
+
+/** Every table that keeps both a base_id and its workspace_id (checked against the schema in tests). */
+const MOVE_TABLES = [
+  "core.access_grants",
+  "core.base_directory",
+  "core.invitations",
+  "core.notifications",
+  "data.attachments",
+  "data.automation_runs",
+  "data.automations",
+  "data.base_changes",
+  "data.base_runtime",
+  "data.comments",
+  "data.computed_stale",
+  "data.deletion_batches",
+  "data.export_jobs",
+  "data.field_dependencies",
+  "data.fields",
+  "data.import_jobs",
+  "data.interface_pages",
+  "data.interface_versions",
+  "data.interfaces",
+  "data.link_relations",
+  "data.long_operations",
+  "data.outbox_events",
+  "data.record_index_num",
+  "data.record_index_text",
+  "data.record_index_time",
+  "data.record_links",
+  "data.record_revisions",
+  "data.record_subscriptions",
+  "data.records",
+  "data.search_documents",
+  "data.share_links",
+  "data.share_submissions",
+  "data.table_syncs",
+  "data.tables",
+  "data.view_sections",
+  "data.views",
+] as const;

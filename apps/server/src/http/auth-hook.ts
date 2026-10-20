@@ -8,7 +8,8 @@ import type { AppContext } from "../lib/app-context.js";
 import { currentRequestContext } from "../kernel/request-context.js";
 import { blockedOrgsForDevice, ensureDeviceKey } from "../modules/access/devices.js";
 import { requiredScope, resolveApiToken } from "../modules/access/api-tokens.js";
-import { setSessionCookie } from "../modules/auth/session.js";
+import { SESSION_IDLE_DAYS, setSessionCookie } from "../modules/auth/session.js";
+import { allowedBeforeMfa, mfaRequired } from "../modules/auth/mfa-policy.js";
 import { sendApiError, unauthorized } from "./errors.js";
 
 export interface RequestUser {
@@ -138,8 +139,10 @@ export async function authHook(
       time_zone: string | null;
       cookie_stale: boolean;
       seen_stale: boolean;
+      has_mfa: boolean;
     }>`
       SELECT s.id AS session_id, u.id AS user_id, u.email, u.display_name, s.auth_method, u.time_zone,
+             EXISTS (SELECT 1 FROM core.user_mfa_factors f WHERE f.user_id = u.id AND f.confirmed_at IS NOT NULL) AS has_mfa,
              (s.cookie_refreshed_at IS NULL OR s.cookie_refreshed_at < now() - interval '1 day') AS cookie_stale,
              (s.last_seen_at IS NULL OR s.last_seen_at < now() - interval '1 minute') AS seen_stale
       FROM core.sessions s
@@ -158,12 +161,13 @@ export async function authHook(
       return;
     }
 
-    // Sessions have no idle timeout; keep the browser's cookie from aging out instead.
+    // Activity pushes the 30-day idle end out again (automation sessions keep their short life).
     const refreshCookie = row.cookie_stale && row.auth_method !== "automation";
     if (row.seen_stale || refreshCookie) {
       await sql`
         UPDATE core.sessions
         SET last_seen_at = now(),
+            idle_expires_at = ${row.auth_method === "automation" ? sql`idle_expires_at` : sql`now() + make_interval(days => ${SESSION_IDLE_DAYS})`},
             cookie_refreshed_at = ${refreshCookie ? sql`now()` : sql`cookie_refreshed_at`}
         WHERE id = ${row.session_id}
       `.execute(ctx.db);
@@ -176,6 +180,11 @@ export async function authHook(
       displayName: row.display_name,
       sessionId: row.session_id,
     };
+
+    if (row.auth_method !== "automation" && !row.has_mfa && !allowedBeforeMfa(path) && (await mfaRequired(ctx.db))) {
+      sendApiError(request, reply, 403, "MFA_SETUP_REQUIRED", "Set up two-factor sign-in to continue (Account → Two-factor authentication).");
+      return;
+    }
 
     // Date filters, "today" and chart day buckets use the viewer's own calendar.
     const tz = browserTimeZone(request);

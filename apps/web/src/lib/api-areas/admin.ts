@@ -88,6 +88,18 @@ export interface DeviceLogMember {
   history: { kind: "requested" | "approved" | "revoked" | "forgotten"; at: string; deviceId: string | null; deviceLabel: string; by: string | null; ip: string | null }[];
 }
 
+/** One row of Members & access → Activity (audit log). */
+export interface ActivityEvent {
+  id: string;
+  action: string;
+  at: string;
+  actor: { name: string; email: string } | null;
+  targetType: string | null;
+  target: string | null;
+  details: Record<string, unknown>;
+  ip: string | null;
+}
+
 export interface PendingDevice {
   orgId: string;
   orgName: string;
@@ -138,6 +150,12 @@ export const adminApi = {
   },
   deleteDevice(orgId: string, deviceId: string) {
     return request<void>(`${org(orgId)}/devices/${encodeURIComponent(deviceId)}`, { method: "DELETE" });
+  },
+  activity(orgId: string, q: { before?: string | null; category?: string }) {
+    const qs = new URLSearchParams();
+    if (q.before) qs.set("before", q.before);
+    if (q.category) qs.set("category", q.category);
+    return request<{ events: ActivityEvent[]; nextBefore: string | null }>(`${org(orgId)}/activity?${qs.toString()}`);
   },
   tokens(orgId: string) {
     return request<{ tokens: ApiTokenInfo[] }>(`${org(orgId)}/api-tokens`);

@@ -8,6 +8,34 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-20
+
+Roles and permissions, phase 3 of the decisions questionnaire (roles R4; history in
+`docs/roles-and-permissions/ROLES-CHANGELOG.md`). Migration 0083.
+
+### Changed
+- **Two-factor sign-in is required for everyone** (G13, B9). Anyone without it is taken to
+  "Set up two-factor sign-in" and can't open anything else until it's on; it can't be turned off.
+  Owners stay exempt from lockout and device approval (B11). Automations and API tokens are unaffected.
+  Platform switch `core.platform_settings.require_mfa`.
+- **Sessions end after 30 days without activity** (G12, B10); each visit restarts the 30 days.
+  Sessions already idle for longer end when this version starts.
+- **Share links: Creators and up only** (G14, B8). Editors see existing links but can't create or change
+  them. With "Allow copying data" off, the shared page blocks copy, cut, drag and right-click, attachments
+  come without download links, and records load 50 at a time.
+- **Owners and Creators can always edit a field**, even one set to "Nobody" (G15).
+- **Automations show "Runs as …"** and a Creator picks which Creator of the base they run as (G16).
+  Saving an automation no longer changes who it runs as; existing ones keep their current person.
+- **Notifications about bases you can no longer open are hidden** and not counted (G17).
+- **Move to workspace…** on a base (G18): same organization; Owners, Admins, or a Workspace Owner of both
+  workspaces. Everything in the base moves; roles from the old workspace stop applying.
+- **Member emails** in workspace and base member lists are only shown to Owners, Admins and Workspace
+  Owners; everyone else sees names (G19).
+- **Activity log** tab in Members & access for Owners and Admins, with filters (G20).
+
+### Fixed
+- The search index kept a moved base's old workspace when it caught up on earlier changes.
+
 ## [0.15.0] - 2026-10-20
 
 Roles and permissions, phase 2 of the decisions questionnaire (roles R3; history in

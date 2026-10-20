@@ -69,6 +69,9 @@ const tokenBody = z.object({
 
 type OrgParams = { orgId: string };
 
+/** Activity log filters: the first part of the audit action. */
+const ACTIVITY_CATEGORIES = ["auth", "member", "access", "invite", "device", "api_token", "org", "base", "share", "automation"];
+
 export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContext): Promise<void> {
   function wrap<P>(fn: (request: FastifyRequest<{ Params: P }>, reply: FastifyReply) => Promise<void>) {
     return async (request: FastifyRequest<{ Params: P }>, reply: FastifyReply) => {
@@ -709,6 +712,68 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
       invalidateDeviceCache(r.rows[0].user_id);
       await writeAuditEvent(ctx.db, { orgId, actorUserId: actor, action: "device.deleted", targetType: "device", targetId: id, metadata: { userId: r.rows[0].user_id }, ip: request.ip });
       void reply.code(204).send();
+    }),
+  );
+
+  /* --------------------------- Activity log --------------------------- */
+
+  /**
+   * Who did what in the organization (questionnaire G20): sign-ins, people, roles, invitations,
+   * devices, tokens, security, workspaces and bases, share links and automations. Newest first,
+   * 100 per page (`before` = createdAt of the last row).
+   */
+  app.get<{ Params: OrgParams; Querystring: { before?: string; category?: string } }>(
+    "/v1/orgs/:orgId/activity",
+    wrap<OrgParams>(async (request, reply) => {
+      const { orgId } = await managerOrg(request);
+      const q = request.query as { before?: string; category?: string };
+      const before = q.before && !Number.isNaN(Date.parse(q.before)) ? new Date(q.before) : null;
+      const prefix = q.category && ACTIVITY_CATEGORIES.includes(q.category) ? `${q.category}.%` : null;
+      const r = await sql<{
+        id: string;
+        action: string;
+        target_type: string | null;
+        target_id: string | null;
+        metadata: Record<string, unknown> | null;
+        ip: string | null;
+        created_at: Date;
+        actor_name: string | null;
+        actor_email: string | null;
+        target_label: string | null;
+      }>`
+        SELECT e.id, e.action, e.target_type, e.target_id::text AS target_id, e.metadata, host(e.ip) AS ip, e.created_at,
+               nullif(a.display_name, '') AS actor_name, a.email AS actor_email,
+               CASE e.target_type
+                 WHEN 'user' THEN (SELECT coalesce(nullif(u.display_name, ''), u.email) FROM core.users u WHERE u.id::text = e.target_id)
+                 WHEN 'base' THEN (SELECT b.name FROM core.base_directory b WHERE b.base_id::text = e.target_id)
+                 WHEN 'workspace' THEN (SELECT w.name FROM core.workspaces w WHERE w.id::text = e.target_id)
+                 WHEN 'automation' THEN (SELECT au.name FROM data.automations au WHERE au.id::text = e.target_id)
+                 WHEN 'api_token' THEN (SELECT t.name FROM core.api_tokens t WHERE t.id::text = e.target_id)
+                 WHEN 'device' THEN (SELECT d.label FROM core.org_devices d WHERE d.id::text = e.target_id)
+                 WHEN 'invitation' THEN (SELECT i.email FROM core.invitations i WHERE i.id::text = e.target_id)
+                 ELSE NULL END AS target_label
+        FROM audit.audit_events e
+        LEFT JOIN core.users a ON a.id = e.actor_user_id
+        WHERE (e.org_id = ${orgId} OR e.workspace_id IN (SELECT id FROM core.workspaces WHERE org_id = ${orgId}))
+          ${before ? sql`AND e.created_at < ${before}` : sql``}
+          ${prefix ? sql`AND e.action LIKE ${prefix}` : sql``}
+        ORDER BY e.created_at DESC
+        LIMIT 101
+      `.execute(ctx.db);
+      const page = r.rows.slice(0, 100);
+      void reply.send({
+        events: page.map((e) => ({
+          id: e.id,
+          action: e.action,
+          at: new Date(e.created_at).toISOString(),
+          actor: e.actor_email ? { name: e.actor_name ?? e.actor_email, email: e.actor_email } : null,
+          targetType: e.target_type,
+          target: e.target_label,
+          details: e.metadata ?? {},
+          ip: e.ip,
+        })),
+        nextBefore: r.rows.length > 100 ? new Date(page[page.length - 1]!.created_at).toISOString() : null,
+      });
     }),
   );
 

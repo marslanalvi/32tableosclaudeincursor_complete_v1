@@ -8,6 +8,21 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.0",
+    date: "2026-10-20",
+    title: "Two-factor for everyone, Activity log, move bases.",
+    items: [
+      "Two-factor sign-in is required for every account: you’re asked to set it up the next time you sign in.",
+      "You stay signed in for 30 days without activity; each visit restarts the 30 days.",
+      "Only Creators and Owners create or change share links, and “Allow copying data” is enforced on the shared page.",
+      "Owners and Creators can always edit a field, even one set to “Nobody”.",
+      "Automations show who they run as, and Creators can change it.",
+      "Members & access → Activity shows who did what.",
+      "Move a base to another workspace from its menu on Home.",
+      "Only Owners, Admins and Workspace Owners see other members’ email addresses.",
+    ],
+  },
+  {
     version: "0.15.0",
     date: "2026-10-20",
     title: "Owners, Admins and Members.",

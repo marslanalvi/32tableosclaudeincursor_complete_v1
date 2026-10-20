@@ -32,6 +32,8 @@ const createBody = z.object({
 
 const patchBody = z.object({
   name: z.string().trim().min(1).max(200).optional(),
+  /** Who the automation acts as (a Creator of this base); its access and connected accounts are used. */
+  runAsUserId: z.string().optional(),
   trigger: triggerSchema.optional(),
   actions: actionsSchema.optional(),
   enabled: z.boolean().optional(),
@@ -61,6 +63,8 @@ interface AutomationRow {
   next_run_at: Date | null;
   last_status: string | null;
   last_run_created: Date | null;
+  run_as: string | null;
+  run_as_name: string | null;
 }
 
 interface RunRow {
@@ -134,6 +138,7 @@ export async function registerAutomationsRoutes(
       lastRunAt: r.last_run_at?.toISOString() ?? null,
       nextRunAt: r.next_run_at?.toISOString() ?? null,
       lastRunStatus: r.last_status,
+      runAs: r.run_as ? { id: pid("usr", r.run_as), name: r.run_as_name ?? "" } : null,
       webhookUrl: canManage && r.trigger?.type === "webhook.received" ? webhookUrl(r.webhook_token) : null,
     };
   }
@@ -170,13 +175,14 @@ export async function registerAutomationsRoutes(
   async function loadAutomation(baseId: string, automationId: string): Promise<AutomationRow | null> {
     const res = await sql<AutomationRow>`
       SELECT a.id, a.name, a.enabled, a.trigger, a.actions, a.webhook_token, a.created_at, a.updated_at,
-             a.last_run_at, a.next_run_at,
+             a.last_run_at, a.next_run_at, a.run_as, nullif(ru.display_name, '') AS run_as_name,
              lr.status AS last_status, lr.created_at AS last_run_created
       FROM data.automations a
       LEFT JOIN LATERAL (
         SELECT status, created_at FROM data.automation_runs
         WHERE automation_id = a.id AND NOT is_test ORDER BY created_at DESC LIMIT 1
       ) lr ON true
+      LEFT JOIN core.users ru ON ru.id = a.run_as
       WHERE a.id = ${automationId} AND a.base_id = ${baseId} AND a.deleted_at IS NULL
     `.execute(ctx.db);
     return res.rows[0] ?? null;
@@ -190,13 +196,14 @@ export async function registerAutomationsRoutes(
         if (!base) return;
         const result = await sql<AutomationRow>`
           SELECT a.id, a.name, a.enabled, a.trigger, a.actions, a.webhook_token, a.created_at, a.updated_at,
-                 a.last_run_at, a.next_run_at,
+                 a.last_run_at, a.next_run_at, a.run_as, nullif(ru.display_name, '') AS run_as_name,
                  lr.status AS last_status, lr.created_at AS last_run_created
           FROM data.automations a
           LEFT JOIN LATERAL (
             SELECT status, created_at FROM data.automation_runs
             WHERE automation_id = a.id AND NOT is_test ORDER BY created_at DESC LIMIT 1
           ) lr ON true
+          LEFT JOIN core.users ru ON ru.id = a.run_as
           WHERE a.base_id = ${base.baseId} AND a.deleted_at IS NULL
           ORDER BY a.created_at ASC
         `.execute(ctx.db);
@@ -257,11 +264,11 @@ export async function registerAutomationsRoutes(
         await sql`
           INSERT INTO data.automations (
             id, workspace_id, base_id, name, enabled, trigger, actions, created_by, updated_by, webhook_token,
-            enabled_at
+            enabled_at, run_as
           ) VALUES (
             ${id}, ${base.workspaceId}, ${base.baseId}, ${name}, ${body.enabled ?? false},
             ${JSON.stringify(trigger)}::jsonb, ${JSON.stringify(actions)}::jsonb, ${base.userId}, ${base.userId},
-            ${token}, ${body.enabled ? new Date() : null}
+            ${token}, ${body.enabled ? new Date() : null}, ${base.userId}
           )
         `.execute(ctx.db);
         await writeAuditEvent(ctx.db, {
@@ -295,6 +302,17 @@ export async function registerAutomationsRoutes(
           return;
         }
 
+        // Saving no longer changes who it runs as; a Creator picks that explicitly.
+        let runAs = existing.run_as;
+        if (body.runAsUserId) {
+          const who = parsePid(body.runAsUserId, "usr");
+          if (!authorize(await compileForUser(ctx.db, who, base.baseId), "base.manage_schema")) {
+            validationProblem(request, reply, "An automation can only run as a Creator of this base");
+            return;
+          }
+          runAs = who;
+        }
+
         const trigger = body.trigger ?? existing.trigger;
         const triggerChanged = body.trigger !== undefined && JSON.stringify(body.trigger) !== JSON.stringify(existing.trigger);
         const actions = body.actions !== undefined ? ensureActionIds(body.actions) : existing.actions;
@@ -315,9 +333,20 @@ export async function registerAutomationsRoutes(
               enabled_at = CASE WHEN ${enabled}::boolean AND NOT ${existing.enabled}::boolean THEN now()
                                 WHEN NOT ${enabled}::boolean THEN NULL ELSE enabled_at END,
               updated_by = ${base.userId},
+              run_as = ${runAs ?? base.userId},
               updated_at = now()
           WHERE id = ${automationId}
         `.execute(ctx.db);
+        if (runAs !== existing.run_as) {
+          await writeAuditEvent(ctx.db, {
+            workspaceId: base.workspaceId,
+            actorUserId: base.userId,
+            action: "automation.run_as_changed",
+            targetType: "automation",
+            targetId: automationId,
+            metadata: { from: existing.run_as, to: runAs },
+          });
+        }
         if (triggerChanged) {
           await sql`DELETE FROM data.automation_record_state WHERE automation_id = ${automationId}`.execute(ctx.db);
         }
@@ -352,10 +381,10 @@ export async function registerAutomationsRoutes(
         const id = generateUuidV7();
         const token = existing.trigger?.type === "webhook.received" ? randomBytes(24).toString("base64url") : null;
         await sql`
-          INSERT INTO data.automations (id, workspace_id, base_id, name, enabled, trigger, actions, created_by, updated_by, webhook_token)
+          INSERT INTO data.automations (id, workspace_id, base_id, name, enabled, trigger, actions, created_by, updated_by, webhook_token, run_as)
           VALUES (${id}, ${base.workspaceId}, ${base.baseId}, ${`${existing.name} (copy)`.slice(0, 200)}, false,
                   ${JSON.stringify(existing.trigger)}::jsonb, ${JSON.stringify(existing.actions)}::jsonb,
-                  ${base.userId}, ${base.userId}, ${token})
+                  ${base.userId}, ${base.userId}, ${token}, ${base.userId})
         `.execute(ctx.db);
         const row = await loadAutomation(base.baseId, id);
         void reply.code(201).send({ automation: row ? dto(row) : null });

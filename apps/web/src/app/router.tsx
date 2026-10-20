@@ -6,7 +6,7 @@ import {
   isRedirect,
   redirect,
 } from "@tanstack/react-router";
-import { api, ApiProblemError, setUnauthorizedHandler } from "../lib/api.ts";
+import { api, ApiProblemError, setMfaSetupHandler, setUnauthorizedHandler } from "../lib/api.ts";
 import { ToastHost } from "./toast.tsx";
 import { authQueryKey } from "../features/auth/use-auth.ts";
 import { queryClient } from "../lib/query-client.ts";
@@ -16,7 +16,7 @@ import { SignupPage } from "../routes/signup.tsx";
 import { HomePage } from "../routes/home.tsx";
 import { BasePage } from "../routes/base.tsx";
 import { ContactsPage } from "../routes/contacts.tsx";
-import { AccountPage } from "../features/account/AccountPage.tsx";
+import { AccountPage, SetupTwoFactorPage } from "../features/account/AccountPage.tsx";
 import { AcceptInvite } from "../features/account/AcceptInvite.tsx";
 import { AdminPage, type AdminTab } from "../features/admin/AdminPage.tsx";
 import { ConnectorsPage, type ConnectorsNotice } from "../features/connectors/ConnectorsPage.tsx";
@@ -35,7 +35,14 @@ export function safeNext(next: unknown): string {
   return next;
 }
 
-async function ensureAuth() {
+/** Signed in, and two-factor set up when it's required (everything else waits for it). */
+async function ensureAuth(destination?: string) {
+  const me = await ensureSignedIn();
+  if (me.mfaSetupRequired) throw redirect({ to: "/setup-2fa", search: { next: destination ?? currentPath() } });
+  return me;
+}
+
+async function ensureSignedIn() {
   try {
     return await queryClient.fetchQuery({
       queryKey: authQueryKey,
@@ -106,8 +113,8 @@ const signupRoute = createRoute({
 const homeRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  beforeLoad: async () => {
-    const me = await ensureAuth();
+  beforeLoad: async ({ location }) => {
+    const me = await ensureAuth(location.href);
     return { me };
   },
   component: HomePage,
@@ -117,8 +124,8 @@ const homeRoute = createRoute({
 const baseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/bases/$baseId/$",
-  beforeLoad: async () => {
-    const me = await ensureAuth();
+  beforeLoad: async ({ location }) => {
+    const me = await ensureAuth(location.href);
     return { me };
   },
   component: function BaseRouteComponent() {
@@ -134,8 +141,8 @@ const contactsRoute = createRoute({
     workspaceId:
       typeof search.workspaceId === "string" ? search.workspaceId : "",
   }),
-  beforeLoad: async ({ search }) => {
-    const me = await ensureAuth();
+  beforeLoad: async ({ search, location }) => {
+    const me = await ensureAuth(location.href);
     if (!search.workspaceId) {
       throw redirect({ to: "/" });
     }
@@ -150,8 +157,8 @@ const contactsRoute = createRoute({
 const accountRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/account",
-  beforeLoad: async () => {
-    const me = await ensureAuth();
+  beforeLoad: async ({ location }) => {
+    const me = await ensureAuth(location.href);
     return { me };
   },
   component: function AccountRouteComponent() {
@@ -175,8 +182,8 @@ const connectorsRoute = createRoute({
     ...(search.reconnected !== undefined ? { reconnected: String(search.reconnected) } : {}),
     ...(typeof search.connectError === "string" ? { connectError: search.connectError } : {}),
   }),
-  beforeLoad: async () => {
-    const me = await ensureAuth();
+  beforeLoad: async ({ location }) => {
+    const me = await ensureAuth(location.href);
     return { me };
   },
   component: function ConnectorsRouteComponent() {
@@ -195,7 +202,37 @@ const connectorsRoute = createRoute({
   },
 });
 
-const ADMIN_TABS: AdminTab[] = ["people", "devices", "tokens", "settings"];
+const setupTwoFactorRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/setup-2fa",
+  validateSearch: (search: Record<string, unknown>): { next?: string } =>
+    typeof search.next === "string" ? { next: search.next } : {},
+  beforeLoad: async ({ search }) => {
+    const me = await ensureSignedIn();
+    if (!me.mfaSetupRequired) throw redirect({ href: safeNext(search.next) });
+    return { me };
+  },
+  component: function SetupTwoFactorRouteComponent() {
+    const { next } = setupTwoFactorRoute.useSearch();
+    return (
+      <SetupTwoFactorPage
+        onDone={() => {
+          void queryClient.invalidateQueries({ queryKey: authQueryKey }).then(() => {
+            window.location.assign(safeNext(next));
+          });
+        }}
+        onSignOut={() => {
+          void fetch("/v1/auth/logout", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" }).finally(() => {
+            queryClient.clear();
+            window.location.assign("/login");
+          });
+        }}
+      />
+    );
+  },
+});
+
+const ADMIN_TABS: AdminTab[] = ["people", "devices", "tokens", "activity", "settings"];
 
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -203,8 +240,8 @@ const adminRoute = createRoute({
   validateSearch: (search: Record<string, unknown>): { tab: AdminTab } => ({
     tab: ADMIN_TABS.includes(search.tab as AdminTab) ? (search.tab as AdminTab) : "people",
   }),
-  beforeLoad: async () => {
-    const me = await ensureAuth();
+  beforeLoad: async ({ location }) => {
+    const me = await ensureAuth(location.href);
     return { me };
   },
   component: function AdminRouteComponent() {
@@ -293,6 +330,7 @@ const routeTree = rootRoute.addChildren([
   baseRoute,
   contactsRoute,
   accountRoute,
+  setupTwoFactorRoute,
   connectorsRoute,
   adminRoute,
   helpIndexRoute,
@@ -311,6 +349,14 @@ declare module "@tanstack/react-router" {
     router: typeof router;
   }
 }
+
+// Two-factor turned required mid-session: everything else waits for the setup page.
+setMfaSetupHandler(() => {
+  const path = currentPath();
+  if (path.startsWith("/setup-2fa") || path.startsWith("/login") || path.startsWith("/signup") || path.startsWith("/invite")) return;
+  void queryClient.invalidateQueries({ queryKey: authQueryKey });
+  void router.navigate({ to: "/setup-2fa", search: { next: path } });
+});
 
 // Any 401 from the API mid-session (expired/revoked session) sends the user
 // to the login page and brings them back afterwards.

@@ -39,6 +39,12 @@ async function parseProblem(response: Response): Promise<TabulaError> {
 
 let unauthorizedHandler: ((path: string) => void) | null = null;
 
+let mfaSetupHandler: (() => void) | null = null;
+/** Called when the server says two-factor has to be set up first (app shell opens /setup-2fa). */
+export function setMfaSetupHandler(fn: (() => void) | null): void {
+  mfaSetupHandler = fn;
+}
+
 /** Called on any 401 outside /v1/auth/* (F: app shell redirects to /login). */
 export function setUnauthorizedHandler(fn: ((path: string) => void) | null): void {
   unauthorizedHandler = fn;
@@ -133,7 +139,9 @@ export async function request<T>(
         if (response.status === 401 && !path.startsWith("/v1/auth/")) {
           unauthorizedHandler?.(path);
         }
-        throw new ApiProblemError(await parseProblem(response));
+        const problem = await parseProblem(response);
+        if (response.status === 403 && (problem as { code?: string }).code === "MFA_SETUP_REQUIRED") mfaSetupHandler?.();
+        throw new ApiProblemError(problem);
       }
       if (response.status === 204) {
         return undefined as T;
@@ -164,6 +172,8 @@ export interface AuthUser {
   id: string;
   email: string;
   name: string;
+  /** Two-factor is required for everyone and this person hasn't set it up yet. */
+  mfaSetupRequired?: boolean;
 }
 
 export interface Workspace {
@@ -264,6 +274,8 @@ export interface BaseDetail {
   tables: TableDto[];
   /** Owner/Admin of the base's organization: may duplicate the base and export. */
   canManageOrg?: boolean;
+  /** Creator or above: may create and change shareable links. */
+  canShare?: boolean;
 }
 
 export interface RecordDto {

@@ -252,7 +252,7 @@ export async function registerWorkspaceRoutes(
         try {
           const inv = await sql<{ id: string; email: string; role: string; expires_at: Date }>`
             SELECT id, email, role, expires_at FROM core.invitations
-            WHERE workspace_id = ${workspaceId} AND accepted_at IS NULL
+            WHERE workspace_id = ${workspaceId} AND accepted_at IS NULL AND status = 'pending'
               AND expires_at > now()
             ORDER BY expires_at DESC
             LIMIT 100
@@ -266,16 +266,18 @@ export async function registerWorkspaceRoutes(
         } catch {
           /* invitations schema may be mid-migration; members still listed */
         }
+        // Emails: only Owners, Admins and Workspace Owners (questionnaire G19); others see names.
+        const seeEmails = isOrgManagerRole(access.orgRole) || access.workspaceRole === "owner";
         void reply.send({
           members: rows.rows
             .filter((r) => r.ws_role || r.org_role === "owner")
             .map((r) => ({
             id: pid("usr", r.id),
-            name: r.display_name || r.email,
-            email: r.email,
+            name: r.display_name || (seeEmails ? r.email : "Member"),
+            email: seeEmails || r.id === user.id ? r.email : "",
             role: r.org_role === "owner" ? "owner" : r.ws_role,
           })),
-          invitations,
+          invitations: seeEmails ? invitations : [],
         });
       } catch (err) {
         handleRouteError(request, reply, err);

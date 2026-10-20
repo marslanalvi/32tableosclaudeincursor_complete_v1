@@ -22,6 +22,7 @@ import { ActionEditor, TriggerEditor } from "./editors.tsx";
 import { RunDetail, RunHistory } from "./RunHistory.tsx";
 import { labelableFields, lastRecord, parseRecordRef, recordLabel } from "./test-record.ts";
 import { recordsApi } from "../../lib/api-areas/records.ts";
+import { shellApi } from "../../lib/api-areas/shell.ts";
 import { useRememberedState } from "./remembered-state.ts";
 import styles from "./automations.module.css";
 
@@ -233,6 +234,41 @@ function CreateMenu({ disabled, onPick }: { disabled: boolean; onPick: (t: Trigg
   );
 }
 
+/**
+ * "Runs as …": whose access and connected accounts the automation uses. Saving no longer
+ * changes it; a Creator picks another Creator of the base here.
+ */
+function RunAsPicker({ baseId, automation }: { baseId: string; automation: Automation }) {
+  const queryClient = useQueryClient();
+  const people = useQuery({ queryKey: ["collaborators", baseId], queryFn: () => shellApi.collaborators(baseId), staleTime: 60_000 });
+  const creators = (people.data?.collaborators ?? []).filter((c) => c.role === "owner" || c.role === "creator");
+  const current = automation.runAs;
+  const save = useMutation({
+    mutationFn: (userId: string) => automationsApi.update(baseId, automation.id, { runAsUserId: userId }),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["automations", baseId] }),
+  });
+  const options = current && !creators.some((c) => c.id === current.id) ? [{ id: current.id, name: current.name || "Someone" }, ...creators] : creators;
+  return (
+    <label className={styles.runAs} title="The automation uses this person's access and connected accounts">
+      Runs as
+      <select
+        value={current?.id ?? ""}
+        disabled={save.isPending || options.length === 0}
+        aria-label="Runs as"
+        onChange={(e) => e.target.value && save.mutate(e.target.value)}
+      >
+        {!current ? <option value="">—</option> : null}
+        {options.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.name}
+          </option>
+        ))}
+      </select>
+      {save.isError ? <span className={styles.metaFail}>{errorMessage(save.error)}</span> : null}
+    </label>
+  );
+}
+
 function AutomationBuilder({
   baseId,
   automation,
@@ -363,6 +399,7 @@ function AutomationBuilder({
         <span className={styles.saveState} aria-live="polite">
           {saveState === "saving" ? "Saving…" : saveState === "saved" ? "All changes saved" : saveState === "error" ? "Not saved" : ""}
         </span>
+        <RunAsPicker baseId={baseId} automation={automation} />
         <div className={styles.headerRight}>
           <div className={styles.tabs} role="tablist">
             <button type="button" role="tab" aria-selected={tab === "edit"} className={tab === "edit" ? styles.tabActive : styles.tab} onClick={() => setTab("edit")}>

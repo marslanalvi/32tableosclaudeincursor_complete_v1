@@ -7,6 +7,9 @@ export interface AccountUser {
   email: string;
   name: string;
   mfaEnabled?: boolean;
+  /** Two-factor is required for everyone: it can't be turned off. */
+  mfaRequired?: boolean;
+  mfaSetupRequired?: boolean;
   hasPassword?: boolean;
 }
 

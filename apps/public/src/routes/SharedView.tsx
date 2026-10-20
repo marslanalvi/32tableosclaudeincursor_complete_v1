@@ -193,8 +193,10 @@ export function SharedView({ token, share }: { token: string; share: ReadableSha
   const canCopy = share.share.allowCopy;
   const sortedField = sort ? fields.find((f) => f.id === sort.field) : null;
 
+  // "Allow copy" off: no copying, cutting, dragging or right-click menu on the shared data.
+  const block = canCopy ? undefined : (e: { preventDefault: () => void }) => e.preventDefault();
   return (
-    <div className={styles.wrap}>
+    <div className={styles.wrap} onCopy={block} onCut={block} onContextMenu={block} onDragStart={block}>
       {isBase && tables.length > 0 ? (
         <div className={styles.tableTabs} role="tablist" aria-label="Tables">
           {tables.map((t) => (

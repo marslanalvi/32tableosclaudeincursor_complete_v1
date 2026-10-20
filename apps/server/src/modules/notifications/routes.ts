@@ -4,6 +4,7 @@ import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import { notFound } from "../../http/errors.js";
 import { handleWave4Error } from "../wave4/problems.js";
+import { compileForUser } from "../access/compile.js";
 
 function bodyText(body: unknown): string {
   if (typeof body === "string") return body;
@@ -65,15 +66,26 @@ export async function registerNotificationsRoutes(
           WHERE n.user_id = ${user.id}
             ${unreadOnly ? sql`AND n.read_at IS NULL` : sql``}
           ORDER BY n.created_at DESC
-          LIMIT ${limit}
+          LIMIT ${limit * 3}
         `.execute(ctx.db);
-        const unread = await sql<{ n: string }>`
-          SELECT count(*)::text AS n FROM core.notifications
+        const unreadByBase = await sql<{ base_id: string | null; n: string }>`
+          SELECT base_id, count(*)::text AS n FROM core.notifications
           WHERE user_id = ${user.id} AND read_at IS NULL
+          GROUP BY base_id
         `.execute(ctx.db);
+        // Notifications about a base the person can no longer open stay hidden (questionnaire G17).
+        const baseIds = [...new Set([...rows.rows, ...unreadByBase.rows].map((r) => r.base_id).filter((b): b is string => Boolean(b)))];
+        const open = new Set<string>();
+        for (const b of baseIds) {
+          if ((await compileForUser(ctx.db, user.id, b)).effectiveBaseRole) open.add(b);
+        }
+        const visible = rows.rows.filter((n) => !n.base_id || open.has(n.base_id)).slice(0, limit);
+        const unreadCount = unreadByBase.rows
+          .filter((r) => !r.base_id || open.has(r.base_id))
+          .reduce((sum, r) => sum + Number(r.n), 0);
 
         void reply.send({
-          notifications: rows.rows.map((n) => ({
+          notifications: visible.map((n) => ({
             id: pid("ntf", n.id),
             category: n.category,
             title: n.title,
@@ -92,7 +104,7 @@ export async function registerNotificationsRoutes(
                 }
               : null,
           })),
-          unreadCount: Number(unread.rows[0]?.n ?? 0),
+          unreadCount,
         });
       } catch (err) {
         handleWave4Error(request, reply, err);

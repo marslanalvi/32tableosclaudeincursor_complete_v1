@@ -81,6 +81,12 @@ export const shellApi = {
   },
 
   // Workspaces
+  moveBase(baseId: string, workspaceId: string) {
+    return request<{ ok: true; workspaceId: string }>(`/v1/bases/${encodeURIComponent(baseId)}/move`, {
+      method: "POST",
+      json: { workspaceId },
+    });
+  },
   createWorkspace(name: string, organizationId?: string) {
     return request<{ workspace: { id: string; name: string } }>("/v1/workspaces", {
       method: "POST",

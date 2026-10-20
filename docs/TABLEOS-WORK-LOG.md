@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.15.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,20 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.16.0: roles phase 3 (two-factor, sessions, share links, Runs as, move base, Activity)
+
+Implements phase 3 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.md` (G12–G20; B8–B11). G10 (interface-only role) stays postponed per B12.
+
+* **Migration `0083_sessions_mfa_runas.sql`:** sessions idle >30 days end; `platform_settings.require_mfa = true`; `data.automations.run_as` (backfilled with `coalesce(updated_by, created_by)`).
+* **Sessions (G12):** `createSession` sets `idle_expires_at = now() + 30 days` (`SESSION_IDLE_DAYS`); the auth hook pushes it out again when it updates `last_seen_at` (at most once a minute; automation sessions excluded). Cookie max-age 30 days, re-issued daily.
+* **Two-factor (G13):** `auth/mfa-policy.ts` (`mfaRequired`, cached 5 s; `allowedBeforeMfa`: `/v1/auth/*` except `ws-ticket`, invitation accept, current device, version). The auth hook loads `has_mfa` with the session and answers 403 `MFA_SETUP_REQUIRED` otherwise (automation sessions and API tokens exempt). `/v1/auth/me` returns `mfaRequired`/`mfaSetupRequired`; `/mfa/disable` is refused while required. Web: `ensureAuth(destination)` redirects to `/setup-2fa?next=…` (`SetupTwoFactorPage` reuses `MfaSection`, `required` hides "turn off"); `setMfaSetupHandler` catches a 403 mid-session; `useFinishAuth` invalidates `/me` after sign-in so the flag is fresh. Owner exemptions from lockout and device approval are unchanged (B11).
+* **Share links (G14):** create/patch/revoke/rotate need `base.manage_schema`; base detail returns `canShare`; `ShareDialog canManage` disables controls with a note. With `allow_copy` off the public query caps `pageSize` at 50 and `publicRecords` blanks attachment `url`/`downloadUrl`; `SharedView` blocks copy/cut/contextmenu/dragstart.
+* **G15:** `canEditFieldValues` / `fieldPermissionAllows`: Owner and Creator always true. **G16:** engine runs as `coalesce(run_as, updated_by, created_by)`; create/duplicate set `run_as`; PATCH `runAsUserId` must be a base Creator (422 otherwise), audited `automation.run_as_changed`; DTO `runAs {id,name}`; `RunAsPicker` in the automation header. **G17:** `/v1/notifications` drops rows (and unread counts) for bases the user can't compile a role for. **G19:** workspace members and base collaborators blank `email` (and hide pending invitations) unless the viewer is Owner/Admin or Workspace Owner; own email always shown.
+* **G18:** `POST /v1/bases/:baseId/move {workspaceId}`: Creator of the base, may create bases in the target, same org, and Owner/Admin or Workspace Owner of both. One transaction updates `workspace_id` in every table with `base_id` (`MOVE_TABLES`, checked against the schema by the test), `data.bases`, `core.public_link_directory`; bumps `perm_epoch`. Fixed `PostgresFtsBackend.upsert` to take the base's current workspace (late index events carried the old one). Web: "Move to workspace…" on base cards (`MoveBaseDialog`).
+* **G20:** `GET /v1/orgs/:orgId/activity?category&before` (Owners/Admins): audit events of the org or its workspaces with actor and a target label, 100 per page. Web: Members & access → Activity with filter and "Show older".
+* **Tests:** `.data/verify-r18-phase3.mjs` (42 checks; toggles `require_mfa` and waits out the 5 s cache), `.data/r18-seed.mjs` + `.data/r2-shell/r18-ui.mjs` (10 checks, screenshots `r18-*.png`). `verify-r7` (30-day cookie/idle) and `verify-r9` (Owner edits "Nobody" fields) updated to the new rules. Local `tabula_cc` keeps `require_mfa = false` for the older suites.
+* **Live (read-only, `.data/r18-live-impact.mjs`):** none of the 10 people has two-factor yet, so everyone (Arslan included) is asked to set it up on their next request after deploy; 13 share links (all copy-off) keep working; 50 automations keep their current "Runs as"; no fields set to "Nobody".
 
 ## v0.15.0: roles phase 2 (Owner, Admin, Member)
 

@@ -739,7 +739,7 @@ async function loadRun(db: TabulaDb, runId: string): Promise<RunRow | null> {
            r.is_test, r.causation_depth, r.attempts, r.max_attempts, r.steps,
            a.name AS a_name, a.enabled AS a_enabled, (a.deleted_at IS NOT NULL) AS a_deleted,
            a.trigger AS a_trigger, a.actions AS a_actions,
-           COALESCE(a.updated_by, a.created_by) AS a_owner,
+           COALESCE(a.run_as, a.updated_by, a.created_by) AS a_owner,
            bd.org_id
     FROM data.automation_runs r
     JOIN data.automations a ON a.id = r.automation_id

@@ -31,6 +31,7 @@ export function ShareDialog({
   viewId,
   viewType,
   viewName,
+  canManage = true,
   onClose,
 }: {
   baseId: string;
@@ -38,6 +39,8 @@ export function ShareDialog({
   viewId?: string;
   viewType?: string;
   viewName?: string;
+  /** False for Editors and below: they see existing links but can't create or change them. */
+  canManage?: boolean;
   onClose: () => void;
 }) {
   const isForm = viewType === "form";
@@ -107,7 +110,7 @@ export function ShareDialog({
           </div>
         ) : null}
         {target ? (
-          <SharePanel key={`${target.targetType}:${target.targetId}`} baseId={baseId} target={target} />
+          <SharePanel key={`${target.targetType}:${target.targetId}`} baseId={baseId} target={target} canManage={canManage} />
         ) : (
           <div className={s.body}>
             <p className={s.hint}>Select a view to share it.</p>
@@ -121,9 +124,12 @@ export function ShareDialog({
 function SharePanel({
   baseId,
   target,
+  canManage,
 }: {
   baseId: string;
   target: { targetType: ShareTargetType; targetId: string };
+  /** Creators and up create and change links; others only see and copy them. */
+  canManage: boolean;
 }) {
   const qc = useQueryClient();
   const queryKey = ["shares", baseId, target.targetId];
@@ -186,7 +192,8 @@ function SharePanel({
     onError,
   });
 
-  const busy = create.isPending || update.isPending || regenerate.isPending || revoke.isPending;
+  const busy = !canManage || create.isPending || update.isPending || regenerate.isPending || revoke.isPending;
+  const creatorsOnly = canManage ? null : <p className={s.hint}>Only Creators and Owners of this base can create or change shareable links.</p>;
   const url = share ? shareLink(share) : "";
   const expired = share?.status === "expired";
 
@@ -204,6 +211,7 @@ function SharePanel({
         <div className={s.body}>
           {sharesQuery.isError ? <p className={s.error}>{errorText(sharesQuery.error)}</p> : null}
           {error ? <p className={s.error}>{error}</p> : null}
+          {creatorsOnly}
           <div className={s.cardSoft}>
             <div className={s.settingTitle}>
               {target.targetType === "form" ? "Shareable form link" : "Shareable read-only link"}
@@ -232,6 +240,7 @@ function SharePanel({
     <>
       <div className={s.body}>
         {error ? <p className={s.error}>{error}</p> : null}
+        {creatorsOnly}
         {expired ? (
           <p className={s.error}>This link expired {new Date(share.expiresAt!).toLocaleString()}. Extend or remove the expiration to re-enable it.</p>
         ) : null}
@@ -373,7 +382,7 @@ function SharePanel({
             <div className={s.settingRow}>
               <div className={s.settingText}>
                 <div className={s.settingTitle}>Allow viewers to copy data</div>
-                <p className={s.hint}>Shows a CSV download button on the shared page.</p>
+                <p className={s.hint}>When off, visitors can’t copy the data, download attachments or use the right-click menu.</p>
               </div>
               <button
                 type="button"

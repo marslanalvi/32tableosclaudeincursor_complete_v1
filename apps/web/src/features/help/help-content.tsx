@@ -589,7 +589,7 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
     body: () => (
       <>
         <p>
-          Choose <b>Share view</b> in the toolbar to create a public link to a view. Anyone with the link can see the records in that view (read-only),
+          Creators and Owners of a base choose <b>Share view</b> in the toolbar to create a public link to a view (Editors see the link but can’t create or change it). Anyone with the link can see the records in that view (read-only),
           without signing in. Options:
         </p>
         <ul>
@@ -598,7 +598,7 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
             the owner is alerted (see <To topic="sign-in-security">Sign-in security</To>).
           </li>
           <li><b>Expiration date</b>: the link stops working afterwards.</li>
-          <li><b>Allow copying data</b>: lets visitors copy or download records.</li>
+          <li><b>Allow copying data</b>: off by default. When off, visitors can’t copy, cut, drag or right-click the data, attachments come without download links, and records load 50 at a time.</li>
         </ul>
         <p>Turn the link off at any time to stop sharing. To give someone access they can sign in with, ask an Owner or Admin to invite them.</p>
       </>
@@ -643,7 +643,7 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
           head={["Account type", "Can do"]}
           rows={[
             ["Owner", "Everything: every workspace and base, all people (including Admins and other Owners), devices, API tokens, security and billing. An organization can have several Owners."],
-            ["Admin", "Invites and manages Members (roles, end dates, suspend, remove, devices), creates workspaces, renames or deletes any workspace, creates API tokens, changes security settings. Opens only the workspaces and bases an Owner gives them, and hands out access only where they are Creator, up to their own role. No billing."],
+            ["Admin", "Invites and manages Members (roles, end dates, suspend, remove, devices), creates workspaces, renames or deletes any workspace, creates API tokens, changes security settings and sees the Activity log. Opens only the workspaces and bases an Owner gives them, and hands out access only where they are Creator, up to their own role. No billing."],
             ["Member", "Opens only what they’re given."],
           ]}
         />
@@ -684,6 +684,8 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
           <li>Tick several rows to give them the same role, or No access, in one step.</li>
           <li><b>Suspend</b> blocks a person immediately while keeping their settings; <b>Reactivate</b> restores them.</li>
           <li><b>Remove</b> takes away all of their access in the organization and signs out their devices.</li>
+          <li><b>Activity</b> (Owners and Admins) lists who did what: sign-ins, people and account types, roles, invitations, devices, tokens, security settings, bases, share links and automations.</li>
+          <li><b>Move to workspace…</b> on a base (Owners, Admins, or a Workspace Owner of both workspaces) moves it with everything in it; roles from the old workspace stop applying.</li>
         </ul>
         <Note>Changes apply immediately, including to people who are signed in right now.</Note>
       </>
@@ -727,7 +729,7 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
     id: "account",
     group: "Admin & security",
     title: "Your account and two-factor authentication",
-    summary: "Change your name, email or password, turn on 2FA and sign out other sessions.",
+    summary: "Change your name, email or password, set up two-factor sign-in (required) and sign out other sessions.",
     keywords: "account profile password two-factor 2fa totp authenticator sessions sign out",
     body: () => (
       <>
@@ -736,12 +738,12 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
           <li><b>Profile</b>: your name and email.</li>
           <li><b>Password</b>: changing it signs you out of your other sessions.</li>
           <li>
-            <b>Two-factor authentication</b>: scan the QR code with an authenticator app, then enter a code each time you sign in. Keep the
-            recovery codes somewhere safe.
+            <b>Two-factor authentication</b>: required for every account. The first time you sign in, TableOS asks you to scan a QR code with an
+            authenticator app; after that you enter a 6-digit code each time you sign in. It can’t be turned off.
           </li>
           <li>
-            <b>Sessions</b>: see where you’re signed in and sign out of the others. Sessions don’t expire: you stay signed in until you sign out,
-            change your password, or an admin removes you.
+            <b>Sessions</b>: see where you’re signed in and sign out of the others. A session ends after 30 days without activity (each visit
+            restarts the 30 days), or when you sign out, change your password, or an Owner or Admin removes you.
           </li>
         </ul>
       </>

@@ -30,9 +30,11 @@ function useFinishAuth(next?: string) {
   const queryClient = useQueryClient();
   const router = useRouter();
   return (user: AuthUser) => {
-    // Drop anything cached for a previous account.
+    // Drop anything cached for a previous account. The sign-in response is only a placeholder:
+    // /me is asked again so its flags (two-factor setup required) are current.
     queryClient.clear();
     queryClient.setQueryData(authQueryKey, user);
+    void queryClient.invalidateQueries({ queryKey: authQueryKey });
     void router.navigate({ href: safeNextPath(next) });
   };
 }
