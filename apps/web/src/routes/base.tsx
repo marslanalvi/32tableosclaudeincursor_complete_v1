@@ -630,6 +630,7 @@ export function BasePage({ baseId }: { baseId: string }) {
           tableId={activeTable.id}
           {...(activeView?.id ? { viewId: activeView.id } : {})}
           {...(activeView?.type ? { viewType: activeView.type } : {})}
+          canManage={base.canShare !== false}
           onClose={() => setShareOpen(false)}
         />
       ) : null}

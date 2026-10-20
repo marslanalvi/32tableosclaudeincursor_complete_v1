@@ -307,18 +307,87 @@ function MembersDialog({
 type BaseDialog =
   | { kind: "rename"; base: BaseSummary }
   | { kind: "delete"; base: BaseSummary }
+  | { kind: "move"; base: BaseSummary }
   | null;
+
+/** Workspaces someone may move bases between (create bases there, or Workspace Owner). */
+const canMoveIn = (w: Workspace) => Boolean(w.canManage || w.workspaceRole === "owner");
+
+function MoveBaseDialog({
+  base,
+  from,
+  workspaces,
+  onClose,
+}: {
+  base: BaseSummary;
+  from: Workspace;
+  workspaces: Workspace[];
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const targets = workspaces.filter((w) => w.id !== from.id && w.organizationId === from.organizationId && canMoveIn(w));
+  const [to, setTo] = useState(targets[0]?.id ?? "");
+  const move = useMutation({
+    mutationFn: () => shellApi.moveBase(base.id, to),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      toast.success(`Moved “${base.name}” to ${targets.find((w) => w.id === to)?.name ?? "the workspace"}`);
+      onClose();
+    },
+  });
+  return (
+    <Dialog
+      title={`Move “${base.name}”`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={uiStyles.btn} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className={uiStyles.btnPrimary} disabled={!to || move.isPending} onClick={() => move.mutate()}>
+            {move.isPending ? "Moving…" : "Move base"}
+          </button>
+        </>
+      }
+    >
+      {targets.length === 0 ? (
+        <p className={uiStyles.muted}>There’s no other workspace you can move it to.</p>
+      ) : (
+        <div className={uiStyles.field}>
+          <label className={uiStyles.label} htmlFor="move-base-to">
+            Move to workspace
+          </label>
+          <select id="move-base-to" className={uiStyles.select} value={to} onChange={(e) => setTo(e.target.value)}>
+            {targets.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      <p className={uiStyles.muted}>
+        People who reach it through a role on “{from.name}” lose access; roles given on the base itself stay. Its tables, records,
+        automations, interfaces and share links move with it.
+      </p>
+      {move.isError ? <p className={uiStyles.error}>{errorMessage(move.error)}</p> : null}
+    </Dialog>
+  );
+}
 
 function BaseCard({
   base,
   onRename,
   onDuplicate,
+  onMove,
   onDelete,
 }: {
   base: BaseSummary;
   onRename: () => void;
   /** Only Owners and Admins duplicate bases. */
   onDuplicate: (() => void) | null;
+  /** Owners, Admins and Workspace Owners move bases between their workspaces. */
+  onMove: (() => void) | null;
   onDelete: () => void;
 }) {
   const router = useRouter();
@@ -367,6 +436,7 @@ function BaseCard({
             },
             { key: "rename", label: "Rename", icon: "✎", onSelect: onRename },
             ...(onDuplicate ? [{ key: "dup", label: "Duplicate", icon: "⧉", onSelect: onDuplicate }] : []),
+            ...(onMove ? [{ key: "move", label: "Move to workspace…", icon: "→", onSelect: onMove }] : []),
             {
               key: "copy",
               label: "Copy base ID",
@@ -495,6 +565,7 @@ function WorkspaceSection({
               base={base}
               onRename={() => setDialog({ kind: "rename", base })}
               onDuplicate={workspace.canManage ? () => duplicate.mutate(base) : null}
+              onMove={canMoveIn(workspace) ? () => setDialog({ kind: "move", base }) : null}
               onDelete={() => setDialog({ kind: "delete", base })}
             />
           ))}
@@ -545,6 +616,9 @@ function WorkspaceSection({
           onSubmit={(name) => rename.mutate({ baseId: dialog.base.id, name })}
           onClose={() => setDialog(null)}
         />
+      ) : null}
+      {dialog?.kind === "move" ? (
+        <MoveBaseDialog base={dialog.base} from={workspace} workspaces={workspaces} onClose={() => setDialog(null)} />
       ) : null}
       {dialog?.kind === "delete" ? (
         <ConfirmDialog

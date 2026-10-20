@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   adminApi,
+  type ActivityEvent,
   type ApiTokenInfo,
   type BaseGrantRole,
   type DeviceLogMember,
@@ -34,7 +35,7 @@ const ACCOUNT_TYPES: { value: OrgRole; label: string; hint: string }[] = [
 ];
 const accountLabel = (r: string) => ACCOUNT_TYPES.find((a) => a.value === r)?.label ?? r;
 
-export type AdminTab = "people" | "devices" | "tokens" | "settings";
+export type AdminTab = "people" | "devices" | "tokens" | "activity" | "settings";
 
 function errorText(err: unknown): string {
   if (err instanceof ApiProblemError) {
@@ -937,6 +938,155 @@ function TokensSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
   );
 }
 
+/* ---------------------------------------------------------------- activity */
+
+const ACTIVITY_FILTERS: { value: string; label: string }[] = [
+  { value: "", label: "Everything" },
+  { value: "auth", label: "Sign-ins and two-factor" },
+  { value: "member", label: "People and account types" },
+  { value: "access", label: "Roles on workspaces and bases" },
+  { value: "invite", label: "Invitations" },
+  { value: "device", label: "Devices" },
+  { value: "api_token", label: "API tokens" },
+  { value: "org", label: "Organization and security" },
+  { value: "base", label: "Bases" },
+  { value: "share", label: "Share links" },
+  { value: "automation", label: "Automations" },
+];
+
+/** Plain-language sentence for an audit action ("approved a device"). */
+function activityText(action: string): string {
+  const known: Record<string, string> = {
+    "auth.login": "signed in",
+    "auth.signup": "created an account",
+    "auth.mfa_enabled": "turned on two-factor sign-in",
+    "auth.mfa_disabled": "turned off two-factor sign-in",
+    "auth.password_changed": "changed their password",
+    "member.suspended": "suspended",
+    "member.reactivated": "reactivated",
+    "member.removed": "removed",
+    "member.role_changed": "changed the account type of",
+    "access.granted": "gave access to",
+    "access.revoked": "removed access of",
+    "invite.created": "sent an invitation to",
+    "invite.accepted": "accepted an invitation",
+    "invite.revoked": "cancelled an invitation to",
+    "device.approved": "approved the device",
+    "device.revoked": "revoked the device",
+    "device.deleted": "forgot the device",
+    "api_token.created": "created the API token",
+    "api_token.revoked": "revoked the API token",
+    "org.security_updated": "changed security settings",
+    "org.ownership_transferred": "handed ownership to",
+    "base.moved": "moved the base",
+    "share.created": "created a share link",
+    "share.revoked": "disabled a share link",
+    "automation.created": "created the automation",
+    "automation.enabled": "turned on the automation",
+    "automation.disabled": "turned off the automation",
+    "automation.run_as_changed": "changed who runs the automation",
+  };
+  return known[action] ?? action.replace(/[._]/g, " ");
+}
+
+function activityDetail(e: ActivityEvent): string {
+  const d = e.details;
+  if (e.action === "member.role_changed" && d["from"] && d["to"]) return `${accountLabel(String(d["from"]))} → ${accountLabel(String(d["to"]))}`;
+  if (e.action.startsWith("access.") && d["role"]) return `${d["resourceType"] ?? ""} role ${String(d["role"])}`.trim();
+  if (e.action === "invite.created" && d["role"]) return `as ${String(d["orgRole"] && d["orgRole"] !== "member" ? `${accountLabel(String(d["orgRole"]))}, ` : "")}${String(d["role"])}`;
+  if (e.action === "auth.login") return d["mfa"] ? "with two-factor" : "";
+  return "";
+}
+
+function ActivitySection({ orgId }: { orgId: string }) {
+  const [category, setCategory] = useState("");
+  const [pages, setPages] = useState<(string | null)[]>([null]);
+  return (
+    <Section
+      title="Activity"
+      description="Who did what in this organization: sign-ins, people and account types, roles, invitations, devices, tokens, security settings, bases, share links and automations."
+      actions={
+        <select
+          className={`${account.input} ${styles.compact}`}
+          value={category}
+          aria-label="Show"
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setPages([null]);
+          }}
+        >
+          {ACTIVITY_FILTERS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      }
+    >
+      <ul className={styles.activityList}>
+        {pages.map((before, i) => (
+          <ActivityPage
+            key={`${category}:${before ?? "first"}`}
+            orgId={orgId}
+            category={category}
+            before={before}
+            last={i === pages.length - 1}
+            onMore={(next) => setPages((p) => [...p, next])}
+          />
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+function ActivityPage({
+  orgId,
+  category,
+  before,
+  last,
+  onMore,
+}: {
+  orgId: string;
+  category: string;
+  before: string | null;
+  last: boolean;
+  onMore: (nextBefore: string) => void;
+}) {
+  const q = useQuery({
+    queryKey: ["admin", "activity", orgId, category, before],
+    queryFn: () => adminApi.activity(orgId, { before, category }),
+  });
+  if (q.isLoading) return <li className={account.muted}>Loading…</li>;
+  if (q.isError) return <li className={account.error}>{errorText(q.error)}</li>;
+  const events = q.data?.events ?? [];
+  return (
+    <>
+      {events.length === 0 && !before ? <li className={account.muted}>Nothing yet.</li> : null}
+      {events.map((e) => {
+        const detail = activityDetail(e);
+        return (
+          <li key={e.id} className={styles.activityRow} data-testid="activity-row" data-action={e.action}>
+            <span className={styles.activityWhen}>{fmt(e.at)}</span>
+            <span>
+              <strong>{e.actor?.name ?? "TableOS"}</strong> {activityText(e.action)}
+              {e.target && !e.action.startsWith("auth.") ? <> <strong>{e.target}</strong></> : null}
+              {detail ? <span className={account.muted}> · {detail}</span> : null}
+            </span>
+            <span className={styles.activityIp}>{e.ip ?? ""}</span>
+          </li>
+        );
+      })}
+      {last && q.data?.nextBefore ? (
+        <li>
+          <button type="button" className={styles.linkBtn} onClick={() => onMore(q.data!.nextBefore!)}>
+            Show older
+          </button>
+        </li>
+      ) : null}
+    </>
+  );
+}
+
 /* ---------------------------------------------------------------- settings */
 
 function SettingsSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
@@ -1031,6 +1181,7 @@ export function AdminPage({ tab, onTab, onBack }: { tab: AdminTab; onTab: (t: Ad
     { id: "people", label: "People" },
     { id: "devices", label: "Devices", ...(data?.pendingDevices ? { count: data.pendingDevices } : {}) },
     { id: "tokens", label: "API tokens" },
+    { id: "activity", label: "Activity" },
     { id: "settings", label: "Security" },
   ];
   return (
@@ -1071,6 +1222,7 @@ export function AdminPage({ tab, onTab, onBack }: { tab: AdminTab; onTab: (t: Ad
             {tab === "people" ? <PeopleSection orgId={orgId} data={data} /> : null}
             {tab === "devices" ? <DevicesSection orgId={orgId} data={data} /> : null}
             {tab === "tokens" ? <TokensSection orgId={orgId} data={data} /> : null}
+            {tab === "activity" ? <ActivitySection orgId={orgId} /> : null}
             {tab === "settings" ? <SettingsSection orgId={orgId} data={data} /> : null}
           </>
         ) : null}

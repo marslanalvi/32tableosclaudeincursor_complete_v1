@@ -138,7 +138,18 @@ function PasswordSection({ hasPassword }: { hasPassword: boolean }) {
   );
 }
 
-function MfaSection({ enabled, hasPassword }: { enabled: boolean; hasPassword: boolean }) {
+function MfaSection({
+  enabled,
+  hasPassword,
+  required = false,
+  onEnabled,
+}: {
+  enabled: boolean;
+  hasPassword: boolean;
+  /** Required for everyone: no "turn off". */
+  required?: boolean;
+  onEnabled?: () => void;
+}) {
   const queryClient = useQueryClient();
   const [setup, setSetup] = useState<{ secret: string; otpauthUrl: string } | null>(null);
   const [code, setCode] = useState("");
@@ -154,6 +165,7 @@ function MfaSection({ enabled, hasPassword }: { enabled: boolean; hasPassword: b
       setSetup(null);
       setCode("");
       refresh();
+      onEnabled?.();
     },
   });
   const disable = useMutation({
@@ -175,6 +187,9 @@ function MfaSection({ enabled, hasPassword }: { enabled: boolean; hasPassword: b
           <span className={styles.badgeOn}>On</span>
           <span className={styles.muted}>Authenticator app (TOTP)</span>
         </div>
+        {required ? (
+          <p className={styles.muted}>Two-factor sign-in is required for everyone in TableOS, so it can’t be turned off.</p>
+        ) : (
         <form
           className={styles.form}
           onSubmit={(e) => {
@@ -199,6 +214,7 @@ function MfaSection({ enabled, hasPassword }: { enabled: boolean; hasPassword: b
           </div>
           {disable.isError ? <Notice kind="error">{errorText(disable.error)}</Notice> : null}
         </form>
+        )}
       </Section>
     );
   }
@@ -325,6 +341,42 @@ function SessionsSection() {
   );
 }
 
+/**
+ * Shown after sign-in to anyone who still has to set up two-factor (required for everyone):
+ * nothing else opens until it's on.
+ */
+export function SetupTwoFactorPage({ onDone, onSignOut }: { onDone: () => void; onSignOut: () => void }) {
+  const me = useQuery({ queryKey: ["account", "me"], queryFn: () => accountApi.me() });
+  const user = me.data?.user;
+  return (
+    <div className={styles.page}>
+      <header className={styles.header}>
+        <h1 className={styles.title}>Set up two-factor sign-in</h1>
+      </header>
+      <main className={styles.main}>
+        <p className={styles.muted}>
+          TableOS requires two-factor sign-in for every account. Set it up once with an authenticator app on your phone; from then on you’ll
+          enter a 6-digit code when you sign in.
+        </p>
+        {me.isError ? <Notice kind="error">{errorText(me.error)}</Notice> : null}
+        {user ? (
+          <MfaSection enabled={Boolean(user.mfaEnabled)} hasPassword={user.hasPassword !== false} required onEnabled={onDone} />
+        ) : null}
+        <div className={styles.actions}>
+          {user?.mfaEnabled ? (
+            <button type="button" className={styles.primary} onClick={onDone}>
+              Continue
+            </button>
+          ) : null}
+          <button type="button" className={styles.secondary} onClick={onSignOut}>
+            Sign out
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 /** Account settings: profile, password, two-factor authentication, sessions. */
 export function AccountPage({ onBack }: { onBack?: () => void }) {
   const me = useQuery({ queryKey: ["account", "me"], queryFn: () => accountApi.me() });
@@ -350,7 +402,7 @@ export function AccountPage({ onBack }: { onBack?: () => void }) {
           <>
             <ProfileSection name={user.name} email={user.email} />
             <PasswordSection hasPassword={user.hasPassword !== false} />
-            <MfaSection enabled={Boolean(user.mfaEnabled)} hasPassword={user.hasPassword !== false} />
+            <MfaSection enabled={Boolean(user.mfaEnabled)} hasPassword={user.hasPassword !== false} required={Boolean(user.mfaRequired)} />
             <SessionsSection />
             <Section
               title="Connectors"

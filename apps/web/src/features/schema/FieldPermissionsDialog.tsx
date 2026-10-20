@@ -10,8 +10,8 @@ import styles from "./field-permissions.module.css";
 const LEVELS: { id: FieldEditLevel; label: string; hint: string }[] = [
   { id: "editors", label: "Editors and up", hint: "Collaborators with Editor, Creator, or Owner permissions (default setting)" },
   { id: "creators", label: "Creators and up", hint: "Collaborators with Creator or Owner permissions" },
-  { id: "specific", label: "Specific users", hint: "A specific list of collaborators with Editor, Creator, or Owner permissions" },
-  { id: "nobody", label: "Nobody", hint: "No collaborators" },
+  { id: "specific", label: "Specific users", hint: "These Editors, plus Creators and Owners (who can always edit)" },
+  { id: "nobody", label: "Nobody but Creators and Owners", hint: "Editors can't change it; Creators and Owners always can" },
 ];
 
 const EDIT_ROLES = new Set(["owner", "creator", "editor"]);

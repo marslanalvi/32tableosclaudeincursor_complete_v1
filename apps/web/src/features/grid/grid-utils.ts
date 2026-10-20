@@ -110,8 +110,8 @@ export function fieldPermissionAllows(field: FieldLike, access: FieldAccess | un
   const perm = (field as { editPermission?: FieldEditPermission }).editPermission;
   if (!perm || perm.level === "editors") return true;
   if (!access) return false;
-  if (perm.level === "nobody") return false;
-  if (perm.level === "creators") return access.role === "owner" || access.role === "creator";
+  if (access.role === "owner" || access.role === "creator") return true;
+  if (perm.level === "nobody" || perm.level === "creators") return false;
   return access.userId !== null && perm.userIds.includes(access.userId);
 }
 

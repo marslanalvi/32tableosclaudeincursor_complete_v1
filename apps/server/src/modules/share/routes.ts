@@ -202,7 +202,7 @@ export async function registerShareRoutes(
         const scope = await adminScope(request, reply, request.params.baseId);
         if (!scope) return;
         const { user, baseId, base, snapshot } = scope;
-        assertCan(snapshot, "record.update");
+        assertCan(snapshot, "base.manage_schema");
         const body = createShareBody.parse(request.body);
 
         let targetId: string;
@@ -328,7 +328,7 @@ export async function registerShareRoutes(
       try {
         const scope = await adminScope(request, reply, request.params.baseId);
         if (!scope) return;
-        assertCan(scope.snapshot, "record.update");
+        assertCan(scope.snapshot, "base.manage_schema");
         const share = await loadShare(scope.baseId, request.params.shareId);
         if (!share || share.revoked_at) {
           notFound(request, reply, "Share not found");
@@ -370,7 +370,7 @@ export async function registerShareRoutes(
       try {
         const scope = await adminScope(request, reply, request.params.baseId);
         if (!scope) return;
-        assertCan(scope.snapshot, "record.update");
+        assertCan(scope.snapshot, "base.manage_schema");
         const share = await loadShare(scope.baseId, request.params.shareId);
         if (!share) {
           notFound(request, reply, "Share not found");
@@ -405,7 +405,7 @@ export async function registerShareRoutes(
       try {
         const scope = await adminScope(request, reply, request.params.baseId);
         if (!scope) return;
-        assertCan(scope.snapshot, "record.update");
+        assertCan(scope.snapshot, "base.manage_schema");
         const share = await loadShare(scope.baseId, request.params.shareId);
         if (!share || share.revoked_at) {
           notFound(request, reply, "Share not found");
@@ -652,9 +652,11 @@ export async function registerShareRoutes(
   );
 
   /** Re-hydrate attachment values with signed public URLs, strip hidden fields. */
+  /** allowCopy = false: attachments come without download links (questionnaire B8). */
   async function publicRecords(
     input: readonly object[],
     visible: PublicFieldRow[],
+    allowCopy: boolean,
   ): Promise<Record<string, unknown>[]> {
     const records = input as unknown as Record<string, unknown>[];
     const visibleIds = new Set(visible.map((f) => pid("fld", f.id)));
@@ -673,7 +675,8 @@ export async function registerShareRoutes(
         if (attFields.includes(k)) {
           const list = attachmentIdsFromCell(v)
             .map((id) => atts.get(id))
-            .filter(Boolean);
+            .filter((a): a is NonNullable<typeof a> => Boolean(a))
+            .map((a) => (allowCopy ? a : { ...a, url: "", downloadUrl: "" }));
           if (list.length) out[k] = list;
           continue;
         }
@@ -746,13 +749,14 @@ export async function registerShareRoutes(
             : (scope.view?.config.sorts ?? []).map((s) => ({ fieldId: s.fieldId, direction: s.direction }));
 
         const result = await executeRecordQuery(ctx.db, scope.tableId, {
-          pageSize: body.pageSize ?? 100,
+          // Without "allow copy", visitors read a page at a time instead of pulling everything at once.
+          pageSize: resolved.link.allow_copy ? (body.pageSize ?? 100) : Math.min(body.pageSize ?? 50, 50),
           ...(filter !== undefined ? { filter } : {}),
           ...(sort.length ? { sort } : {}),
           ...(body.cursor ? { cursor: body.cursor } : {}),
         });
         void reply.send({
-          records: await publicRecords(result.records, scope.visible),
+          records: await publicRecords(result.records, scope.visible, resolved.link.allow_copy),
           nextCursor: result.nextCursor,
         });
       } catch (err) {
@@ -796,7 +800,7 @@ export async function registerShareRoutes(
           notFound(request, reply, "Record not found");
           return;
         }
-        const [record] = await publicRecords([found], scope.visible);
+        const [record] = await publicRecords([found], scope.visible, resolved.link.allow_copy);
         void reply.send({ record });
       } catch (err) {
         handleWave4Error(request, reply, err);

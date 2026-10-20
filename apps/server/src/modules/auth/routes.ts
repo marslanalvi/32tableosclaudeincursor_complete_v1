@@ -50,6 +50,7 @@ import {
 } from "./challenges.js";
 import { AuthRateLimiter } from "./rate-limit.js";
 import { decideSignup, notifyDomainJoin } from "./signup-policy.js";
+import { mfaRequired } from "./mfa-policy.js";
 import {
   alertOwners,
   attemptMeta,
@@ -519,6 +520,7 @@ export async function registerAuthRoutes(
         return;
       }
       const mfa = await userHasMfa(ctx.db, request.user.id);
+      const required = await mfaRequired(ctx.db);
       const hasPassword = await sql<{ n: number }>`
         SELECT 1 AS n FROM core.user_identities
         WHERE user_id = ${request.user.id} AND provider = 'password' AND password_hash IS NOT NULL
@@ -530,6 +532,9 @@ export async function registerAuthRoutes(
           email: request.user.email,
           name: request.user.displayName,
           mfaEnabled: mfa,
+          /** Two-factor is required for everyone: true while this person still has to set it up. */
+          mfaRequired: required,
+          mfaSetupRequired: required && !mfa,
           hasPassword: hasPassword.rows.length > 0,
         },
       });
@@ -805,6 +810,10 @@ export async function registerAuthRoutes(
         return;
       }
       const body = mfaDisableBody.parse(request.body ?? {});
+      if (await mfaRequired(ctx.db)) {
+        sendApiError(request, reply, 403, "FORBIDDEN", "Two-factor sign-in is required for everyone and can't be turned off");
+        return;
+      }
       const secret = await getConfirmedMfaSecret(ctx.db, ctx.env, request.user.id);
       if (!secret) {
         void reply.send({ ok: true, enabled: false });

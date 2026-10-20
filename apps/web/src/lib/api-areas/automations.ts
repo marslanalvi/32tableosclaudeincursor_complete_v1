@@ -108,6 +108,8 @@ export interface Automation {
   nextRunAt?: string | null;
   lastRunStatus?: string | null;
   webhookUrl?: string | null;
+  /** The person whose access and connected accounts the automation uses. */
+  runAs?: { id: string; name: string } | null;
 }
 
 export interface StepResult {
@@ -147,7 +149,7 @@ export const automationsApi = {
   create(baseId: string, body: Partial<Pick<Automation, "name" | "enabled" | "trigger" | "actions">>) {
     return request<{ automation: Automation }>(base(baseId), { method: "POST", json: body });
   },
-  update(baseId: string, id: string, body: Partial<Pick<Automation, "name" | "enabled" | "trigger" | "actions">>) {
+  update(baseId: string, id: string, body: Partial<Pick<Automation, "name" | "enabled" | "trigger" | "actions">> & { runAsUserId?: string }) {
     return request<{ ok: true; automation: Automation }>(`${base(baseId)}/${id}`, { method: "PATCH", json: body });
   },
   duplicate(baseId: string, id: string) {

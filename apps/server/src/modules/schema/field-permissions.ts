@@ -27,13 +27,15 @@ export function editPermissionToWire(p: FieldEditPermission | null): { level: Fi
   return { level: p.level, userIds: p.userIds.map((u) => pid("usr", u)) };
 }
 
-/** Whether a user with `role` may write values into a field with permission `p`. */
+/**
+ * Whether a user with `role` may write values into a field with permission `p`. Owners and
+ * Creators always may (questionnaire G15), so "Nobody" means nobody below Creator.
+ */
 export function canEditFieldValues(p: FieldEditPermission | null, role: string | null, userId: string | null): boolean {
-  const editor = role === "owner" || role === "creator" || role === "editor";
-  if (!editor) return false;
+  if (role === "owner" || role === "creator") return true;
+  if (role !== "editor") return false;
   if (!p) return true;
-  if (p.level === "nobody") return false;
-  if (p.level === "creators") return role === "owner" || role === "creator";
+  if (p.level === "nobody" || p.level === "creators") return false;
   return userId !== null && p.userIds.includes(userId);
 }
 

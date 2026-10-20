@@ -289,6 +289,8 @@ export async function registerBaseRoutes(
           hiddenTableIds: hiddenTableIds.map((id) => pid("tbl", id)),
           /** Owners and Admins may duplicate the base and export its data. */
           canManageOrg: isOrgManagerRole(orgRole),
+          /** Creators and up create and change shareable links (questionnaire B8). */
+          canShare: viewRights.isBaseCreator,
         });
       } catch (err) {
         handleRouteError(request, reply, err);
