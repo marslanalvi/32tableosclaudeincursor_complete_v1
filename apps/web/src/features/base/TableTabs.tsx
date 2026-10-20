@@ -736,7 +736,8 @@ export function TableTabs({
   activeTableId: string | null;
   onSelect: (tableId: string) => void;
   onImport: (tableId: string) => void;
-  onExport: (tableId: string) => void;
+  /** Omitted for people who may not export (only Owners and Admins export). */
+  onExport?: ((tableId: string) => void) | undefined;
   /** Open the add-table dialog from elsewhere (e.g. Tools → Connectors). */
   openAdd?: AddMode | null;
   onOpenAddHandled?: () => void;
@@ -1119,7 +1120,7 @@ export function TableTabs({
               separatorBefore: true,
               onSelect: () => onImport(menuTable.id),
             },
-            { key: "export", label: "Export CSV", icon: "⤒", onSelect: () => onExport(menuTable.id) },
+            ...(onExport ? [{ key: "export", label: "Export CSV", icon: "⤒", onSelect: () => onExport(menuTable.id) }] : []),
             {
               key: "copy",
               label: "Copy table ID",

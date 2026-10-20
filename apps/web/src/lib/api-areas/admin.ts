@@ -46,7 +46,7 @@ export interface OrgMember {
 }
 
 export interface OrgAccess {
-  org: { id: string; name: string; requireDeviceApproval: boolean };
+  org: { id: string; name: string; requireDeviceApproval: boolean; allowedSignupDomains?: string[] };
   workspaces: { id: string; name: string; bases: { id: string; name: string }[] }[];
   members: OrgMember[];
   invitations: { id: string; email: string; role: string; workspaceId: string | null; baseId: string | null; baseIds?: string[]; expiresAt: string }[];
@@ -97,8 +97,8 @@ export const adminApi = {
   access(orgId: string) {
     return request<OrgAccess>(`${org(orgId)}/access`);
   },
-  setSettings(orgId: string, body: { requireDeviceApproval: boolean }) {
-    return request<{ requireDeviceApproval: boolean }>(`${org(orgId)}/settings`, { method: "PATCH", json: body });
+  setSettings(orgId: string, body: { requireDeviceApproval?: boolean; allowedSignupDomains?: string[] }) {
+    return request<{ requireDeviceApproval: boolean; allowedSignupDomains: string[] }>(`${org(orgId)}/settings`, { method: "PATCH", json: body });
   },
   setGrant(
     orgId: string,

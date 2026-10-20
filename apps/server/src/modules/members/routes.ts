@@ -8,6 +8,7 @@ import { ApiError, handleRouteError } from "../../http/errors.js";
 import { writeAuditEvent } from "../audit/write.js";
 import { invalidateBaseSnapshotCache, invalidateUserSnapshotCache } from "../access/compile.js";
 import { isOrgOwner } from "../access/workspace-access.js";
+import { allowedDomainsOf } from "../auth/signup-policy.js";
 import {
   DEVICE_COOKIE,
   deviceLabel,
@@ -39,7 +40,14 @@ const grantBody = z
 
 const memberPatch = z.object({ status: z.enum(["active", "suspended"]) });
 const devicePatch = z.object({ status: z.enum(["approved", "revoked"]).optional(), label: z.string().trim().max(100).optional() });
-const settingsPatch = z.object({ requireDeviceApproval: z.boolean() });
+const DOMAIN_RE = /^(?=.{3,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+const settingsPatch = z.object({
+  requireDeviceApproval: z.boolean().optional(),
+  allowedSignupDomains: z
+    .array(z.string().trim().toLowerCase().transform((d) => d.replace(/^@/, "")).pipe(z.string().regex(DOMAIN_RE, "Not a valid email domain")))
+    .max(50)
+    .optional(),
+});
 const tokenBody = z.object({
   name: z.string().trim().min(1).max(100),
   scopes: z.array(z.enum(TOKEN_SCOPES as [string, ...string[]])).min(1),
@@ -110,7 +118,7 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
       const user = me(request);
       const r = await sql<{ id: string; name: string; role: string }>`
         SELECT o.id, o.name, m.role
-        FROM core.organization_members m INNER JOIN core.organizations o ON o.id = m.org_id
+        FROM core.organization_members m INNER JOIN core.organizations o ON o.id = m.org_id AND o.status = 'active'
         WHERE m.user_id = ${user.id} AND m.status = 'active'
         ORDER BY (m.role = 'owner') DESC, o.created_at
       `.execute(ctx.db);
@@ -188,6 +196,7 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
           id: pid("org", orgId),
           name: org.rows[0]?.name ?? "",
           requireDeviceApproval: requiresDeviceApproval(org.rows[0]?.settings),
+          allowedSignupDomains: allowedDomainsOf(org.rows[0]?.settings),
         },
         workspaces: workspaces.rows.map((w) => ({
           id: pid("wsp", w.id),
@@ -336,15 +345,30 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
     wrap<OrgParams>(async (request, reply) => {
       const { userId, orgId } = await ownerOrg(request);
       const body = settingsPatch.parse(request.body);
-      await sql`
-        UPDATE core.organizations
-        SET settings = jsonb_set(settings, '{security}', coalesce(settings->'security', '{}'::jsonb) || ${JSON.stringify({ requireDeviceApproval: body.requireDeviceApproval })}::jsonb),
-            updated_at = now()
-        WHERE id = ${orgId}
-      `.execute(ctx.db);
-      invalidateDeviceCache();
+      if (body.requireDeviceApproval !== undefined) {
+        await sql`
+          UPDATE core.organizations
+          SET settings = jsonb_set(settings, '{security}', coalesce(settings->'security', '{}'::jsonb) || ${JSON.stringify({ requireDeviceApproval: body.requireDeviceApproval })}::jsonb),
+              updated_at = now()
+          WHERE id = ${orgId}
+        `.execute(ctx.db);
+        invalidateDeviceCache();
+      }
+      if (body.allowedSignupDomains !== undefined) {
+        const domains = [...new Set(body.allowedSignupDomains)];
+        await sql`
+          UPDATE core.organizations
+          SET settings = jsonb_set(settings, '{signup}', coalesce(settings->'signup', '{}'::jsonb) || ${JSON.stringify({ allowedDomains: domains })}::jsonb),
+              updated_at = now()
+          WHERE id = ${orgId}
+        `.execute(ctx.db);
+      }
       await writeAuditEvent(ctx.db, { orgId, actorUserId: userId, action: "org.security_updated", targetType: "organization", targetId: orgId, metadata: body, ip: request.ip });
-      void reply.send({ requireDeviceApproval: body.requireDeviceApproval });
+      const after = await sql<{ settings: unknown }>`SELECT settings FROM core.organizations WHERE id = ${orgId}`.execute(ctx.db);
+      void reply.send({
+        requireDeviceApproval: requiresDeviceApproval(after.rows[0]?.settings),
+        allowedSignupDomains: allowedDomainsOf(after.rows[0]?.settings),
+      });
     }),
   );
 

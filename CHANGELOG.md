@@ -8,6 +8,26 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-10-19
+
+Roles and permissions, phase 1 of the decisions questionnaire
+(`docs/roles-and-permissions/Roles-Decisions-Questionnaire.md`; history in
+`docs/roles-and-permissions/ROLES-CHANGELOG.md`).
+
+### Changed
+- **Sign-up is by invitation** (G1, G5, B1). An account can only be created with a pending
+  invitation for that email, or with an email domain the organization allows. Nobody gets an
+  organization of their own any more. Invited people join through the invitation; domain sign-ups join
+  as a Member with no access and the Owners and Admins get a notification. Platform setting
+  `core.platform_settings.signup_mode` (migration 0081, default `restricted`).
+- **Allowed sign-up domains** in Members & access → Security (`settings.signup.allowedDomains`).
+- **Only Owners and Admins create workspaces** (G3, B4); with several organizations they choose which one.
+- **Only Owners and Admins create bases, duplicate a base or export data** (G2, G4, B6, B7); Create a base,
+  Duplicate and Export CSV are hidden for everyone else. A base can only be duplicated into a workspace
+  of the same organization.
+- **The contacts directory needs a role on the workspace** (G9); people with only base roles don't see it.
+- Deleted organizations no longer appear in lists or in the workspace sidebar.
+
 ## [0.13.0] - 2026-10-15
 
 ### Added

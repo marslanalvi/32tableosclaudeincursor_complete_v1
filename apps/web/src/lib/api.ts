@@ -169,6 +169,12 @@ export interface AuthUser {
 export interface Workspace {
   id: string;
   name: string;
+  organizationId?: string;
+  organizationName?: string;
+  /** Owner/Admin of the workspace's organization: may create and duplicate bases and export. */
+  canManage?: boolean;
+  /** null when the person only has roles on some bases in this workspace. */
+  workspaceRole?: string | null;
 }
 
 export interface BaseSummary {
@@ -254,6 +260,8 @@ export interface BaseDetail {
   id: string;
   name: string;
   tables: TableDto[];
+  /** Owner/Admin of the base's organization: may duplicate the base and export. */
+  canManageOrg?: boolean;
 }
 
 export interface RecordDto {

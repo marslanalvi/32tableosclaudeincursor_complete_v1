@@ -818,8 +818,62 @@ function SettingsSection({ orgId, data }: { orgId: string; data: OrgAccess }) {
     mutationFn: (v: boolean) => adminApi.setSettings(orgId, { requireDeviceApproval: v }),
     onSettled: refresh,
   });
+  const domains = data.org.allowedSignupDomains ?? [];
+  const [newDomain, setNewDomain] = useState("");
+  const saveDomains = useMutation({
+    mutationFn: (list: string[]) => adminApi.setSettings(orgId, { allowedSignupDomains: list }),
+    onSuccess: () => setNewDomain(""),
+    onSettled: refresh,
+  });
+  const addDomain = () => {
+    const d = newDomain.trim().toLowerCase().replace(/^@/, "");
+    if (d && !domains.includes(d)) saveDomains.mutate([...domains, d]);
+  };
   return (
     <Section title="Security" description="These rules apply to everyone except you, the owner.">
+      <div className={styles.signupDomains}>
+        <strong>Allowed sign-up domains</strong>
+        <span className={account.muted}>
+          Anyone can create an account with an email address at these domains. They join this organization
+          as a Member with no access until you give them a workspace or base, and you get a notification. Everyone
+          else needs an invitation.
+        </span>
+        <div className={styles.domainChips}>
+          {domains.length === 0 ? <span className={account.muted}>No domains: accounts by invitation only.</span> : null}
+          {domains.map((d) => (
+            <span key={d} className={styles.domainChip}>
+              @{d}
+              <button
+                type="button"
+                aria-label={`Remove @${d}`}
+                disabled={saveDomains.isPending}
+                onClick={() => saveDomains.mutate(domains.filter((x) => x !== d))}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <form
+          className={styles.domainAdd}
+          onSubmit={(e) => {
+            e.preventDefault();
+            addDomain();
+          }}
+        >
+          <input
+            className={account.input}
+            placeholder="company.com"
+            value={newDomain}
+            aria-label="Email domain"
+            onChange={(e) => setNewDomain(e.target.value)}
+          />
+          <button type="submit" className={account.secondary} disabled={!newDomain.trim() || saveDomains.isPending}>
+            Add domain
+          </button>
+        </form>
+        {saveDomains.isError ? <div className={account.error}>{errorText(saveDomains.error)}</div> : null}
+      </div>
       <label className={styles.check}>
         <input type="checkbox" checked={data.org.requireDeviceApproval} disabled={save.isPending} onChange={(e) => save.mutate(e.target.checked)} />
         <span>

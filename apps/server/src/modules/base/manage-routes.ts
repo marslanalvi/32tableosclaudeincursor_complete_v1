@@ -3,7 +3,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
-import { handleRouteError, notFound } from "../../http/errors.js";
+import { ApiError, handleRouteError, notFound } from "../../http/errors.js";
+import { isOrgManager } from "../access/workspace-access.js";
 import { resolveBaseContext } from "../access/helpers.js";
 import { assertCan } from "../access/assert.js";
 import { compileForUser, compileForWorkspace } from "../access/compile.js";
@@ -151,10 +152,21 @@ export async function registerBaseManageRoutes(
         }
         const snapshot = await compileForUser(ctx.db, user.id, baseId);
         assertCan(snapshot, "base.read");
+        // A copy holds all the data, so only the organization's Owners and Admins may make one,
+        // and only into a workspace of the same organization.
+        if (!(await isOrgManager(ctx.db, user.id, base.orgId))) {
+          throw new ApiError(403, "FORBIDDEN", "Only Owners and Admins can duplicate a base");
+        }
 
         const targetWorkspaceId = body.workspaceId
           ? parsePid(body.workspaceId, "wsp")
           : base.workspaceId;
+        const target = await sql<{ org_id: string }>`
+          SELECT org_id FROM core.workspaces WHERE id = ${targetWorkspaceId} AND deleted_at IS NULL
+        `.execute(ctx.db);
+        if (target.rows[0]?.org_id !== base.orgId) {
+          throw new ApiError(403, "FORBIDDEN", "A base can only be duplicated into a workspace of the same organization");
+        }
         const wsSnapshot = await compileForWorkspace(
           ctx.db,
           user.id,

@@ -12,7 +12,8 @@ export function ToolsMenu({
 }: {
   onManageFields: () => void;
   onImport: () => void;
-  onExport: () => void;
+  /** Omitted for people who may not export (only Owners and Admins export). */
+  onExport?: (() => void) | undefined;
   onTrash: () => void;
   onConnectors: () => void;
   disabled?: boolean;
@@ -50,12 +51,16 @@ export function ToolsMenu({
           label: detail("Import CSV", "Add records from a spreadsheet file"),
           onSelect: onImport,
         },
-        {
-          key: "export",
-          icon: "⤒",
-          label: detail("Export CSV", "Download this view as a CSV file"),
-          onSelect: onExport,
-        },
+        ...(onExport
+          ? [
+              {
+                key: "export",
+                icon: "⤒",
+                label: detail("Export CSV", "Download this view as a CSV file"),
+                onSelect: onExport,
+              },
+            ]
+          : []),
         {
           key: "connectors",
           icon: "⇄",

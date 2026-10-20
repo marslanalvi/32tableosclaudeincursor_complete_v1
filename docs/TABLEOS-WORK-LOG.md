@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.13.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.14.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,20 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.14.0: roles phase 1 (sign-up, workspaces, bases, duplicate, export, contacts)
+
+Implements phase 1 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.md` (G1–G4, G9; B1, B4, B6, B7). Roles history: `docs/roles-and-permissions/ROLES-CHANGELOG.md`.
+
+* **Sign-up** (`auth/signup-policy.ts`, `auth/routes.ts`): `decideSignup` returns `create_org` (signup mode `open`, or no active organization yet), `invited` (a pending, unexpired invitation for the email), `domain` (an active org whose `settings.signup.allowedDomains` holds the email's domain) or `denied` (403, "by invitation only"). Only `create_org` creates an organization (now kind `standard`), Home workspace and subscription. `domain` inserts an `organization_members` row (`member`, source `domain_auto_join`) and notifies the org's Owners/Admins. The response carries `joinedVia`; `organization`/`workspace` are null when none was created.
+* **Platform setting** (migration `0081_platform_settings.sql`): `core.platform_settings(key, value jsonb)`, `signup_mode = "restricted"`. The local `tabula_cc` test database is set to `"open"` so the older suites can still sign up owners; `verify-r16-phase1.mjs` switches it while it runs.
+* **Allowed domains:** `PATCH /v1/orgs/:orgId/settings` takes `requireDeviceApproval` and/or `allowedSignupDomains` (lower-cased, leading `@` dropped, validated, max 50) and returns both; `GET …/access` returns `org.allowedSignupDomains`. Security tab (`AdminPage.tsx` `SettingsSection`) shows chips with remove and an Add domain field.
+* **Owner/Admin-only** (`isOrgManager` / `isOrgManagerRole` in `access/workspace-access.ts`): `POST /v1/workspaces` (422 with `meta.organizations` when the person runs several orgs and sends no `organizationId`), `POST /v1/workspaces/:w/bases`, `POST /v1/bases/:b/duplicate` (target workspace must be in the same org), `GET …/tables/:t/export` and legacy `POST …/export/csv`.
+* **Contacts** (`contacts/routes.ts`): `directoryScope` uses `getWorkspaceAccess(...).workspaceRole`; base-only people get 404.
+* **Listings:** `GET /v1/workspaces` returns `organizationId`, `organizationName`, `canManage`, `workspaceRole` (null = base roles only) and skips non-active orgs; `GET /v1/bases/:b` returns `canManageOrg`; `/v1/orgs` and `primaryOrgId` skip non-active orgs.
+* **Web:** Home hides + Create workspace / Create a base / Duplicate for non-managers. New `CreateWorkspaceDialog` with an Organization picker. Workspace menu shows Rename only to workspace owners and Contacts only with a workspace role. Empty Home for people without access explains who grants it. The base menu hides Duplicate base; Tools and the table tab menu hide Export CSV (`onExport` optional). The sign-up subtitle says accounts are by invitation.
+* **Live clean-up (B6), not run yet:** `.data/r16-live-cleanup-report.mjs` (read-only report; JSON in `.data/r16-live-cleanup-report.json`) and `.data/r16-remove-personal-orgs.mjs` (dry run by default; `--apply` soft-deletes every org except "Arslan's workspace" and trashes their workspaces and bases in one transaction, writing a backup; `--revert FILE` restores). Live on 2026-10-19 has 13 organizations to remove (25 workspaces, 3 small bases) and no bases copied across organizations.
+* Tests: `.data/verify-r16-phase1.mjs` (34 checks), `.data/r16-seed.mjs` + `.data/r2-shell/r16-ui.mjs` (16 checks, screenshots `r16-*.png`). The `pw.mjs` login helper now fills `input#password` (the Show password button also matched `/password/i`).
 
 ## v0.13.0: show password, CORS max-age
 
