@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import { notFound, validationProblem } from "../../http/errors.js";
-import { userCanAccessWorkspace } from "../access/helpers.js";
+import { getWorkspaceAccess } from "../access/workspace-access.js";
 import { handleWave4Error } from "../wave4/problems.js";
 import {
   createRecordsBySlot,
@@ -45,8 +45,9 @@ export async function registerContactsRoutes(
       return null;
     }
     const workspaceId = parsePid(request.params.workspaceId, "wsp");
-    const access = await userCanAccessWorkspace(ctx.db, user.id, workspaceId);
-    if (!access.ok) {
+    // The directory belongs to the workspace: people with only base roles (or none) don't see it.
+    const access = await getWorkspaceAccess(ctx.db, user.id, workspaceId);
+    if (!access?.workspaceRole) {
       notFound(request, reply, "Workspace not found");
       return null;
     }

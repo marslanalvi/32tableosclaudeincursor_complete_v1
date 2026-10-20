@@ -81,10 +81,10 @@ export const shellApi = {
   },
 
   // Workspaces
-  createWorkspace(name: string) {
+  createWorkspace(name: string, organizationId?: string) {
     return request<{ workspace: { id: string; name: string } }>("/v1/workspaces", {
       method: "POST",
-      json: { name },
+      json: organizationId ? { name, organizationId } : { name },
     });
   },
   renameWorkspace(workspaceId: string, name: string) {

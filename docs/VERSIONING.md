@@ -74,4 +74,5 @@ Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was intr
 `v0.11.0`: per-base access overrides and multi-base invites, bulk access changes, bell on Home with desktop notifications, Help Back, import name clashes;
 `v0.12.0`: syncs skip invalid values (review / keep as text), background Sync now with Stop/Pause/Resume, sync scheduler in the API, instant import Stop and fixable invalid entries, devices log per person, grouped record history;
 `v0.12.1`: sync values pre-checked against their field so invalid ones don't force slow per-record retries;
-`v0.13.0`: show/hide password, CORS preflight max-age 7200).
+`v0.13.0`: show/hide password, CORS preflight max-age 7200;
+`v0.14.0`: roles phase 1 — sign-up by invitation or allowed domain, no personal organizations, Owner/Admin-only workspaces, bases, duplicate and export, contacts need a workspace role).

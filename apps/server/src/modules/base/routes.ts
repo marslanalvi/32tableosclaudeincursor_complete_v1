@@ -5,7 +5,8 @@ import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
 import { nextOrderKey } from "../../lib/order-key.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
-import { handleRouteError, notFound } from "../../http/errors.js";
+import { ApiError, handleRouteError, notFound } from "../../http/errors.js";
+import { getOrgRole, isOrgManager, isOrgManagerRole } from "../access/workspace-access.js";
 import { userCanAccessWorkspace, resolveBaseContext } from "../access/helpers.js";
 import { assertCan } from "../access/assert.js";
 import { compileForWorkspace } from "../access/compile.js";
@@ -60,6 +61,9 @@ export async function registerBaseRoutes(
 
         const wsSnapshot = await compileForWorkspace(ctx.db, user.id, workspaceId);
         assertCan(wsSnapshot, "base.manage_schema");
+        if (!(await isOrgManager(ctx.db, user.id, access.orgId))) {
+          throw new ApiError(403, "FORBIDDEN", "Only Owners and Admins can create bases");
+        }
 
         const baseId = generateUuidV7();
         const orderKey = nextOrderKey();
@@ -218,7 +222,7 @@ export async function registerBaseRoutes(
           ORDER BY v.order_key ASC
         `.execute(ctx.db);
 
-        const [tables, fields, views, viewConfigInfo, viewRights, hiddenTableIds, syncs] = await Promise.all([
+        const [tables, fields, views, viewConfigInfo, viewRights, hiddenTableIds, syncs, orgRole] = await Promise.all([
           tablesP,
           fieldsP,
           viewsP,
@@ -229,6 +233,7 @@ export async function registerBaseRoutes(
             .catch(() => ({ isBaseCreator: false, canUpdateShared: false })),
           loadHiddenTableIds(ctx.db, user.id, baseId),
           syncedFieldsByTable(ctx.db, baseId),
+          getOrgRole(ctx.db, user.id, base.orgId),
         ]);
         const syncInfo = new Map<string, ReturnType<typeof syncDto>>(
           await Promise.all([...syncs].map(async ([tableId, s]) => [tableId, syncDto(s.sync, await sourceNames(ctx.db, s.sync))] as const)),
@@ -282,6 +287,8 @@ export async function registerBaseRoutes(
             ),
           })),
           hiddenTableIds: hiddenTableIds.map((id) => pid("tbl", id)),
+          /** Owners and Admins may duplicate the base and export its data. */
+          canManageOrg: isOrgManagerRole(orgRole),
         });
       } catch (err) {
         handleRouteError(request, reply, err);

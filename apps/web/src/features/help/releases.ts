@@ -8,6 +8,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.14.0",
+    date: "2026-10-19",
+    title: "Accounts by invitation; Owners and Admins run workspaces.",
+    items: [
+      "New accounts need an invitation, or an email address at a domain your organization allows (Members & access → Security).",
+      "Nobody gets a separate organization of their own when they sign up.",
+      "Only Owners and Admins create workspaces and bases, duplicate bases and export data.",
+      "Owners and Admins of several organizations choose which one a new workspace belongs to.",
+      "The workspace contacts directory is only for people with a role on that workspace.",
+    ],
+  },
+  {
     version: "0.13.0",
     date: "2026-10-15",
     title: "Show your password while typing it.",

@@ -93,6 +93,15 @@ export async function isOrgOwner(db: TabulaDb, userId: string, orgId: string): P
   return requestMayAccess(orgId) && (await getOrgRole(db, userId, orgId)) === "owner";
 }
 
+/** Owners and Admins run the organization: workspaces, bases, export, duplicating bases. */
+export function isOrgManagerRole(role: string | null | undefined): boolean {
+  return role === "owner" || role === "admin";
+}
+
+export async function isOrgManager(db: TabulaDb, userId: string, orgId: string): Promise<boolean> {
+  return requestMayAccess(orgId) && isOrgManagerRole(await getOrgRole(db, userId, orgId));
+}
+
 /** Workspace roles can manage members when they are owner or creator. */
 export function workspaceRoleCanManageMembers(role: WorkspaceRole | null): boolean {
   return role === "owner" || role === "creator";

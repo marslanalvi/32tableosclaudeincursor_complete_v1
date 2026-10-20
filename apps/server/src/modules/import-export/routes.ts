@@ -8,6 +8,7 @@ import { ApiError, notFound, validationProblem } from "../../http/errors.js";
 import { resolveBaseContext, resolveTableContext } from "../access/helpers.js";
 import { assertCan } from "../access/assert.js";
 import { compileForUser } from "../access/compile.js";
+import { isOrgManager } from "../access/workspace-access.js";
 import { LimitsService } from "../billing/limits-service.js";
 import { executeRecordQuery } from "../query/execute-record-query.js";
 import { loadView } from "../share/service.js";
@@ -290,6 +291,9 @@ export async function registerImportExportRoutes(
       }
       const snapshot = await compileForUser(ctx.db, user.id, baseId);
       assertCan(snapshot, "export.data");
+      if (!(await isOrgManager(ctx.db, user.id, table.orgId))) {
+        throw new ApiError(403, "FORBIDDEN", "Only Owners and Admins can export data");
+      }
       const format = (request.query.format ?? "csv").toLowerCase();
       if (format !== "csv" && format !== "xlsx") {
         validationProblem(request, reply, "format must be csv or xlsx");
@@ -352,6 +356,9 @@ export async function registerImportExportRoutes(
       }
       const snapshot = await compileForUser(ctx.db, user.id, baseId);
       assertCan(snapshot, "export.data");
+      if (!(await isOrgManager(ctx.db, user.id, table.orgId))) {
+        throw new ApiError(403, "FORBIDDEN", "Only Owners and Admins can export data");
+      }
       const data = await buildExport(tableId, body.viewId ? parsePid(body.viewId, "viw") : null);
       void reply.send({
         format: "csv",

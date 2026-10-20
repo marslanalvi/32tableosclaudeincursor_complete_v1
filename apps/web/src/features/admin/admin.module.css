@@ -159,6 +159,48 @@
 .check input {
   margin-top: 2px;
 }
+.signupDomains {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  padding-bottom: var(--tabula-space-3);
+  margin-bottom: var(--tabula-space-3);
+  border-bottom: 1px solid var(--tabula-color-border, #e5e7eb);
+}
+.domainChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.domainChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border-radius: 999px;
+  background: var(--tabula-color-surface-muted, #f1f3f5);
+  font-weight: 500;
+}
+.domainChip button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 6px;
+  color: inherit;
+  opacity: 0.6;
+}
+.domainChip button:hover {
+  opacity: 1;
+}
+.domainAdd {
+  display: flex;
+  gap: var(--tabula-space-2);
+  max-width: 420px;
+}
 .baseChecks {
   padding-left: 24px;
   display: flex;

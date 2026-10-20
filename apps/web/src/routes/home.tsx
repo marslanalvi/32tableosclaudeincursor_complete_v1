@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api, type BaseSummary, type Workspace } from "../lib/api.ts";
 import { shellApi } from "../lib/api-areas/shell.ts";
+import { adminApi, type OrgSummary } from "../lib/api-areas/admin.ts";
 import { useMe } from "../features/auth/use-auth.ts";
 import { AccountMenu } from "../features/base/AccountMenu.tsx";
 import { NotificationsBell } from "../features/notifications/NotificationsBell.tsx";
@@ -154,6 +155,78 @@ function CreateBaseDialog({
   );
 }
 
+function CreateWorkspaceDialog({
+  orgs,
+  busy,
+  error,
+  onSubmit,
+  onClose,
+}: {
+  orgs: OrgSummary[];
+  busy: boolean;
+  error: string | null;
+  onSubmit: (name: string, organizationId: string | undefined) => void;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("My workspace");
+  const [orgId, setOrgId] = useState(orgs[0]?.id ?? "");
+  const submit = () => {
+    if (name.trim()) onSubmit(name.trim(), orgId || undefined);
+  };
+  return (
+    <Dialog
+      title="Create workspace"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={uiStyles.btn} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className={uiStyles.btnPrimary} disabled={!name.trim() || busy} onClick={submit}>
+            {busy ? "Creating…" : "Create"}
+          </button>
+        </>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <div className={uiStyles.field}>
+          <label className={uiStyles.label} htmlFor="new-ws-name">
+            Workspace name
+          </label>
+          <input
+            id="new-ws-name"
+            className={uiStyles.input}
+            value={name}
+            autoFocus
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        {orgs.length > 1 ? (
+          <div className={uiStyles.field}>
+            <label className={uiStyles.label} htmlFor="new-ws-org">
+              Organization
+            </label>
+            <select id="new-ws-org" className={uiStyles.select} value={orgId} onChange={(e) => setOrgId(e.target.value)}>
+              {orgs.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : null}
+        {error ? <p className={uiStyles.error}>{error}</p> : null}
+      </form>
+    </Dialog>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 
 function MembersDialog({
@@ -280,7 +353,8 @@ function BaseCard({
 }: {
   base: BaseSummary;
   onRename: () => void;
-  onDuplicate: () => void;
+  /** Only Owners and Admins duplicate bases. */
+  onDuplicate: (() => void) | null;
   onDelete: () => void;
 }) {
   const router = useRouter();
@@ -328,7 +402,7 @@ function BaseCard({
                 void router.navigate({ to: "/bases/$baseId/$", params: { baseId: base.id, _splat: "" } }),
             },
             { key: "rename", label: "Rename", icon: "✎", onSelect: onRename },
-            { key: "dup", label: "Duplicate", icon: "⧉", onSelect: onDuplicate },
+            ...(onDuplicate ? [{ key: "dup", label: "Duplicate", icon: "⧉", onSelect: onDuplicate }] : []),
             {
               key: "copy",
               label: "Copy base ID",
@@ -431,11 +505,15 @@ function WorkspaceSection({
               </button>
             )}
             items={[
-              { key: "rename", label: "Rename workspace", icon: "✎", onSelect: () => setRenamingWs(true) },
+              ...(workspace.workspaceRole === "owner"
+                ? [{ key: "rename", label: "Rename workspace", icon: "✎", onSelect: () => setRenamingWs(true) }]
+                : []),
               { key: "members", label: "Members and invites", icon: "👥", onSelect: () => setSharing(true) },
-              { key: "contacts", label: "Contacts", icon: "☎", onSelect: () => {
-                  window.location.assign(`/contacts?workspaceId=${encodeURIComponent(workspace.id)}`);
-                } },
+              ...(workspace.workspaceRole
+                ? [{ key: "contacts", label: "Contacts", icon: "☎", onSelect: () => {
+                    window.location.assign(`/contacts?workspaceId=${encodeURIComponent(workspace.id)}`);
+                  } }]
+                : []),
             ]}
           />
         </div>
@@ -452,25 +530,31 @@ function WorkspaceSection({
               key={base.id}
               base={base}
               onRename={() => setDialog({ kind: "rename", base })}
-              onDuplicate={() => duplicate.mutate(base)}
+              onDuplicate={workspace.canManage ? () => duplicate.mutate(base) : null}
               onDelete={() => setDialog({ kind: "delete", base })}
             />
           ))}
-          <button type="button" className={styles.createCard} onClick={() => setCreating(true)}>
-            <span className={styles.createPlus} aria-hidden>
-              +
-            </span>
-            Create a base
-          </button>
+          {workspace.canManage ? (
+            <button type="button" className={styles.createCard} onClick={() => setCreating(true)}>
+              <span className={styles.createPlus} aria-hidden>
+                +
+              </span>
+              Create a base
+            </button>
+          ) : null}
         </div>
       )}
       {bases.length === 0 && basesQuery.isSuccess ? (
-        <p className={uiStyles.muted}>No bases yet. Create one to get started.</p>
+        <p className={uiStyles.muted}>
+          {workspace.canManage
+            ? "No bases yet. Create one to get started."
+            : "No bases shared with you here yet. Owners and Admins create bases."}
+        </p>
       ) : null}
 
       {creating ? (
         <CreateBaseDialog
-          workspaces={workspaces}
+          workspaces={workspaces.filter((w) => w.canManage)}
           defaultWorkspaceId={workspace.id}
           onClose={() => setCreating(false)}
         />
@@ -527,8 +611,12 @@ export function HomePage() {
     enabled: me.isSuccess,
   });
   const workspaces = workspacesQuery.data?.workspaces ?? [];
+  const orgsQuery = useQuery({ queryKey: ["admin", "orgs"], queryFn: () => adminApi.orgs(), enabled: me.isSuccess });
+  // Only Owners and Admins create workspaces; they pick the organization when they run several.
+  const managedOrgs = (orgsQuery.data?.orgs ?? []).filter((o) => o.role === "owner" || o.role === "admin");
+  const canCreateWs = managedOrgs.length > 0;
   const createWs = useMutation({
-    mutationFn: (name: string) => shellApi.createWorkspace(name),
+    mutationFn: (v: { name: string; organizationId?: string | undefined }) => shellApi.createWorkspace(v.name, v.organizationId),
     onSuccess: async (res) => {
       await queryClient.invalidateQueries({ queryKey: ["workspaces"], exact: true });
       setCreatingWs(false);
@@ -573,13 +661,15 @@ export function HomePage() {
               {w.name}
             </a>
           ))}
-          <button
-            type="button"
-            className={styles.sidebarCreate}
-            onClick={() => setCreatingWs(true)}
-          >
-            + Create workspace
-          </button>
+          {canCreateWs ? (
+            <button
+              type="button"
+              className={styles.sidebarCreate}
+              onClick={() => setCreatingWs(true)}
+            >
+              + Create workspace
+            </button>
+          ) : null}
         </nav>
         <main className={styles.main}>
           <h1 className={styles.pageTitle}>
@@ -592,12 +682,22 @@ export function HomePage() {
               {errorMessage(workspacesQuery.error, "Could not load workspaces")}
             </p>
           ) : workspaces.length === 0 ? (
-            <div className={styles.emptyState}>
-              <p>You don’t have a workspace yet.</p>
-              <button type="button" className={uiStyles.btnPrimary} onClick={() => setCreatingWs(true)}>
-                Create workspace
-              </button>
-            </div>
+            canCreateWs ? (
+              <div className={styles.emptyState}>
+                <p>You don’t have a workspace yet.</p>
+                <button type="button" className={uiStyles.btnPrimary} onClick={() => setCreatingWs(true)}>
+                  Create workspace
+                </button>
+              </div>
+            ) : (
+              <div className={styles.emptyState}>
+                <p>Nothing has been shared with you yet.</p>
+                <p className={uiStyles.muted}>
+                  Your organization’s Owner or Admin gives you access to workspaces and bases. If you
+                  were sent an invitation, open the link in that email.
+                </p>
+              </div>
+            )
           ) : (
             workspaces.map((w) => (
               <WorkspaceSection key={w.id} workspace={w} workspaces={workspaces} />
@@ -606,14 +706,11 @@ export function HomePage() {
         </main>
       </div>
       {creatingWs ? (
-        <PromptDialog
-          title="Create workspace"
-          label="Workspace name"
-          initialValue="My workspace"
-          confirmLabel="Create"
+        <CreateWorkspaceDialog
+          orgs={managedOrgs}
           busy={createWs.isPending}
           error={createWs.isError ? errorMessage(createWs.error) : null}
-          onSubmit={(name) => createWs.mutate(name)}
+          onSubmit={(name, organizationId) => createWs.mutate({ name, organizationId })}
           onClose={() => setCreatingWs(false)}
         />
       ) : null}

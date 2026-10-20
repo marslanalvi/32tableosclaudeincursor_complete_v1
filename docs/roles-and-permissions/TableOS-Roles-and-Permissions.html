@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TableOS — Roles, Permissions &amp; Access</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Inter, Arial, sans-serif; color: #1d2330; font-size: 10.2pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 6px; }
+  h2 { font-size: 15pt; margin: 26px 0 8px; padding-bottom: 4px; border-bottom: 2px solid #1d2330; page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 16px 0 6px; page-break-after: avoid; }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 6px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  code { font-family: Consolas, "Courier New", monospace; font-size: 8.8pt; background: #f2f4f7; padding: 0 3px; border-radius: 3px; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 8.6pt; background: #f6f7f9; border: 1px solid #e1e4ea; border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; page-break-inside: avoid; margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 9pt; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  th, td { border: 1px solid #d9dde4; padding: 4px 6px; vertical-align: top; text-align: left; }
+  th { background: #eef1f5; font-weight: 600; }
+  td.c, th.c { text-align: center; }
+  .y { color: #0f7b3f; font-weight: 700; }
+  .n { color: #b9bec8; }
+  .cover { page-break-after: always; padding-top: 70mm; }
+  .cover .sub { font-size: 12pt; color: #4a5263; margin-top: 4px; }
+  .cover .meta { margin-top: 40mm; font-size: 9.5pt; color: #4a5263; }
+  .box { border: 1px solid #d9dde4; border-radius: 8px; padding: 10px 12px; margin: 10px 0; page-break-inside: avoid; }
+  .note { background: #f3f7ff; border-color: #c9dafb; }
+  .warn { background: #fff7ea; border-color: #f0cf96; }
+  .crit { background: #fff1f0; border-color: #f2b8b5; }
+  .sev { display: inline-block; font-size: 8pt; font-weight: 700; padding: 0 6px; border-radius: 9px; color: #fff; white-space: nowrap; }
+  .sev.c { background: #b42318; } .sev.h { background: #d9480f; } .sev.m { background: #b7791f; } .sev.l { background: #5b6472; }
+  .tested { display: inline-block; font-size: 7.8pt; font-weight: 600; padding: 0 5px; border-radius: 8px; background: #e7f6ec; color: #0f7b3f; border: 1px solid #b7e1c4; }
+  .toc li { margin: 1px 0; }
+  .small { font-size: 8.6pt; color: #4a5263; }
+  .pb { page-break-before: always; }
+  .closed { display: inline-block; font-size: 7.8pt; font-weight: 700; padding: 0 6px; border-radius: 8px; background: #0f7b3f; color: #fff; white-space: nowrap; }
+  .planned { display: inline-block; font-size: 7.8pt; font-weight: 600; padding: 0 6px; border-radius: 8px; background: #eef1f5; color: #4a5263; border: 1px solid #d9dde4; white-space: nowrap; }
+  .two { display: flex; gap: 12px; } .two > div { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <h1>TableOS — Roles, Permissions &amp; Access</h1>
+  <div class="sub">How accounts, organizations, workspaces, bases and roles work today, every rule in the code, the gaps, and a recommended model</div>
+  <div class="meta">
+    Document version <b>2</b> — roles <b>R2</b>, TableOS <b>0.14.0</b> (version 1 described 0.13.0, commit <code>c2f239a</code>)<br />
+    Prepared: 19 October 2026<br />
+    Source: the TableOS code base (server permission checks, database schema, web screens) and tests run on a local copy of the system.
+    Statements marked <span class="tested">tested</span> were reproduced on the local test system while writing this document.
+  </div>
+</div>
+
+<h2>Contents</h2>
+<ol class="toc">
+  <li>Version history and gap status (start here)</li>
+  <li>Summary in plain words</li>
+  <li>The building blocks</li>
+  <li>How accounts, organizations and workspaces come into being today</li>
+  <li>The role layers (organization, workspace, base, field, device)</li>
+  <li>How TableOS decides what someone can do</li>
+  <li>Who can give access, and how</li>
+  <li>Full privilege matrix (every feature)</li>
+  <li>Security controls</li>
+  <li>Account types: what each person actually sees</li>
+  <li>Gaps and risks</li>
+  <li>Recommended model and decisions needed</li>
+  <li>Appendix A — API route → permission map</li>
+  <li>Appendix B — Where it lives in the code and database</li>
+</ol>
+
+<!-- ============================================================ history -->
+<h2 class="pb" id="history">0. Version history and gap status</h2>
+<p>This document is updated with every release that changes who can do what. Sections 1–11 describe the system as it was in <b>0.13.0</b> (roles R1), and the evidence for each gap. This section says what has changed since. The running history is in <code>docs/roles-and-permissions/ROLES-CHANGELOG.md</code>.</p>
+<table>
+  <tr><th>Document</th><th>Roles</th><th>TableOS</th><th>What it describes</th></tr>
+  <tr><td>1</td><td>R1</td><td>0.13.0</td><td>Starting point: open sign-up, a personal organization for everyone, anyone could create workspaces, copy or export bases.</td></tr>
+  <tr><td><b>2</b></td><td><b>R2</b></td><td><b>0.14.0</b></td><td><b>Phase 1 of the questionnaire</b>: sign-up by invitation or allowed email domain; no personal organizations; Owners and Admins create workspaces and bases, duplicate and export; contacts need a workspace role.</td></tr>
+  <tr><td>—</td><td>R3</td><td>phase 2</td><td>Planned: Owner, Admin, Member only; several Owners and transfer; Admins only get what they're assigned and manage people; one invite dialog.</td></tr>
+  <tr><td>—</td><td>R4</td><td>phase 3</td><td>Planned: two-factor for everyone, 30-day sessions, share-link rules, activity log, remaining gaps.</td></tr>
+</table>
+
+<h3>What changed in 0.14.0</h3>
+<table>
+  <tr><th>Area</th><th>Before (R1)</th><th>Now (R2)</th></tr>
+  <tr><td>Creating an account</td><td>Anyone</td><td>Only with a pending invitation, or an email at a domain the organization allows (Members &amp; access → Security). Domain sign-ups join as a Member with no access; Owners and Admins are notified. Everyone else: "TableOS accounts are by invitation only".</td></tr>
+  <tr><td>Own organization on sign-up</td><td>Everyone</td><td>Nobody (only the very first account on a brand-new installation).</td></tr>
+  <tr><td>Create a workspace</td><td>Everyone</td><td>Owners and Admins; they choose the organization when they run several.</td></tr>
+  <tr><td>Create a base</td><td>Workspace Creators and up</td><td>Owners and Admins</td></tr>
+  <tr><td>Duplicate a base</td><td>Anyone who could open it, into any workspace</td><td>Owners and Admins, into a workspace of the same organization</td></tr>
+  <tr><td>Export CSV / Excel</td><td>Anyone who could open the table</td><td>Owners and Admins (copy and paste in the grid still works)</td></tr>
+  <tr><td>Contacts directory</td><td>Every organization member</td><td>People with a role on that workspace</td></tr>
+  <tr><td>Deleted organizations</td><td>Still listed</td><td>Hidden from every list</td></tr>
+</table>
+
+<h3>Gap status</h3>
+<table>
+  <tr><th>Gap</th><th>Status</th><th>Note</th></tr>
+  <tr><td>G1 personal organizations</td><td><span class="closed">closed 0.14.0</span></td><td>No new ones. The 13 existing ones on live (25 empty or near-empty workspaces, 3 small bases) are removed after your approval, reversibly.</td></tr>
+  <tr><td>G2 duplicate copies data out</td><td><span class="closed">closed 0.14.0</span></td><td>Live check: no base had been copied into another organization.</td></tr>
+  <tr><td>G3 everyone creates workspaces</td><td><span class="closed">closed 0.14.0</span></td><td></td></tr>
+  <tr><td>G4 export can't be restricted</td><td><span class="closed">closed 0.14.0</span></td><td>Owners and Admins only.</td></tr>
+  <tr><td>G5 open sign-up</td><td><span class="closed">closed 0.14.0</span></td><td>Invitation or allowed domain (@bluecascade.org, @gmail.com to be set on live).</td></tr>
+  <tr><td>G6 single Owner</td><td><span class="planned">phase 2</span></td><td>Several Owners, transfer.</td></tr>
+  <tr><td>G7 half-built Admin, unused roles</td><td><span class="planned">phase 2</span></td><td>Owner, Admin, Member only.</td></tr>
+  <tr><td>G8 delegated invites</td><td><span class="planned">phase 2</span></td><td>Admins invite; workspace Owner role assignable.</td></tr>
+  <tr><td>G9 contacts open to all</td><td><span class="closed">closed 0.14.0</span></td><td></td></tr>
+  <tr><td>G10 interface-only</td><td><span class="planned">postponed</span></td><td>Keep roles minimal for now (B12).</td></tr>
+  <tr><td>G11 two invite screens</td><td><span class="planned">phase 2</span></td><td></td></tr>
+  <tr><td>G12–G20</td><td><span class="planned">phase 3</span></td><td>Sessions, two-factor, share links, field permissions, Runs as, notifications, move base, member emails, activity log.</td></tr>
+</table>
+
+<!-- ============================================================ 1 -->
+<h2 class="pb">1. Summary in plain words</h2>
+<p>TableOS copies Airtable's three-level model: <b>Organization → Workspace → Base</b>. A role given on a workspace applies to every base in it; a role given on a base applies to that base only. Inside a base there are four roles: <b>Creator, Editor, Commenter, Viewer</b>. On top of roles there are <b>field permissions</b> (who may edit a field's values) and <b>device approval</b> (a member's new browser must be approved by the owner).</p>
+<p>The part that causes most confusion: <b>every person who signs up automatically gets their own organization</b>, in which they are the Owner, with a workspace called "Home". That is also true for people you invite. So an invited member is, at the same time, a limited member of <i>your</i> organization and the Owner of <i>their own</i> organization. Their Home page mixes both, and in their own organization they can create workspaces and bases freely.</p>
+
+<div class="box crit">
+  <b>Most important problems found</b>
+  <ol>
+    <li><b>Anyone with access to one of your bases — even a Viewer — can copy the entire base, with all its records, into their own workspace</b> and becomes Creator of the copy. <span class="tested">tested</span></li>
+    <li><b>Everybody can create workspaces</b>, because everybody is the Owner of the personal organization created at sign-up. <span class="tested">tested</span></li>
+    <li><b>Every role, including Viewer, can download every table as CSV/Excel</b>; there is no setting to restrict export. <span class="tested">tested</span></li>
+    <li><b>Only one person (the organization Owner) can manage people</b>; the Admin role exists in the database but cannot be assigned, and ownership cannot be transferred.</li>
+    <li><b>Sign-up is open to anyone</b> who reaches the site, and every sign-up creates a new organization.</li>
+  </ol>
+</div>
+<p>Section 10 lists all 20 gaps with evidence. Section 11 proposes an Airtable-aligned model with clear settings (for example "Who can create workspaces: Owners and Admins only") and a three-phase plan, plus the decisions we need from you.</p>
+
+<!-- ============================================================ 2 -->
+<h2>2. The building blocks</h2>
+<table>
+  <tr><th style="width:22%">Thing</th><th>What it is</th><th style="width:30%">Created by</th></tr>
+  <tr><td><b>Account</b> (user)</td><td>A person: email + password (+ optional two-factor). One account can belong to several organizations.</td><td>Anyone, via <i>Create an account</i>.</td></tr>
+  <tr><td><b>Organization</b></td><td>The company / tenant. Owns workspaces, members, devices, API tokens, security settings and the plan. Every member has an <i>organization role</i>.</td><td>Created automatically at every sign-up, named "&lt;Name&gt;'s workspace".</td></tr>
+  <tr><td><b>Workspace</b></td><td>A folder of bases inside an organization. Its purpose is to give one role that covers many bases (including bases added later).</td><td>"Home" is created at sign-up; more via <i>+ Create workspace</i> (Owner of the organization).</td></tr>
+  <tr><td><b>Base</b></td><td>A database: tables, fields, records, views, automations, interfaces, forms. The unit most roles are about.</td><td>Workspace Owner or Creator.</td></tr>
+  <tr><td>Table, field, record, view</td><td>Inside a base. Views can be <i>collaborative</i> (everyone), <i>personal</i> (only you) or <i>locked</i> (only the view's author or a base Creator can change it).</td><td>See matrix (section 7).</td></tr>
+  <tr><td>Interface</td><td>An app-like page built on a base.</td><td>Base Creator.</td></tr>
+  <tr><td>Share link</td><td>A public (optionally password-protected, optionally expiring) link to a view, a whole base (read-only) or a form (submit-only).</td><td>Base Editor or Creator.</td></tr>
+  <tr><td>Automation</td><td>Trigger + actions; runs with the access of the person who last saved it.</td><td>Base Creator.</td></tr>
+  <tr><td>API token</td><td>Key for programs (<code>tos_…</code>) with read/write/delete scopes, all bases or chosen ones.</td><td>Organization Owner only.</td></tr>
+  <tr><td>Device</td><td>A browser, identified by a long-lived cookie. In organizations that require approval, a member's new device waits for the Owner.</td><td>Registered automatically at first sign-in.</td></tr>
+</table>
+
+<!-- ============================================================ 3 -->
+<h2>3. How accounts, organizations and workspaces come into being today</h2>
+<h3>3.1 Sign-up</h3>
+<p>Signing up (<code>POST /v1/auth/signup</code>, public) does all of this in one step (<code>apps/server/src/modules/auth/routes.ts</code> lines 173–221):</p>
+<ol>
+  <li>creates the account;</li>
+  <li>creates a new organization named "&lt;Name&gt;'s workspace" of kind <code>personal</code>;</li>
+  <li>makes the person its <b>Owner</b>;</li>
+  <li>creates a workspace <b>Home</b> and gives the person the <b>workspace Owner</b> role on it;</li>
+  <li>starts a free plan for that organization.</li>
+</ol>
+<h3>3.2 Being invited</h3>
+<p>When the Owner of organization A invites someone, the invitation is for a workspace (all its bases) or for selected bases. Accepting it (<code>POST /v1/invitations/accept</code>) adds the person to organization A with the organization role <b>member</b> and creates the workspace or base role. The invited person must sign in (or sign up) with the invited email address — and if they sign up, they also get their own personal organization from step 3.1.</p>
+<pre>Arslan signs up
+└── Organization "Arslan's workspace"     Arslan = Owner
+    └── Workspace "Home"                   Arslan = workspace Owner
+        └── Base "Signize.us"
+
+Arslan invites Mahad to the base "Signize.us" as Editor.
+Mahad signs up and accepts:
+├── Organization "Mahad's workspace"     Mahad = Owner      (created by his sign-up)
+│   └── Workspace "Home"                   Mahad = workspace Owner
+│       └── (anything Mahad creates here is outside Arslan's control)
+└── Organization "Arslan's workspace"    Mahad = member
+    └── Workspace "Home"                   (visible to Mahad, showing only Signize.us)
+        └── Base "Signize.us"              Mahad = Editor</pre>
+<div class="box note">On Mahad's Home page both organizations' workspaces appear together, both called "Home". The <i>+ Create workspace</i> button creates the workspace in <b>his own</b> organization (the first one he owns, <code>workspace/routes.ts</code> lines 80–99). <span class="tested">tested</span> — an invited Viewer had two organizations (own: Owner, company: member), two "Home" workspaces, and created a new workspace (HTTP 201).</div>
+
+<h3>3.3 Creating workspaces and bases</h3>
+<ul>
+  <li><b>Workspace:</b> the server allows it to anyone who is Owner of an organization, and puts it in the first organization they own. Because every account owns its personal organization, in practice <b>everyone can create workspaces</b>. The creator becomes workspace Owner.</li>
+  <li><b>Base:</b> needs <i>Owner</i> or <i>Creator</i> on the workspace (or organization Owner/Admin). The creator becomes base Creator.</li>
+</ul>
+
+<!-- ============================================================ 4 -->
+<h2 class="pb">4. The role layers</h2>
+<h3>4.1 Organization roles</h3>
+<table>
+  <tr><th style="width:14%">Role</th><th style="width:25%">How someone gets it</th><th>What it gives</th><th style="width:16%">Status</th></tr>
+  <tr><td><b>Owner</b></td><td>Signing up (own organization). Cannot be given or transferred.</td><td>Acts as Owner of every workspace (full access to every base). <b>Only role</b> that can invite, change roles, set access dates, suspend/remove members, approve/revoke devices, create API tokens, change security settings, create workspaces. Never needs device approval; never locked out by wrong passwords.</td><td>In use</td></tr>
+  <tr><td><b>Admin</b></td><td>Nowhere — no screen or API assigns it.</td><td>Same data access as Owner (Owner of every workspace), but <b>cannot</b> invite or manage access.</td><td>Half-built, unreachable</td></tr>
+  <tr><td><b>Billing admin</b></td><td>Nowhere.</td><td>Only: upgrade the plan / checkout.</td><td>Unused</td></tr>
+  <tr><td><b>Member</b></td><td>Accepting an invitation.</td><td>Nothing by itself. Only the workspace/base roles below give access.</td><td>In use</td></tr>
+  <tr><td><b>Guest</b></td><td>Nowhere.</td><td>Defined in the database only.</td><td>Unused</td></tr>
+</table>
+<p>A membership can be <b>active</b>, <b>suspended</b> (keeps roles, can open nothing) or <b>deactivated</b> (removed: every role and device in that organization deleted).</p>
+
+<h3>4.2 Workspace roles</h3>
+<table>
+  <tr><th style="width:14%">Role</th><th style="width:28%">How someone gets it</th><th>Effect</th></tr>
+  <tr><td><b>Owner</b></td><td>Automatically, by creating the workspace (or signing up for "Home"). Cannot be assigned to others.</td><td>Rename/delete the workspace; create bases; Creator on every base; cannot be restricted on any base.</td></tr>
+  <tr><td><b>Creator</b></td><td>Invitation to the workspace, or Members &amp; access.</td><td>Create bases in the workspace; Creator on every base.</td></tr>
+  <tr><td><b>Editor</b></td><td>Same.</td><td>Editor on every base.</td></tr>
+  <tr><td><b>Commenter</b></td><td>Same.</td><td>Commenter on every base.</td></tr>
+  <tr><td><b>Viewer</b></td><td>Same.</td><td>Viewer on every base.</td></tr>
+</table>
+
+<h3>4.3 Base roles</h3>
+<p><b>Creator, Editor, Commenter, Viewer</b> (see the matrix in section 7) plus:</p>
+<ul>
+  <li><b>No access to this base</b> (stored as role <code>none</code>, since 0.11.0): blocks one base that a workspace role would otherwise open.</li>
+  <li><b>Interface only</b>: defined (read records and views through an interface) but not offered anywhere yet.</li>
+</ul>
+
+<h3>4.4 Field permissions (per field)</h3>
+<p>Field header → <i>Edit field permissions</i> (needs Creator). Levels: <b>Editors and up</b> (default) · <b>Creators and up</b> · <b>Specific people</b> · <b>Nobody</b>. They only limit <i>editing values</i>; everyone who can open the base still sees the field. "Nobody" also blocks the Owner and Creators (<code>schema/field-permissions.ts</code> line 35). Automations and restores are not limited by field permissions.</p>
+
+<h3>4.5 Time limits and status</h3>
+<ul>
+  <li><b>Access until</b>: any workspace or base role can end automatically on a date.</li>
+  <li><b>Suspend</b> / <b>Reactivate</b>: blocks everything immediately, keeps the roles.</li>
+  <li><b>Remove</b>: deletes all roles and devices in the organization (the person's own personal organization is untouched).</li>
+</ul>
+
+<!-- ============================================================ 5 -->
+<h2>5. How TableOS decides what someone can do</h2>
+<p>For every request on a base, the server computes one <b>effective base role</b> (<code>packages/permissions/src/snapshot.ts</code>, <code>apps/server/src/modules/access/compile.ts</code>):</p>
+<ol>
+  <li>The browser's device must not be blocked in that organization (device approval) — otherwise the organization is invisible.</li>
+  <li>The person must be an <b>active</b> member of the organization — otherwise no access at all.</li>
+  <li>Organization <b>Owner or Admin</b> → treated as workspace Owner → <b>Creator</b>.</li>
+  <li>Workspace <b>Owner</b> → <b>Creator</b>, whatever the base says.</li>
+  <li>Otherwise, if the base has its own setting, <b>it wins</b> (higher, lower, or <i>No access</i>).</li>
+  <li>Otherwise the base inherits the workspace role.</li>
+  <li>Expired roles count as no role. No role = no access (the base is not listed and returns "not found").</li>
+</ol>
+<p>The effective role is then checked against the action the request needs (for example <code>record.update</code>), and field permissions / synced-field rules are applied on writes.</p>
+<table>
+  <tr><th>Example</th><th>Workspace role</th><th>Base setting</th><th>Result on that base</th></tr>
+  <tr><td>Normal workspace member</td><td>Editor</td><td>—</td><td>Editor</td></tr>
+  <tr><td>Promoted on one base</td><td>Viewer</td><td>Creator</td><td>Creator</td></tr>
+  <tr><td>Restricted on one base</td><td>Editor</td><td>Viewer</td><td>Viewer</td></tr>
+  <tr><td>Removed from one base</td><td>Editor</td><td>No access</td><td>No access (base hidden)</td></tr>
+  <tr><td>Base-only member</td><td>—</td><td>Commenter</td><td>Commenter (only that base appears)</td></tr>
+  <tr><td>Workspace owner</td><td>Owner</td><td>Viewer / No access</td><td>Creator (owners can't be restricted)</td></tr>
+  <tr><td>Expired grant</td><td>Editor until yesterday</td><td>—</td><td>No access</td></tr>
+  <tr><td>Suspended</td><td>anything</td><td>anything</td><td>No access</td></tr>
+</table>
+
+<!-- ============================================================ 6 -->
+<h2 class="pb">6. Who can give access, and how</h2>
+<table>
+  <tr><th style="width:26%">Path</th><th style="width:16%">Who can use it</th><th>What it does</th></tr>
+  <tr><td>Sign-up</td><td>Anyone</td><td>New organization (Owner) + workspace "Home" (Owner).</td></tr>
+  <tr><td>Create workspace</td><td>Organization Owner (= everyone, in their own org)</td><td>Creator of the workspace becomes its Owner.</td></tr>
+  <tr><td>Create base</td><td>Workspace Owner / Creator</td><td>Creator of the base becomes base Creator.</td></tr>
+  <tr><td>Members &amp; access → Invite</td><td>Organization Owner</td><td>Email + "Selected bases only" (tick any bases, any workspaces) or "Workspace · X (all its bases)" + role. One invitation and one email even for several bases. Link valid 7 days; must be accepted with the invited email.</td></tr>
+  <tr><td>Home → workspace <i>Share</i></td><td>Organization Owner</td><td>Invites to the <b>whole workspace</b> (all bases). This is how "one base gave the whole workspace" happened on live.</td></tr>
+  <tr><td>Members &amp; access → member → Edit access</td><td>Organization Owner</td><td>Set/clear any workspace or base role, "No access to this base", "Access until"; tick several rows to change them at once; Reset to workspace role.</td></tr>
+  <tr><td>Suspend / Remove</td><td>Organization Owner</td><td>See 4.5. The Owner's own access can't be changed.</td></tr>
+  <tr><td>Devices</td><td>Organization Owner</td><td>Approve / deny / revoke / rename / forget devices; per-person log of sessions and decisions.</td></tr>
+  <tr><td>API tokens</td><td>Organization Owner</td><td>Create/revoke tokens; a token stops working if its creator is no longer an active Owner.</td></tr>
+  <tr><td>Field permissions</td><td>Base Creator</td><td>Per-field edit rights.</td></tr>
+  <tr><td>Share links</td><td>Base Editor / Creator</td><td>Public or password links to views, base, forms.</td></tr>
+</table>
+<div class="box warn">Nobody except the organization Owner can invite or change access — not workspace Owners, not base Creators, not Admins. In Airtable, workspace owners and base creators can invite.</div>
+
+<!-- ============================================================ 7 -->
+<h2 class="pb">7. Full privilege matrix</h2>
+<p class="small">✓ = allowed. Workspace Owner and organization Owner/Admin act as base Creator on bases. Org Owner = organization Owner. "Author" = the person who created the item.</p>
+
+<h3>7.1 Organization level</h3>
+<table>
+  <tr><th>Action</th><th class="c">Org Owner</th><th class="c">Org Admin*</th><th class="c">Member</th></tr>
+  <tr><td>Invite people (workspace or bases)</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td></tr>
+  <tr><td>Change roles, access dates, "No access", bulk changes</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td></tr>
+  <tr><td>Suspend, reactivate, remove members</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td></tr>
+  <tr><td>Approve / revoke devices; see device &amp; session log</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td></tr>
+  <tr><td>Create / revoke API tokens</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td></tr>
+  <tr><td>Security settings (require device approval)</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td></tr>
+  <tr><td>Create workspaces in this organization</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">— (but can in their own org)</td></tr>
+  <tr><td>Upgrade plan</td><td class="c y">✓</td><td class="c n">— (Billing admin: ✓)</td><td class="c n">—</td></tr>
+  <tr><td>Receive wrong-password and device-approval alerts</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td></tr>
+</table>
+<p class="small">* Admin cannot currently be assigned.</p>
+
+<h3>7.2 Workspace level</h3>
+<table>
+  <tr><th>Action</th><th class="c">Org Owner</th><th class="c">WS Owner</th><th class="c">WS Creator</th><th class="c">WS Editor / Commenter / Viewer</th><th class="c">Base-only member</th></tr>
+  <tr><td>See the workspace on Home</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓ (only their bases)</td></tr>
+  <tr><td>See the workspace's member list</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td></tr>
+  <tr><td>See the workspace contacts directory</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓ (see gap G9)</td></tr>
+  <tr><td>Create bases</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td></tr>
+  <tr><td>Rename / delete the workspace</td><td class="c y">✓</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td></tr>
+  <tr><td>Invite / manage members</td><td class="c y">✓</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td></tr>
+</table>
+
+<h3>7.3 Base — data and structure</h3>
+<table>
+  <tr><th>Action</th><th class="c">Viewer</th><th class="c">Commenter</th><th class="c">Editor</th><th class="c">Creator</th></tr>
+  <tr><td>Open the base, read records, search inside it</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Export CSV / Excel</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Record revision history; see trash</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Duplicate the whole base (into a workspace where they can create bases)</td><td class="c y">✓ (G2)</td><td class="c y">✓ (G2)</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Create, edit, delete, duplicate, reorder records; import CSV</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Link / unlink records</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Upload attachments</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Undo / redo (own changes only); restore records from trash</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Add, change, delete fields and tables; set primary field; restore fields/tables</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td></tr>
+  <tr><td>Field permissions</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td></tr>
+  <tr><td>Rename the base; delete the base</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td></tr>
+  <tr><td>Rebuild the search index</td><td class="c n">—</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td></tr>
+</table>
+
+<h3>7.4 Views</h3>
+<table>
+  <tr><th>Action</th><th class="c">Viewer</th><th class="c">Commenter</th><th class="c">Editor</th><th class="c">Creator</th></tr>
+  <tr><td>See collaborative and locked views; own personal views</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Create / edit / delete <b>personal</b> views (only their own)</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Create / edit / delete <b>collaborative</b> views; reorder views</td><td class="c n">—</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Edit a <b>locked</b> view; lock / unlock</td><td class="c n">—</td><td class="c n">—</td><td class="c">view author only</td><td class="c y">✓</td></tr>
+  <tr><td>Favorite a view</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+</table>
+<p class="small">The last collaborative view of a table can't be deleted.</p>
+
+<h3>7.5 Comments</h3>
+<table>
+  <tr><th>Action</th><th class="c">Viewer</th><th class="c">Commenter</th><th class="c">Editor</th><th class="c">Creator</th></tr>
+  <tr><td>Read comments</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Write comments, @mention, react, resolve / reopen any thread</td><td class="c n">—</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+  <tr><td>Edit or delete a comment</td><td colspan="4" class="c">Author only (nobody can edit or delete someone else's comment, not even the Owner)</td></tr>
+  <tr><td>Follow a record (notification level)</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td><td class="c y">✓</td></tr>
+</table>
+
+<h3>7.6 Share links and forms</h3>
+<ul>
+  <li>Create, change, regenerate, revoke share links: <b>Editor and Creator</b>. List links: anyone with base access. <span class="tested">tested</span> (Viewer: refused, 403).</li>
+  <li>Link types: <b>view</b> (read that view), <b>base</b> (read the whole base), <b>form</b> (submit only, including file uploads). Visitors never edit.</li>
+  <li>Options: public or <b>password</b>; <b>expiry date</b>; "allow copy" (display hint only — not enforced by the server).</li>
+  <li>Wrong passwords: 5 tries → 15-minute lock for that visitor, and the organization Owner is alerted (email + IP).</li>
+  <li>Form submissions are created as "Form" (no account needed), count toward the plan's record limit and are rate-limited.</li>
+</ul>
+
+<h3>7.7 Interfaces</h3>
+<ul><li><b>Build</b> (create, edit, publish, pages): base <b>Creator</b>. <b>Use</b> published interfaces: any base role (non-builders only see published ones). There is no "interface-only" access yet — to use an interface a person needs a role on the base.</li></ul>
+
+<h3>7.8 Automations</h3>
+<table>
+  <tr><th>Action</th><th>Who</th></tr>
+  <tr><td>See automations and their run history</td><td>Any base role</td></tr>
+  <tr><td>Create, edit, duplicate, delete, test, get webhook URL</td><td>Creator</td></tr>
+  <tr><td>Press an automation button in a record</td><td>Editor and Creator</td></tr>
+  <tr><td>Incoming webhook trigger</td><td>Anyone with the secret webhook URL</td></tr>
+  <tr><td>Whose permissions and connected accounts (Gmail, Slack, …) the actions use</td><td>The person who <b>last saved</b> the automation (otherwise its creator). If that person loses access, the actions fail.</td></tr>
+</table>
+
+<h3>7.9 Synced tables and connectors</h3>
+<ul>
+  <li>Connections (Gmail, Slack, HubSpot, Airtable) belong to <b>the person</b> who connected them, not to the organization. Others can't use or see someone else's connection.</li>
+  <li>Create a synced table: base <b>Creator</b>, using <b>their own</b> connection (or, for a table from another base, read access to that base in the same organization).</li>
+  <li>Sync now / Stop: <b>Editor and Creator</b>. Pause, resume, two-way, "keep as text", stop syncing: <b>Creator</b>. Two-way can only be turned on by the person who set up the sync.</li>
+  <li>Synced fields are read-only for everyone (except fields made writable by two-way HubSpot sync).</li>
+</ul>
+
+<h3>7.10 Attachments, import, export</h3>
+<ul>
+  <li>Upload: Editor and Creator. Download: anyone with base access. File links in records are signed and expire.</li>
+  <li>Import: Editor and Creator. Export (CSV/Excel): <b>every role, including Viewer</b> (G4).</li>
+</ul>
+
+<h3>7.11 Search, notifications, contacts</h3>
+<ul>
+  <li>Search only returns bases the person can open.</li>
+  <li>Notifications are personal; they are not re-checked when someone loses access to a base (G17).</li>
+  <li>The workspace contacts directory only requires organization membership (G9).</li>
+</ul>
+
+<h3>7.12 API tokens</h3>
+<ul>
+  <li>Only the organization Owner creates them. Scopes: <b>read</b>, <b>write</b>, <b>delete</b>; optionally limited to chosen bases; optional expiry.</li>
+  <li>A token can reach only the records API and schema reads (<code>access/api-tokens.ts</code> <code>requiredScope</code>); everything else is refused.</li>
+  <li>A token works only while it is unrevoked, unexpired and its creator is still an active Owner of the organization. It acts with the Owner's access.</li>
+</ul>
+
+<!-- ============================================================ 8 -->
+<h2 class="pb">8. Security controls</h2>
+<table>
+  <tr><th style="width:24%">Control</th><th>How it works today</th></tr>
+  <tr><td>Device approval</td><td>On by default per organization. A member's new browser is "Waiting" until the Owner approves it; until then that organization's data is invisible to them. Revoked devices are blocked even if approval is turned off. The Owner gets a bell notification and has a per-person log (devices, active/ended sessions, approvals and revocations). Owners never need approval.</td></tr>
+  <tr><td>Wrong passwords (sign-in)</td><td>Warning from the 3rd try, 15-minute lock after 5 wrong passwords; the organization Owner is alerted with the email and IP. The Owner's own account is never locked (it is still rate-limited: 10 tries per 15 minutes per IP).</td></tr>
+  <tr><td>Wrong passwords (share links)</td><td>Same policy per visitor IP; Owner alerted.</td></tr>
+  <tr><td>Sessions</td><td>Never expire (since 0.8.1): you stay signed in until you sign out, change your password, or the Owner removes or suspends you or revokes the device. Each person can sign out other sessions.</td></tr>
+  <tr><td>Two-factor (MFA)</td><td>Optional per person (authenticator app). Not enforceable by the organization.</td></tr>
+  <tr><td>Audit log</td><td>Sign-ins, failed sign-ins, invitations, role changes, device decisions, share links, API tokens and sync settings are recorded (not yet viewable in the app except the device log).</td></tr>
+</table>
+
+<!-- ============================================================ 9 -->
+<h2>9. Account types: what each person actually sees</h2>
+<table>
+  <tr><th style="width:20%">Person</th><th>What they see and can do</th></tr>
+  <tr><td><b>Company owner</b> (signed up, invites the team)</td><td>Everything in the company organization; Members &amp; access; alerts. Also cannot be restricted, locked out or asked for device approval.</td></tr>
+  <tr><td><b>Member with a workspace role</b></td><td>That workspace with all its bases at that role (minus bases set to "No access"). <b>Plus</b> their own personal organization with its own "Home" workspace, where they are Owner and can create workspaces and bases.</td></tr>
+  <tr><td><b>Member with selected bases</b></td><td>The workspace(s) containing those bases, showing only those bases. Plus their own personal organization, as above. Can copy any base they can read into their own workspace (G2).</td></tr>
+  <tr><td><b>Suspended member</b></td><td>Nothing in the company organization; their own organization still works.</td></tr>
+  <tr><td><b>Removed member</b></td><td>Nothing in the company organization. Anything they exported or created in their own organization stays with them.</td></tr>
+  <tr><td><b>Someone who just signs up</b> (not invited)</td><td>A brand-new organization of their own with "Home". Nothing of yours.</td></tr>
+  <tr><td><b>Share-link visitor</b></td><td>Only the shared view, base (read-only) or form (submit). No account.</td></tr>
+  <tr><td><b>Program with an API token</b></td><td>Records API within the token's scopes and bases, acting as the Owner.</td></tr>
+  <tr><td><b>Automation</b></td><td>Acts as the person who last saved it, within that person's access.</td></tr>
+</table>
+
+<!-- ============================================================ 10 -->
+<h2 class="pb">10. Gaps and risks</h2>
+<p class="small">Severity: <span class="sev c">Critical</span> data can leave your control · <span class="sev h">High</span> wrong people can do important things · <span class="sev m">Medium</span> missing control or confusing behaviour · <span class="sev l">Low</span> polish.</p>
+
+<table>
+  <tr><th style="width:5%">#</th><th style="width:10%">Severity</th><th>Gap — what happens today</th><th style="width:26%">Evidence</th></tr>
+  <tr><td>G1</td><td><span class="sev h">High</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Every account owns a personal organization.</b> Sign-up always creates an organization (Owner) + "Home" (workspace Owner), including for people you invite. They therefore see two organizations mixed on Home (both workspaces called "Home") and have a private place where they can create workspaces and bases outside your control. <span class="tested">tested</span></td><td><code>auth/routes.ts</code> 173–221</td></tr>
+  <tr><td>G2</td><td><span class="sev c">Critical</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Any role can copy a whole base, with records, into their own workspace.</b> Duplicating only checks "can read the source" and "can create bases in the target workspace" — not that the target is in the same organization, and not that the person is a Creator. A Viewer duplicated a company base into their own "Home" and became Creator of the copy. After the Owner removed them they lost the copy, but the copy remains inside the company's data, not listed in any company workspace (orphaned). <span class="tested">tested</span></td><td><code>base/manage-routes.ts</code> 152–174; <code>base/duplicate-base.ts</code></td></tr>
+  <tr><td>G3</td><td><span class="sev h">High</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Everyone can create workspaces.</b> The server only requires being Owner of <i>an</i> organization, which everyone is (G1); <i>+ Create workspace</i> is shown to everybody and silently creates it in the person's own organization. There is no setting "Who can create workspaces". <span class="tested">tested</span></td><td><code>workspace/routes.ts</code> 70–118; Home sidebar</td></tr>
+  <tr><td>G4</td><td><span class="sev h">High</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Export cannot be restricted.</b> Viewer and Commenter can download every table as CSV/Excel (and see all data through the base's API with a token if they are Owner). Airtable lets owners restrict export to Creators. <span class="tested">tested</span></td><td><code>permissions/authorize.ts</code> (viewer has <code>export.data</code>); <code>import-export/routes.ts</code> 292, 354</td></tr>
+  <tr><td>G5</td><td><span class="sev h">High</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Open sign-up.</b> Anyone who reaches the site can create an account and an organization; there is no invite-only mode or allowed-email-domain rule.</td><td><code>auth/routes.ts</code> signup (public)</td></tr>
+  <tr><td>G6</td><td><span class="sev h">High</span></td><td><b>Single point of control.</b> Only the organization Owner can invite, change roles, approve devices or create tokens. Ownership can't be transferred and there can't be a second Owner. If the Owner is away or leaves, nobody can manage access.</td><td><code>members/routes.ts</code> <code>ownerOrg</code> 68–75; <code>invitations/routes.ts</code></td></tr>
+  <tr><td>G7</td><td><span class="sev m">Medium</span></td><td><b>Admin role half-built.</b> Admin gets Owner-level data access (Owner of every workspace) but cannot manage people, and no screen or API can assign it. Billing admin and Guest are unused.</td><td><code>access/workspace-access.ts</code> 29–31; no assigning route</td></tr>
+  <tr><td>G8</td><td><span class="sev m">Medium</span></td><td><b>No delegated invites.</b> Workspace Owners and base Creators can't invite collaborators (Airtable allows it). The workspace Owner role can't be given to anyone else.</td><td><code>invitations/routes.ts</code> 120–137</td></tr>
+  <tr><td>G9</td><td><span class="sev m">Medium</span><br /><span class="closed">closed 0.14.0</span></td><td><b>Contacts directory is open to every organization member</b>, including people invited to one base only.</td><td><code>contacts/routes.ts</code> 48–51; <code>access/helpers.ts</code> 6–27</td></tr>
+  <tr><td>G10</td><td><span class="sev m">Medium</span></td><td><b>No interface-only access.</b> To use an interface a person needs a role on the whole base. The <code>interface_only</code> role exists but isn't offered.</td><td><code>permissions/roles.ts</code>; <code>interfaces/routes.ts</code></td></tr>
+  <tr><td>G11</td><td><span class="sev m">Medium</span></td><td><b>Two invite screens behave differently.</b> Home → workspace <i>Share</i> always gives the whole workspace; Members &amp; access offers selected bases. This caused "I gave one base and they got the whole workspace" on live.</td><td><code>routes/home.tsx</code> share dialog</td></tr>
+  <tr><td>G12</td><td><span class="sev m">Medium</span></td><td><b>Sessions never expire.</b> An unattended or stolen browser stays signed in until signed out, password changed, device revoked or member removed. No organization policy for session length.</td><td>migration <code>0076_sessions_no_expiry.sql</code></td></tr>
+  <tr><td>G13</td><td><span class="sev m">Medium</span></td><td><b>Owner account is the softest high-value target.</b> It is exempt from lockout and device approval and MFA is optional; nobody can require MFA.</td><td><code>auth/lockout.ts</code> 74–81; <code>access/devices.ts</code></td></tr>
+  <tr><td>G14</td><td><span class="sev m">Medium</span></td><td><b>Public share links need no approval.</b> Any Editor can publish a view or the whole base on a public link; no organization switch to disable public links or require passwords. "Allow copy" isn't enforced by the server.</td><td><code>share/routes.ts</code> 198–290</td></tr>
+  <tr><td>G15</td><td><span class="sev l">Low</span></td><td><b>Field permission "Nobody" also locks out the Owner</b> and Creators until changed.</td><td><code>schema/field-permissions.ts</code> 35</td></tr>
+  <tr><td>G16</td><td><span class="sev l">Low</span></td><td><b>Automations change identity when someone else saves them</b>: they then run with that person's access and connected accounts.</td><td><code>automations/engine.ts</code> 742</td></tr>
+  <tr><td>G17</td><td><span class="sev l">Low</span></td><td><b>Old notifications stay visible</b> after someone loses access to a base (title and preview text).</td><td><code>notifications/routes.ts</code></td></tr>
+  <tr><td>G18</td><td><span class="sev l">Low</span></td><td><b>No "move base to another workspace".</b> Only duplicate (which leaves the original and has gap G2).</td><td><code>base/manage-routes.ts</code></td></tr>
+  <tr><td>G19</td><td><span class="sev l">Low</span></td><td><b>Workspace member lists show every member's email</b> to all workspace members (also Viewers).</td><td><code>workspace/routes.ts</code> 190–250</td></tr>
+  <tr><td>G20</td><td><span class="sev l">Low</span></td><td><b>No audit screen.</b> Role changes, invitations and share links are logged but only the device log can be viewed.</td><td><code>audit.audit_events</code></td></tr>
+</table>
+
+<!-- ============================================================ 11 -->
+<h2 class="pb">11. Recommended model and decisions needed</h2>
+<h3>11.1 Target model (Airtable-aligned, organization-centric)</h3>
+<pre>Organization (your company — the only place company data lives)
+├── Owners        one or more; transferable; everything incl. billing
+├── Admins        manage people, devices, workspaces, policies (no billing)
+├── Billing admin plan and invoices only
+├── Members       get access only through workspace / base roles
+└── Guests        base-only people; can never create workspaces or bases
+
+Organization policies (new settings, defaults in brackets)
+  • Who can create workspaces ............. [Owners and Admins]
+  • Who can invite people ................. [Owners and Admins]  (+ workspace Owners, + base Creators)
+  • Who can export data (CSV/Excel/API) ... [Creators and up]
+  • Public share links .................... [Allowed, password required]
+  • Copy bases outside the organization ... [Never]
+  • Require two-factor ..................... [Off]
+  • Session length ......................... [30 days]
+  • Sign-up ................................ [Invite only]  (or allowed email domains)
+
+Workspace roles:  Owner (assignable, can manage that workspace's people) · Creator · Editor · Commenter · Viewer
+Base roles:       Creator · Editor · Commenter · Viewer · Interface only · No access</pre>
+
+<h3>11.2 Proposed changes by phase</h3>
+<table>
+  <tr><th style="width:12%">Phase</th><th>Change</th><th style="width:16%">Fixes</th></tr>
+  <tr><td><b>1 — urgent</b></td><td>Duplicating a base requires <b>Creator</b> on the source and a target workspace <b>in the same organization</b>; clean up existing cross-organization copies.</td><td>G2, G18</td></tr>
+  <tr><td>1</td><td>Organization setting "Who can create workspaces" (default Owners and Admins); hide <i>+ Create workspace</i> for others; when someone belongs to several organizations, ask which organization the workspace is for.</td><td>G3</td></tr>
+  <tr><td>1</td><td>Organization setting "Who can export data"; enforce it on CSV/Excel export and the API.</td><td>G4</td></tr>
+  <tr><td>1</td><td>Contacts directory requires a workspace role.</td><td>G9</td></tr>
+  <tr><td><b>2 — structure</b></td><td>Invite-only sign-up (or allowed email domains); invited people <b>don't get a personal organization</b> (existing personal organizations of invited members: keep, hide or remove — your decision).</td><td>G1, G5</td></tr>
+  <tr><td>2</td><td>Assignable <b>Admin</b> role with people management; multiple Owners and <b>transfer ownership</b>.</td><td>G6, G7</td></tr>
+  <tr><td>2</td><td>Delegated invites (setting): workspace Owners invite to their workspace, base Creators to their base; workspace Owner assignable.</td><td>G8</td></tr>
+  <tr><td>2</td><td>One invite dialog everywhere (whole workspace or selected bases).</td><td>G11</td></tr>
+  <tr><td><b>3 — hardening</b></td><td>Session length policy; "require two-factor" policy (incl. Owners).</td><td>G12, G13</td></tr>
+  <tr><td>3</td><td>Share-link policy (disable public / require password); enforce "allow copy".</td><td>G14</td></tr>
+  <tr><td>3</td><td>Interface-only access; audit log screen; hide notifications for bases you can't open; "move base" between workspaces; automation run-as shown and changeable.</td><td>G10, G15–G20</td></tr>
+</table>
+
+<h3>11.3 Decisions we need from you</h3>
+<ol>
+  <li><b>Sign-up:</b> invite only, allowed email domains (e.g. @bluecascade.org), or open?</li>
+  <li><b>Personal organizations of invited people</b> (e.g. Mahad's own "Home"): keep, hide, or remove (after moving anything important)?</li>
+  <li><b>Who may create workspaces:</b> Owners only, Owners and Admins, or a list of people?</li>
+  <li><b>Who may invite:</b> Owners/Admins only, or also workspace Owners and base Creators?</li>
+  <li><b>Export:</b> who may download data — Creators only, Editors and up, or everyone?</li>
+  <li><b>Public share links:</b> allowed, allowed with password only, or off?</li>
+  <li><b>Admins:</b> who should be Admin, and should Admins also see billing?</li>
+  <li><b>Security:</b> require two-factor? Session length (never / 30 days / 7 days)?</li>
+</ol>
+
+<!-- ============================================================ A -->
+<h2 class="pb">Appendix A — API route → permission map</h2>
+<p class="small">Grouped by area. "creator" = needs <code>base.manage_schema</code> (or <code>base.manage_members</code> for deleting a base); "editor" = <code>record.create/update/delete</code> or <code>view.update</code>; "commenter" = <code>record.comment</code>; "any role" = any effective base role. All routes need a signed-in session or an API token unless marked public.</p>
+<table>
+  <tr><th style="width:42%">Route</th><th style="width:20%">Needs</th><th>Notes</th></tr>
+  <tr><td colspan="3"><b>Accounts &amp; organization</b></td></tr>
+  <tr><td><code>POST /v1/auth/signup</code>, <code>/login</code>, <code>/mfa/verify</code>, <code>/logout</code>, Google</td><td>public</td><td>Login lockout; sign-up creates an organization</td></tr>
+  <tr><td><code>/v1/auth/me</code>, <code>/password</code>, <code>/sessions</code>, <code>/mfa/*</code></td><td>signed in</td><td>Own account only</td></tr>
+  <tr><td><code>GET /v1/orgs</code>, <code>GET /v1/devices/current</code></td><td>signed in</td><td>Own memberships / this device</td></tr>
+  <tr><td><code>/v1/orgs/:org/access</code>, <code>/members/*</code>, <code>/grants</code>, <code>/devices/*</code>, <code>/device-log</code>, <code>/api-tokens/*</code>, <code>/settings</code></td><td>org Owner</td><td></td></tr>
+  <tr><td><code>POST /v1/invitations</code>, <code>GET</code>, <code>DELETE</code></td><td>org Owner</td><td>One or several bases, or a workspace</td></tr>
+  <tr><td><code>GET /v1/public/invitations/:token</code>; <code>POST /v1/invitations/accept</code></td><td>public / signed in</td><td>Must match the invited email; becomes <code>member</code></td></tr>
+  <tr><td><code>/v1/billing/plan</code> · <code>/upgrade</code>, <code>/checkout</code></td><td>member · Owner or Billing admin</td><td></td></tr>
+  <tr><td colspan="3"><b>Workspaces &amp; bases</b></td></tr>
+  <tr><td><code>GET /v1/workspaces</code></td><td>signed in</td><td>Workspaces where they have a role or a base</td></tr>
+  <tr><td><code>POST /v1/workspaces</code></td><td>Owner of any organization</td><td>Created in their first owned organization (G3)</td></tr>
+  <tr><td><code>PATCH</code>/<code>DELETE /v1/workspaces/:w</code></td><td>workspace Owner</td><td></td></tr>
+  <tr><td><code>GET /v1/workspaces/:w/members</code></td><td>workspace role</td><td>Base-only members excluded</td></tr>
+  <tr><td><code>GET /v1/workspaces/:w/bases</code></td><td>org member</td><td>Filtered to bases they can open</td></tr>
+  <tr><td><code>POST /v1/workspaces/:w/bases</code></td><td>workspace Owner/Creator</td><td></td></tr>
+  <tr><td><code>/v1/workspaces/:w/contacts*</code></td><td>org member</td><td>G9</td></tr>
+  <tr><td><code>GET /v1/bases/:b</code>, <code>/changes</code>, <code>/hidden-tables</code></td><td>any role</td><td>Personal views only for their owner</td></tr>
+  <tr><td><code>PATCH /v1/bases/:b</code> · <code>DELETE</code></td><td>creator</td><td>Rename · delete (30-day trash)</td></tr>
+  <tr><td><code>POST /v1/bases/:b/duplicate</code></td><td>any role + target workspace Owner/Creator</td><td>G2 — no same-organization check</td></tr>
+  <tr><td><code>GET /v1/bases/:b/collaborators</code></td><td>any role</td><td></td></tr>
+  <tr><td colspan="3"><b>Schema</b></td></tr>
+  <tr><td><code>GET …/tables</code>, <code>…/fields</code></td><td>any role</td><td></td></tr>
+  <tr><td>Create / rename / delete / duplicate / reorder tables and fields; primary field; <code>PUT …/fields/:f/permissions</code></td><td>creator</td><td></td></tr>
+  <tr><td colspan="3"><b>Records, links, query, history</b></td></tr>
+  <tr><td><code>POST …/records/query</code>, <code>GET …/records/:r</code>, <code>…/group</code></td><td>any role</td><td></td></tr>
+  <tr><td>Create / update / delete / batch / duplicate / move records</td><td>editor</td><td>Field permissions; synced fields read-only</td></tr>
+  <tr><td>Link / unlink records · create link field</td><td>editor · creator</td><td></td></tr>
+  <tr><td><code>GET …/records/:r/history</code></td><td>any role</td><td>Kept 14 days on the current plan</td></tr>
+  <tr><td><code>…/undo</code>, <code>…/redo</code></td><td>editor</td><td>Own changes only</td></tr>
+  <tr><td><code>GET …/trash</code> · <code>POST …/trash/restore</code></td><td>any role · editor (records) / creator (tables, fields)</td><td></td></tr>
+  <tr><td colspan="3"><b>Views &amp; comments</b></td></tr>
+  <tr><td><code>POST …/views</code></td><td>commenter (personal) · editor (shared/locked)</td><td></td></tr>
+  <tr><td><code>PATCH</code>/<code>DELETE …/views/:v</code>, reorder</td><td>owner of personal view · editor (shared) · author or creator (locked)</td><td>Last shared view can't be deleted</td></tr>
+  <tr><td><code>GET …/comments</code> · <code>POST</code>, resolve, reactions</td><td>any role · commenter</td><td>Edit/delete: author only</td></tr>
+  <tr><td colspan="3"><b>Sharing, forms, interfaces</b></td></tr>
+  <tr><td><code>GET …/shares</code> · create / update / regenerate / revoke</td><td>any role · editor</td><td></td></tr>
+  <tr><td><code>/v1/public/shares/:token/*</code></td><td>public (link + password)</td><td>Read view/base; submit form</td></tr>
+  <tr><td>Interfaces: build · use published</td><td>creator · any role</td><td></td></tr>
+  <tr><td colspan="3"><b>Automations, syncs, connectors</b></td></tr>
+  <tr><td>Automations: list, runs · manage, test, webhook URL · button trigger</td><td>any role · creator · editor</td><td>Runs as last saver</td></tr>
+  <tr><td><code>POST /v1/hooks/:token</code></td><td>public (secret URL)</td><td></td></tr>
+  <tr><td>Syncs: view, issues · run, stop · create, pause, resolve, remove</td><td>any role · editor · creator</td><td>Own connection needed</td></tr>
+  <tr><td><code>/v1/connections*</code></td><td>signed in</td><td>Own connections only</td></tr>
+  <tr><td colspan="3"><b>Files, import/export, search, notifications</b></td></tr>
+  <tr><td>Attachment presign/upload · download</td><td>editor · any role</td><td>Public signed file links expire</td></tr>
+  <tr><td>Import · export</td><td>editor · any role (G4)</td><td></td></tr>
+  <tr><td><code>GET /v1/search</code> · reindex</td><td>signed in · creator</td><td>Only bases they can open</td></tr>
+  <tr><td><code>/v1/notifications*</code></td><td>signed in</td><td>Own notifications</td></tr>
+  <tr><td>API token calls</td><td>scope read/write/delete</td><td>Records API and schema reads only</td></tr>
+</table>
+
+<!-- ============================================================ B -->
+<h2>Appendix B — Where it lives in the code and database</h2>
+<table>
+  <tr><th style="width:36%">Topic</th><th>Location</th></tr>
+  <tr><td>Role list and actions per role</td><td><code>packages/permissions/src/roles.ts</code>, <code>actions.ts</code>, <code>authorize.ts</code></td></tr>
+  <tr><td>Effective role rules (workspace vs base, "none")</td><td><code>packages/permissions/src/snapshot.ts</code> (<code>combineBaseRole</code>); <code>apps/server/src/modules/access/compile.ts</code></td></tr>
+  <tr><td>Organization roles, workspace access</td><td><code>apps/server/src/modules/access/workspace-access.ts</code>, <code>helpers.ts</code></td></tr>
+  <tr><td>Sign-up (personal organization + Home)</td><td><code>apps/server/src/modules/auth/routes.ts</code></td></tr>
+  <tr><td>Invitations</td><td><code>apps/server/src/modules/invitations/routes.ts</code></td></tr>
+  <tr><td>Members &amp; access, devices, API tokens (server)</td><td><code>apps/server/src/modules/members/routes.ts</code>, <code>access/devices.ts</code>, <code>access/api-tokens.ts</code></td></tr>
+  <tr><td>Members &amp; access (screen)</td><td><code>apps/web/src/features/admin/AdminPage.tsx</code></td></tr>
+  <tr><td>Workspaces and bases</td><td><code>apps/server/src/modules/workspace/routes.ts</code>, <code>base/routes.ts</code>, <code>base/manage-routes.ts</code>, <code>base/duplicate-base.ts</code></td></tr>
+  <tr><td>Field permissions</td><td><code>apps/server/src/modules/schema/field-permissions.ts</code>; enforced in <code>records/write.ts</code></td></tr>
+  <tr><td>Lockout and alerts</td><td><code>apps/server/src/modules/auth/lockout.ts</code></td></tr>
+  <tr><td>Auth check on every request</td><td><code>apps/server/src/http/auth-hook.ts</code></td></tr>
+</table>
+<table>
+  <tr><th style="width:36%">Database table</th><th>Holds</th></tr>
+  <tr><td><code>core.organizations</code></td><td>Organizations (kind <code>personal</code> for sign-up ones), settings (e.g. device approval)</td></tr>
+  <tr><td><code>core.organization_members</code></td><td>Organization role (owner/admin/billing_admin/member/guest) and status (active/suspended/deactivated)</td></tr>
+  <tr><td><code>core.workspaces</code>, <code>core.base_directory</code></td><td>Workspaces and bases (with their organization)</td></tr>
+  <tr><td><code>core.access_grants</code></td><td>Workspace and base roles per person, incl. <code>none</code>, expiry, who granted</td></tr>
+  <tr><td><code>core.invitations</code></td><td>Pending/accepted invitations (workspace, base, extra bases, role, expiry)</td></tr>
+  <tr><td><code>core.org_devices</code>, <code>core.sessions</code></td><td>Devices (pending/approved/revoked) and sign-in sessions</td></tr>
+  <tr><td><code>core.api_tokens</code></td><td>API tokens (scopes, bases, expiry)</td></tr>
+  <tr><td><code>data.fields.edit_permission</code></td><td>Field permissions</td></tr>
+  <tr><td><code>audit.audit_events</code></td><td>Audit log</td></tr>
+</table>
+<p class="small">End of document.</p>
+</body>
+</html>

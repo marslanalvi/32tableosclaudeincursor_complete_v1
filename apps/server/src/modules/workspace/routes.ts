@@ -4,15 +4,18 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
-import { ApiError, handleRouteError, notFound, validationProblem } from "../../http/errors.js";
+import { ApiError, handleRouteError, notFound } from "../../http/errors.js";
 import { userCanAccessWorkspace } from "../access/helpers.js";
 import { compileForUser } from "../access/compile.js";
-import { getWorkspaceAccess } from "../access/workspace-access.js";
+import { getWorkspaceAccess, isOrgManagerRole } from "../access/workspace-access.js";
 import { requestMayAccess } from "../../kernel/request-context.js";
 
 const createBody = z.object({
   name: z.string().trim().min(1).max(200),
+  /** Needed when the person is Owner/Admin of several organizations. */
+  organizationId: z.string().optional(),
 });
+const renameBody = z.object({ name: z.string().trim().min(1).max(200) });
 
 export async function registerWorkspaceRoutes(
   app: FastifyInstance,
@@ -35,9 +38,15 @@ export async function registerWorkspaceRoutes(
         return;
       }
 
-      const result = await sql<{ id: string; name: string; org_id: string }>`
-        SELECT w.id, w.name, w.org_id
+      const result = await sql<{ id: string; name: string; org_id: string; org_name: string; org_role: string; ws_role: string | null }>`
+        SELECT w.id, w.name, w.org_id, o.name AS org_name, m.role AS org_role,
+          (SELECT g.role FROM core.access_grants g
+           WHERE g.principal_type = 'user' AND g.principal_id = ${user.id}
+             AND g.resource_type = 'workspace' AND g.resource_id = w.id AND g.role <> 'none'
+             AND (g.expires_at IS NULL OR g.expires_at > now())
+           LIMIT 1) AS ws_role
         FROM core.workspaces w
+        INNER JOIN core.organizations o ON o.id = w.org_id AND o.status = 'active'
         INNER JOIN core.organization_members m
           ON m.org_id = w.org_id AND m.user_id = ${user.id} AND m.status = 'active'
         WHERE w.deleted_at IS NULL AND w.status = 'active'
@@ -60,6 +69,11 @@ export async function registerWorkspaceRoutes(
           id: pid("wsp", r.id),
           name: r.name,
           organizationId: pid("org", r.org_id),
+          organizationName: r.org_name,
+          /** Owner/Admin may create bases here, duplicate and export. */
+          canManage: isOrgManagerRole(r.org_role),
+          /** null = only reaches some bases here (no workspace role: no rename, no contacts). */
+          workspaceRole: isOrgManagerRole(r.org_role) ? "owner" : r.ws_role,
         })),
       });
     } catch (err) {
@@ -77,17 +91,27 @@ export async function registerWorkspaceRoutes(
 
       const body = createBody.parse(request.body);
 
-      const membership = await sql<{ org_id: string }>`
-        SELECT org_id FROM core.organization_members
-        WHERE user_id = ${user.id} AND status = 'active' AND role = 'owner'
-        ORDER BY joined_at ASC
-        LIMIT 1
+      // Only Owners and Admins create workspaces, and only in an organization they run.
+      const membership = await sql<{ org_id: string; name: string }>`
+        SELECT m.org_id, o.name FROM core.organization_members m
+        INNER JOIN core.organizations o ON o.id = m.org_id AND o.status = 'active'
+        WHERE m.user_id = ${user.id} AND m.status = 'active' AND m.role IN ('owner', 'admin')
+        ORDER BY m.joined_at ASC
       `.execute(ctx.db);
-
-      const org = membership.rows[0];
-      if (!org) {
-        validationProblem(request, reply, "No organization available");
-        return;
+      const allowed = membership.rows.filter((r) => requestMayAccess(r.org_id));
+      if (allowed.length === 0) {
+        throw new ApiError(403, "FORBIDDEN", "Only Owners and Admins can create workspaces");
+      }
+      let org = allowed[0]!;
+      if (body.organizationId) {
+        const wanted = parsePid(body.organizationId, "org");
+        const match = allowed.find((r) => r.org_id === wanted);
+        if (!match) throw new ApiError(403, "FORBIDDEN", "You can't create workspaces in that organization");
+        org = match;
+      } else if (allowed.length > 1) {
+        throw new ApiError(422, "VALIDATION_FAILED", "Choose the organization for the new workspace", {
+          organizations: allowed.map((r) => ({ id: pid("org", r.org_id), name: r.name })),
+        });
       }
 
       const workspaceId = generateUuidV7();
@@ -132,7 +156,7 @@ export async function registerWorkspaceRoutes(
           return;
         }
         const workspaceId = parsePid(request.params.workspaceId, "wsp");
-        const body = createBody.parse(request.body);
+        const body = renameBody.parse(request.body);
         const access = await userCanAccessWorkspace(ctx.db, user.id, workspaceId);
         if (!access.ok) {
           notFound(request, reply, "Workspace not found");

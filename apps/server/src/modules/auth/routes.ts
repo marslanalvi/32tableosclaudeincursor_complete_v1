@@ -49,6 +49,7 @@ import {
   findChallenge,
 } from "./challenges.js";
 import { AuthRateLimiter } from "./rate-limit.js";
+import { decideSignup, notifyDomainJoin } from "./signup-policy.js";
 import {
   alertOwners,
   attemptMeta,
@@ -136,9 +137,10 @@ function rateLimited(request: FastifyRequest, reply: FastifyReply, retryAfterSec
 
 async function primaryOrgId(ctx: AppContext, userId: string): Promise<string | null> {
   const res = await sql<{ org_id: string }>`
-    SELECT org_id FROM core.organization_members
-    WHERE user_id = ${userId} AND status = 'active'
-    ORDER BY joined_at ASC
+    SELECT m.org_id FROM core.organization_members m
+    INNER JOIN core.organizations o ON o.id = m.org_id AND o.status = 'active'
+    WHERE m.user_id = ${userId} AND m.status = 'active'
+    ORDER BY m.joined_at ASC
     LIMIT 1
   `.execute(ctx.db);
   return res.rows[0]?.org_id ?? null;
@@ -170,12 +172,25 @@ export async function registerAuthRoutes(
         return;
       }
 
+      const decision = await decideSignup(ctx.db, emailNormalized);
+      if (decision.kind === "denied") {
+        sendApiError(
+          request,
+          reply,
+          403,
+          "FORBIDDEN",
+          "TableOS accounts are by invitation only. Ask your organization's Owner or Admin to invite you, then use the link in the invitation.",
+        );
+        return;
+      }
+
       const userId = generateUuidV7();
-      const orgId = generateUuidV7();
-      const workspaceId = generateUuidV7();
       const identityId = generateUuidV7();
       const passwordHash = await hashPassword(body.password);
-      const orgSlug = uniqueSlug(slugify(body.email.split("@")[0] ?? "user"));
+      const createOrg = decision.kind === "create_org";
+      const orgId = createOrg ? generateUuidV7() : decision.orgId;
+      const workspaceId = createOrg ? generateUuidV7() : null;
+      const orgSlug = createOrg ? uniqueSlug(slugify(body.email.split("@")[0] ?? "user")) : null;
 
       await ctx.db.transaction().execute(async (trx) => {
         await sql`
@@ -184,18 +199,29 @@ export async function registerAuthRoutes(
         `.execute(trx);
 
         await sql`
+          INSERT INTO core.user_identities (id, user_id, provider, subject, password_hash, password_changed_at)
+          VALUES (${identityId}, ${userId}, 'password', ${emailNormalized}, ${passwordHash}, now())
+        `.execute(trx);
+
+        if (decision.kind === "domain") {
+          // Joins as a Member with no access; an Owner or Admin gives them workspaces or bases.
+          await sql`
+            INSERT INTO core.organization_members (org_id, user_id, role, source)
+            VALUES (${orgId}, ${userId}, 'member', 'domain_auto_join')
+            ON CONFLICT (org_id, user_id) DO NOTHING
+          `.execute(trx);
+        }
+        // Invited people join when they accept the invitation; no organization of their own.
+        if (!createOrg || !workspaceId) return;
+
+        await sql`
           INSERT INTO core.organizations (id, name, slug, kind, created_by)
-          VALUES (${orgId}, ${`${body.name}'s workspace`}, ${orgSlug}, 'personal', ${userId})
+          VALUES (${orgId}, ${`${body.name}'s workspace`}, ${orgSlug}, 'standard', ${userId})
         `.execute(trx);
 
         await sql`
           INSERT INTO core.organization_members (org_id, user_id, role, source)
           VALUES (${orgId}, ${userId}, 'owner', 'org_creation')
-        `.execute(trx);
-
-        await sql`
-          INSERT INTO core.user_identities (id, user_id, provider, subject, password_hash, password_changed_at)
-          VALUES (${identityId}, ${userId}, 'password', ${emailNormalized}, ${passwordHash}, now())
         `.execute(trx);
 
         await sql`
@@ -230,8 +256,10 @@ export async function registerAuthRoutes(
         action: "auth.signup",
         targetType: "user",
         targetId: userId,
+        metadata: { via: decision.kind },
         ...clientMeta(request),
       });
+      if (decision.kind === "domain") await notifyDomainJoin(ctx.db, orgId, { id: userId, name: body.name, email: body.email });
 
       void reply.code(201).send({
         user: {
@@ -239,8 +267,10 @@ export async function registerAuthRoutes(
           email: body.email,
           name: body.name,
         },
-        organization: { id: pid("org", orgId), slug: orgSlug },
-        workspace: { id: pid("wsp", workspaceId), name: "Home" },
+        organization: createOrg ? { id: pid("org", orgId), slug: orgSlug } : null,
+        workspace: workspaceId ? { id: pid("wsp", workspaceId), name: "Home" } : null,
+        /** "invited": accept your invitation next; "domain": wait for an Owner or Admin to give you access. */
+        joinedVia: decision.kind,
       });
     } catch (err) {
       handleRouteError(request, reply, err);

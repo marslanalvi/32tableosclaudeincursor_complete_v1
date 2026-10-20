@@ -461,7 +461,9 @@ export function BasePage({ baseId }: { baseId: string }) {
               )}
               items={[
                 { key: "rename", icon: "✎", label: "Rename base", onSelect: () => setBaseDialog("rename") },
-                { key: "dup", icon: "⧉", label: "Duplicate base", onSelect: () => duplicateBase.mutate() },
+                ...(base.canManageOrg
+                  ? [{ key: "dup", icon: "⧉", label: "Duplicate base", onSelect: () => duplicateBase.mutate() }]
+                  : []),
                 {
                   key: "copy",
                   icon: "#",
@@ -538,7 +540,7 @@ export function BasePage({ baseId }: { baseId: string }) {
                   setActiveViewId(null);
                 }}
                 onImport={(id) => setImportTableId(id)}
-                onExport={(id) => setExportTableId(id)}
+                onExport={base.canManageOrg ? (id) => setExportTableId(id) : undefined}
                 openAdd={openAdd}
                 onOpenAddHandled={clearOpenAdd}
               />
@@ -546,7 +548,7 @@ export function BasePage({ baseId }: { baseId: string }) {
                 disabled={!activeTable}
                 onManageFields={() => setFieldsOpen(true)}
                 onImport={() => resolvedTableId && setImportTableId(resolvedTableId)}
-                onExport={() => resolvedTableId && setExportTableId(resolvedTableId)}
+                onExport={base.canManageOrg ? () => resolvedTableId && setExportTableId(resolvedTableId) : undefined}
                 onTrash={() => setTrashOpen(true)}
                 onConnectors={() => setConnectorsOpen(true)}
               />
