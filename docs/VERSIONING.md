@@ -78,4 +78,5 @@ Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was intr
 `v0.14.0`: roles phase 1 — sign-up by invitation or allowed domain, no personal organizations, Owner/Admin-only workspaces, bases, duplicate and export, contacts need a workspace role;
 `v0.15.0`: roles phase 2 — Owner/Admin/Member only, several Owners and transfer, Admins manage Members within what they're given, invitations with an account type, workspace Owner role, one invite form;
 `v0.16.0`: roles phase 3 — two-factor required for everyone, 30-day idle sessions, share links for Creators with "allow copy" enforced, Owners/Creators always edit fields, automation "Runs as", hidden notifications for closed bases, move base to another workspace, member emails for managers only, Activity log;
-`v0.16.1`: realtime served by the API (live changes in production), protected default Grid view, delete workspace from Home).
+`v0.16.1`: realtime served by the API (live changes in production), protected default Grid view, delete workspace from Home;
+`v0.16.2`: short BullMQ job history (Redis OOM), realtime tickets fall back to memory).

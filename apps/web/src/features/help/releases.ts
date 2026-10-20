@@ -8,6 +8,12 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.2",
+    date: "2026-10-20",
+    title: "Background work no longer fills up the server's memory.",
+    items: ["Syncs, notifications, search and live updates keep working: finished background jobs are cleared after an hour."],
+  },
+  {
     version: "0.16.1",
     date: "2026-10-20",
     title: "Live updates between people, a permanent Grid view, deleting workspaces.",

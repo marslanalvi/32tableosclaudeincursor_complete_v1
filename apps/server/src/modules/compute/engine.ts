@@ -868,7 +868,8 @@ export function scheduleComputeJob(scope: ComputeScope): void {
     await queue.add(
       "recompute-base",
       { baseId: scope.baseId, workspaceId: scope.workspaceId },
-      { removeOnComplete: 1000, removeOnFail: 5000, jobId: `compute-${scope.baseId}-${Date.now()}` },
+      // Short history only: Redis is small and refuses writes when full.
+      { removeOnComplete: { age: 3600, count: 50 }, removeOnFail: { age: 86_400, count: 100 }, jobId: `compute-${scope.baseId}-${Date.now()}` },
     );
   };
   if (scope.afterCommit) scope.afterCommit(enqueue);

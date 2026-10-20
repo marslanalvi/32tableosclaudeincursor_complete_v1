@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.16.1**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.2**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,12 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.16.2: Redis out of memory
+
+* Production logs (API, worker, relay): `ReplyError: OOM command not allowed when used memory > 'maxmemory'` on BullMQ scripts and on the ws-ticket `SET`. `BullMQEventBus.publish` adds every outbox event to one queue per registered consumer group (`tabula:evt-groups:<topic>`), with `removeOnComplete: 1000, removeOnFail: 5000`; batch events carry up to 100 record ids, so the retained history alone outgrows a small Key Value plan (policy `noeviction`, as BullMQ requires).
+* `EVENT_JOB_RETENTION` (`packages/events/src/bullmq-bus.ts`): done jobs `{ age: 3600, count: 50 }`, failed `{ age: 86400, count: 100 }`; the compute job uses the same. `storeWsTicket`/`consumeWsTicket` fall back to the in-memory map when Redis errors (the gateway runs in the API process).
+* Existing backlog: `.data/r20-redis-cleanup.mjs` (`PROD_REDIS_URL`; dry run lists memory and per-queue counts; `--apply` runs `Queue.clean` on completed and failed jobs only, keeping waiting/active jobs and group registrations). Locally: 13.5 MB → 6 MB.
 
 ## v0.16.1: realtime in the API, default Grid view, delete workspace
 
