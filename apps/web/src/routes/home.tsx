@@ -313,6 +313,61 @@ type BaseDialog =
 /** Workspaces someone may move bases between (create bases there, or Workspace Owner). */
 const canMoveIn = (w: Workspace) => Boolean(w.canManage || w.workspaceRole === "owner");
 
+/** Deleting a workspace takes every base in it along: confirm by typing its name. */
+function DeleteWorkspaceDialog({
+  workspace,
+  baseCount,
+  onClose,
+}: {
+  workspace: Workspace;
+  baseCount: number;
+  onClose: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const [typed, setTyped] = useState("");
+  const remove = useMutation({
+    mutationFn: () => shellApi.deleteWorkspace(workspace.id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+      toast.success(`Workspace “${workspace.name}” deleted`);
+      onClose();
+    },
+  });
+  const matches = typed.trim() === workspace.name.trim();
+  return (
+    <Dialog
+      title="Delete workspace?"
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" className={uiStyles.btn} onClick={onClose}>
+            Cancel
+          </button>
+          <button type="button" className={uiStyles.btnDanger} disabled={!matches || remove.isPending} onClick={() => remove.mutate()}>
+            {remove.isPending ? "Deleting…" : "Delete workspace"}
+          </button>
+        </>
+      }
+    >
+      <p>
+        <strong>{workspace.name}</strong>
+        {baseCount > 0
+          ? ` and the ${baseCount === 1 ? "base" : `${baseCount} bases`} you can see in it (with every table, record, automation, interface and share link) will be deleted for everyone.`
+          : " will be deleted for everyone."}{" "}
+        Everyone loses access to it, including people who reach it through a role on the workspace. It can only be brought back by
+        TableOS support.
+      </p>
+      <div className={uiStyles.field}>
+        <label className={uiStyles.label} htmlFor="delete-ws-name">
+          Type <strong>{workspace.name}</strong> to confirm
+        </label>
+        <input id="delete-ws-name" className={uiStyles.input} value={typed} autoFocus onChange={(e) => setTyped(e.target.value)} />
+      </div>
+      {remove.isError ? <p className={uiStyles.error}>{errorMessage(remove.error)}</p> : null}
+    </Dialog>
+  );
+}
+
 function MoveBaseDialog({
   base,
   from,
@@ -474,6 +529,7 @@ function WorkspaceSection({
   const [dialog, setDialog] = useState<BaseDialog>(null);
   const [creating, setCreating] = useState(false);
   const [renamingWs, setRenamingWs] = useState(false);
+  const [deletingWs, setDeletingWs] = useState(false);
   const [sharing, setSharing] = useState(false);
   const basesKey = ["workspaces", workspace.id, "bases"];
   const basesQuery = useQuery({
@@ -548,6 +604,9 @@ function WorkspaceSection({
                     window.location.assign(`/contacts?workspaceId=${encodeURIComponent(workspace.id)}`);
                   } }]
                 : []),
+              ...(workspace.workspaceRole === "owner" || workspace.orgRole === "admin"
+                ? [{ key: "delete", label: "Delete workspace…", icon: "🗑", danger: true, separatorBefore: true, onSelect: () => setDeletingWs(true) }]
+                : []),
             ]}
           />
         </div>
@@ -616,6 +675,9 @@ function WorkspaceSection({
           onSubmit={(name) => rename.mutate({ baseId: dialog.base.id, name })}
           onClose={() => setDialog(null)}
         />
+      ) : null}
+      {deletingWs ? (
+        <DeleteWorkspaceDialog workspace={workspace} baseCount={bases.length} onClose={() => setDeletingWs(false)} />
       ) : null}
       {dialog?.kind === "move" ? (
         <MoveBaseDialog base={dialog.base} from={workspace} workspaces={workspaces} onClose={() => setDialog(null)} />

@@ -245,6 +245,8 @@ export interface ViewDto {
   createdBy?: string | null;
   isFavorite?: boolean;
   isMine?: boolean;
+  /** The table's default Grid view: always there, can't be deleted or made personal. */
+  isDefault?: boolean;
   config?: Record<string, unknown>;
 }
 

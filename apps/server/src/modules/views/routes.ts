@@ -286,6 +286,18 @@ export async function registerViewsRoutes(
           return;
         }
         if (row.visibility !== "personal") assertCan(r.snapshot, "view.update");
+        if (row.is_default && body.visibility === "personal") {
+          sendProblem(
+            reply,
+            request,
+            createTabulaError(TabulaErrorCodes.FORBIDDEN, {
+              title: "The default Grid view stays shared",
+              detail: "The default Grid view can't be made personal.",
+              meta: { reason: "DEFAULT_VIEW" },
+            }),
+          );
+          return;
+        }
         if (body.visibility !== undefined && body.visibility !== "personal") {
           assertCanCreate(r.snapshot, body.visibility);
         }
@@ -370,6 +382,19 @@ export async function registerViewsRoutes(
         const creator = await isBaseCreator(ctx.db, user.id, baseId);
         if (!canEditView(row, user.id, creator)) {
           lockedProblem(request, reply, row);
+          return;
+        }
+        // Every table keeps its default Grid view; nobody, whatever their role, can delete it.
+        if (row.is_default) {
+          sendProblem(
+            reply,
+            request,
+            createTabulaError(TabulaErrorCodes.FORBIDDEN, {
+              title: "The default Grid view can't be deleted",
+              detail: "Every table keeps its default Grid view. You can rename it, filter or sort it, or create other views.",
+              meta: { reason: "DEFAULT_VIEW" },
+            }),
+          );
           return;
         }
         if (row.visibility !== "personal") assertCan(r.snapshot, "view.update");

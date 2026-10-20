@@ -8,6 +8,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.1",
+    date: "2026-10-20",
+    title: "Live updates between people, a permanent Grid view, deleting workspaces.",
+    items: [
+      "Changes made by other people in the same base appear live again, without refreshing.",
+      "Every table keeps its default Grid view; nobody can delete it.",
+      "Owners can delete a workspace from its menu on Home, after confirming its name.",
+    ],
+  },
+  {
     version: "0.16.0",
     date: "2026-10-20",
     title: "Two-factor for everyone, Activity log, move bases.",
