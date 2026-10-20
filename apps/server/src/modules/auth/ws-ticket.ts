@@ -45,8 +45,12 @@ export async function storeWsTicket(
 ): Promise<void> {
   const payload = JSON.stringify(record);
   if (redis) {
-    await redis.set(ticketRedisKey(ticket, secret), payload, "EX", TTL_SECONDS);
-    return;
+    try {
+      await redis.set(ticketRedisKey(ticket, secret), payload, "EX", TTL_SECONDS);
+      return;
+    } catch {
+      // Redis full or down: the gateway in this process can still use the in-memory ticket.
+    }
   }
   pruneMemory();
   memoryTickets.set(ticket, {
@@ -66,15 +70,15 @@ export async function consumeWsTicket(
   }
   if (redis) {
     const key = ticketRedisKey(ticket, secret);
-    const raw = await redis.getdel(key);
-    if (!raw) {
-      return null;
+    const raw = await redis.getdel(key).catch(() => null);
+    if (raw) {
+      try {
+        return JSON.parse(raw) as WsTicketRecord;
+      } catch {
+        return null;
+      }
     }
-    try {
-      return JSON.parse(raw) as WsTicketRecord;
-    } catch {
-      return null;
-    }
+    // Not in Redis: it may have been stored in memory while Redis refused writes.
   }
   pruneMemory();
   const entry = memoryTickets.get(ticket);

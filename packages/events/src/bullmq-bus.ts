@@ -14,6 +14,16 @@ export function queueNameForGroup(topic: string, group: string): string {
   return `evt__${safe(topic)}__${safe(group)}`;
 }
 
+/**
+ * Finished jobs keep their whole event in Redis, once per consumer group. Keep only a short
+ * history (Redis is small and refuses writes when full): done jobs for an hour, failed ones
+ * for a day, and never more than a few per queue. The outbox in Postgres is the durable record.
+ */
+export const EVENT_JOB_RETENTION = {
+  removeOnComplete: { age: 3600, count: 50 },
+  removeOnFail: { age: 86_400, count: 100 },
+} as const;
+
 /** Redis set listing the consumer groups registered for a topic. */
 function groupsKey(topic: string): string {
   return `tabula:evt-groups:${topic}`;
@@ -66,8 +76,7 @@ export class BullMQEventBus implements EventBus {
       groups.map((group) =>
         this.getQueue(queueNameForGroup(topic, group)).add(key, event, {
           jobId: safe(event.id),
-          removeOnComplete: 1000,
-          removeOnFail: 5000,
+          ...EVENT_JOB_RETENTION,
         }),
       ),
     );

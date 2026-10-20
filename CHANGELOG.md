@@ -8,6 +8,15 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-10-20
+
+### Fixed
+- **Production Redis ran out of memory** ("OOM command not allowed"), which stopped background jobs
+  (sync, notifications, search, computed fields) and live updates. Every event is copied into one queue
+  per consumer, and each queue kept its last 1,000 finished and 5,000 failed jobs with the whole event.
+  Now finished jobs are kept for an hour (at most 50 per queue) and failed ones for a day (at most 100).
+- Live-update tickets fall back to memory when Redis refuses writes, so realtime keeps working.
+
 ## [0.16.1] - 2026-10-20
 
 ### Fixed
