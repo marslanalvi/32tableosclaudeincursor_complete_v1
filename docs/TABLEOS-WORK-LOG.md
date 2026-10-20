@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.16.0**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.1**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,15 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.16.1: realtime in the API, default Grid view, delete workspace
+
+* **Why live changes never arrived in production:** production runs only `node dist/api.js`. The realtime gateway (`entrypoints/realtime.ts`, port 3002) was never started there, and `/v1/auth/ws-ticket` returned `ws://127.0.0.1:3002/v1/ws`, which `resolveWsUrl` rewrites to `<web host>/ws` (a dev-only Vite proxy). The kernel already published every committed change to Redis (`publishBaseChange`); nobody was listening.
+* **Fix:** the gateway moved to `modules/realtime/gateway.ts` (`attachRealtimeGateway({ httpServer, db, redis, env, log })`); `entrypoints/realtime.ts` is a thin wrapper and `entrypoints/api.ts` attaches it to Fastify's server (`REALTIME_IN_API`, default on). `realtimeUrl()` in auth routes: `REALTIME_PUBLIC_URL`, else behind a proxy (`x-forwarded-proto`/`NODE_ENV=production`) `wss://<x-forwarded-host|host>/v1/ws`, else `/ws` (local Vite proxy to the standalone gateway). `publishBaseChange` emits on `localBaseChanges` (in-process) when there's no Redis; the gateway listens to both, and `handleOp` no longer broadcasts itself. `connectRedis` gives up after 3 s (it used to retry forever and block the API start).
+* **Default Grid view:** `DELETE …/views/:id` refuses `is_default` (403, `meta.reason = DEFAULT_VIEW`) for everyone; PATCH can't make it personal. Migration `0084_default_grid_view.sql` clears non-grid/personal defaults, keeps one per table, promotes the first shared Grid view or inserts one, and adds `views_one_default_per_table`. Web: `ViewDto.isDefault`; the views sidebar hides Delete/Make personal for it and shows "Default view: every table keeps it."
+* **Delete workspace:** Home workspace menu "Delete workspace…" (workspace Owners, which includes org Owners, and Admins) opens `DeleteWorkspaceDialog` (type the name to enable).
+* **Fresh start (live, only after approval):** `.data/r19-live-inventory.mjs` (read-only counts), `.data/r19-fresh-start.mjs` (dry run by default; `--apply` empties every table except plans, shards, platform settings, feature flags and migrations in one transaction, restores the shard row, and creates one Owner with UUIDv7 ids; password from `OWNER_PASSWORD`, never printed). Rehearsed on a scratch copy: sign-in, two-factor setup and creating a workspace work.
+* Tests: `.data/verify-r19.mjs` (15 checks, also run against an API without Redis on port 3300), `.data/r2-shell/r19-ui.mjs` (5 checks, screenshots `r19-*.png`).
 
 ## v0.16.0: roles phase 3 (two-factor, sessions, share links, Runs as, move base, Activity)
 

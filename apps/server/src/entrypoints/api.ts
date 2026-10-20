@@ -5,6 +5,7 @@ import { createApp } from "../composition/create-app.js";
 import { startAutomationEngine } from "../modules/automations/consumer.js";
 import { mfaKey } from "../modules/auth/mfa-pending.js";
 import { startSyncScheduler } from "../modules/sync/scheduler.js";
+import { attachRealtimeGateway } from "../modules/realtime/gateway.js";
 
 const rootEnv = resolve(process.cwd(), "../../.env");
 const localEnv = resolve(process.cwd(), ".env");
@@ -35,6 +36,14 @@ try {
 } catch (err) {
   ctx.log.error({ err }, "Failed to start API");
   process.exit(1);
+}
+
+// Live changes and presence: production only runs this process, so the API serves the realtime
+// WebSocket (/v1/ws) on its own port. Set REALTIME_IN_API=false when a separate gateway runs.
+if (process.env["REALTIME_IN_API"] !== "false") {
+  const gateway = attachRealtimeGateway({ httpServer: app.server, db: ctx.db, redis: ctx.redis, env: ctx.env, log: ctx.log });
+  process.once("SIGTERM", () => gateway.close());
+  ctx.log.info("Realtime WebSocket served by the API at /v1/ws");
 }
 
 // Automations must fire even when no separate worker is deployed. The engine takes a Postgres

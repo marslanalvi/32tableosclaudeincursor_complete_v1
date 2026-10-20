@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import type { RealtimeActor } from "@tabula/realtime-protocol";
 import type { Redis } from "ioredis";
 
@@ -26,10 +27,21 @@ export function realtimeBaseChannel(baseId: string): string {
   return `rt:base:${baseId}`;
 }
 
+/**
+ * In-process channel for changes when there is no Redis (or the caller had none): the realtime
+ * gateway running inside the API listens here as well as on Redis.
+ */
+export const localBaseChanges = new EventEmitter();
+localBaseChanges.setMaxListeners(0);
+
 export async function publishBaseChange(
-  redis: Redis,
+  redis: Redis | null,
   payload: RealtimeChangePayload,
 ): Promise<void> {
+  if (!redis) {
+    localBaseChanges.emit("change", payload);
+    return;
+  }
   await redis.publish(
     realtimeBaseChannel(payload.baseId),
     JSON.stringify(payload),

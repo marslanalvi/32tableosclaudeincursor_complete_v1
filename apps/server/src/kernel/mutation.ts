@@ -215,24 +215,23 @@ export async function withBaseTx(
       )
     `.execute(trx);
 
-    const redis = params.redis;
-    if (redis) {
-      // Realtime fan-out must only happen once the change is durable.
-      callbacks.push(() =>
-        publishBaseChange(redis, {
-          baseId: params.baseId,
-          seq: changeSeq,
-          kind: mutation.kind,
-          tableIds,
-          ops: mutation.ops,
-          clientMutationId,
-          actor: {
-            type: params.actor.actorType,
-            id: params.actor.actorId,
-          },
-        }),
-      );
-    }
+    // Realtime fan-out must only happen once the change is durable. Without Redis the change goes
+    // to the gateway running in this process.
+    const redis = params.redis ?? null;
+    callbacks.push(() =>
+      publishBaseChange(redis, {
+        baseId: params.baseId,
+        seq: changeSeq,
+        kind: mutation.kind,
+        tableIds,
+        ops: mutation.ops,
+        clientMutationId,
+        actor: {
+          type: params.actor.actorType,
+          id: params.actor.actorId,
+        },
+      }),
+    );
 
     return changeSeq;
   };

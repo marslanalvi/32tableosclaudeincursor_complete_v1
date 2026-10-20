@@ -463,7 +463,7 @@ export function ViewsSidebar({
                     {view.visibility === "locked" ? "Unlock view" : "Lock view"}
                   </button>
                 ) : null}
-                {view.isMine && canEdit ? (
+                {view.isMine && canEdit && !view.isDefault ? (
                   <button
                     type="button"
                     role="menuitem"
@@ -475,7 +475,7 @@ export function ViewsSidebar({
                     {view.visibility === "personal" ? "Make collaborative" : "Make personal"}
                   </button>
                 ) : null}
-                {canEdit ? (
+                {canEdit && !view.isDefault ? (
                   <button
                     type="button"
                     role="menuitem"
@@ -484,6 +484,11 @@ export function ViewsSidebar({
                   >
                     Delete view
                   </button>
+                ) : null}
+                {view.isDefault ? (
+                  <span className={styles.menuNote} role="note">
+                    Default view: every table keeps it.
+                  </span>
                 ) : null}
               </>
             )}

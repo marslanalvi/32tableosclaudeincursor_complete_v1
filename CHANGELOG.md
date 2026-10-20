@@ -8,6 +8,21 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-10-20
+
+### Fixed
+- **Live changes between people didn't arrive in production** (they only showed after a refresh): the
+  realtime WebSocket ran as a separate process that production never started, and the ticket pointed
+  browsers at `127.0.0.1`. The API now serves `/v1/ws` on its own port (`REALTIME_IN_API=false` to turn
+  off) and hands out its own address (`wss://` behind HTTPS). Changes reach it through Redis, or in-process
+  when there is no Redis. `REALTIME_PUBLIC_URL` still overrides the address.
+- The API no longer hangs at start when Redis can't be reached; it falls back to in-memory after 3 seconds.
+- **Every table keeps a default Grid view** that nobody (any account type or role) can delete or make
+  personal. Migration 0084 makes a shared Grid view the default where another view had taken over (or
+  adds one), and allows only one default per table.
+- **Owners can delete a workspace** from its menu on Home, after a warning and typing its name
+  (Admins and Workspace Owners too, as before on the server).
+
 ## [0.16.0] - 2026-10-20
 
 Roles and permissions, phase 3 of the decisions questionnaire (roles R4; history in

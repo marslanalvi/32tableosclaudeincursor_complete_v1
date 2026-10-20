@@ -504,14 +504,28 @@ export async function registerAuthRoutes(
         issuedAt: Date.now(),
       });
       const expiresAt = new Date(Date.now() + 30_000).toISOString();
-      const url =
-        process.env["REALTIME_PUBLIC_URL"] ??
-        `ws://127.0.0.1:${ctx.env.REALTIME_PORT}/v1/ws`;
-      void reply.send({ ticket, expiresAt, url });
+      void reply.send({ ticket, expiresAt, url: realtimeUrl(request) });
     } catch (err) {
       handleRouteError(request, reply, err);
     }
   });
+
+  /**
+   * Where the browser opens the WebSocket. REALTIME_PUBLIC_URL wins; otherwise, when the API serves
+   * realtime itself (the default), the address it was reached at (wss behind HTTPS proxies). Local
+   * dev reaches the standalone gateway through the web proxy (\`/ws\`).
+   */
+  function realtimeUrl(request: FastifyRequest): string {
+    const configured = process.env["REALTIME_PUBLIC_URL"];
+    if (configured) return configured;
+    const forwardedProto = String(request.headers["x-forwarded-proto"] ?? "").split(",")[0]?.trim();
+    const host = String(request.headers["x-forwarded-host"] ?? request.headers.host ?? "").split(",")[0]?.trim();
+    const behindProxy = Boolean(forwardedProto) || ctx.env.NODE_ENV === "production";
+    if (process.env["REALTIME_IN_API"] !== "false" && behindProxy && host) {
+      return `${forwardedProto === "http" ? "ws" : "wss"}://${host}/v1/ws`;
+    }
+    return "/ws";
+  }
 
   app.get("/v1/auth/me", async (request, reply) => {
     try {
