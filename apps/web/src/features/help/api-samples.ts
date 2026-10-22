@@ -130,8 +130,8 @@ export const API_SAMPLES: ApiSample[] = [
     status: 200,
     response: {
       records: [
-        record(R1, 2, 4, "a1", { [F_NAME]: "Ada Lovelace", [F_ORDERS]: 13 }, "2026-10-22T08:17:06.294Z"),
-        record(R2, 1, 5, "a2", { [F_NAME]: "Grace Hopper", [F_ORDERS]: 7 }),
+        record(R1, 2, 4, "a1", { Name: "Ada Lovelace", Orders: 13 }, "2026-10-22T08:17:06.294Z"),
+        record(R2, 1, 5, "a2", { Name: "Grace Hopper", Orders: 7 }),
       ],
       nextCursor: null,
       totalCount: 2,
@@ -147,8 +147,8 @@ export const API_SAMPLES: ApiSample[] = [
     status: 200,
     response: {
       records: [
-        record(R1, 2, 4, "a1", { [F_NAME]: "Ada Lovelace" }, "2026-10-22T08:17:06.294Z"),
-        record(R2, 1, 5, "a2", { [F_NAME]: "Grace Hopper" }),
+        record(R1, 2, 4, "a1", { Name: "Ada Lovelace" }, "2026-10-22T08:17:06.294Z"),
+        record(R2, 1, 5, "a2", { Name: "Grace Hopper" }),
       ],
       nextCursor: CURSOR,
       totalCount: 3,
@@ -161,7 +161,17 @@ export const API_SAMPLES: ApiSample[] = [
     path: `/v1/tables/${TBL}/records/${R1}?fields=${F_NAME},${F_ORDERS}`,
     tokenType: "read",
     status: 200,
-    response: { record: record(R1, 2, 4, "a1", { [F_NAME]: "Ada Lovelace", [F_ORDERS]: 13 }, "2026-10-22T08:17:06.294Z") },
+    response: { record: record(R1, 2, 4, "a1", { Name: "Ada Lovelace", Orders: 13 }, "2026-10-22T08:17:06.294Z") },
+  },
+  {
+    id: "read-one-ids",
+    title: "Read one record with field IDs",
+    method: "GET",
+    path: `/v1/tables/${TBL}/records/${R1}?returnFieldsByFieldId=true`,
+    tokenType: "read",
+    note: "Field IDs and option IDs instead of names; they don't change when a field or option is renamed. Works on every record endpoint (query string, or \"returnFieldsByFieldId\": true in a JSON body).",
+    status: 200,
+    response: { record: record(R1, 2, 4, "a1", { [F_ID]: R1, [F_NAME]: "Ada Lovelace", [F_ORDERS]: 13, [F_STATUS]: "opt_active" }, "2026-10-22T08:17:06.294Z") },
   },
   {
     id: "group",
@@ -174,9 +184,9 @@ export const API_SAMPLES: ApiSample[] = [
     status: 200,
     response: {
       groups: [
-        { key: '["opt_active"]', value: "opt_active", values: ["opt_active"], count: 1, aggregates: { [`sum:${F_ORDERS}`]: 13 } },
-        { key: '["opt_lead"]', value: "opt_lead", values: ["opt_lead"], count: 1, aggregates: { [`sum:${F_ORDERS}`]: 7 } },
-        { key: "[null]", value: null, values: [null], count: 1, aggregates: { [`sum:${F_ORDERS}`]: 3 } },
+        { key: '["opt_active"]', value: "Active", values: ["Active"], count: 1, aggregates: { "sum:Orders": 13 } },
+        { key: '["opt_lead"]', value: "Lead", values: ["Lead"], count: 1, aggregates: { "sum:Orders": 7 } },
+        { key: "[null]", value: null, values: [null], count: 1, aggregates: { "sum:Orders": 3 } },
       ],
     },
   },
@@ -186,10 +196,10 @@ export const API_SAMPLES: ApiSample[] = [
     method: "POST",
     path: `/v1/tables/${TBL}/records`,
     tokenType: "write",
-    note: "Field names or IDs; responses always use IDs. typecast turns the option name \"Active\" into its option.",
+    note: "Send field names or IDs. typecast also creates a select option that doesn't exist yet.",
     request: { fields: { Name: "Ada Lovelace", Orders: 12, Status: "Active" }, typecast: true },
     status: 201,
-    response: { record: record(R1, 1, 4, "a1", { [F_ID]: R1, [F_NAME]: "Ada Lovelace", [F_ORDERS]: 12, [F_STATUS]: "opt_active" }) },
+    response: { record: record(R1, 1, 4, "a1", { "Record ID": R1, Name: "Ada Lovelace", Orders: 12, Status: "Active" }) },
   },
   {
     id: "batch-create",
@@ -204,8 +214,8 @@ export const API_SAMPLES: ApiSample[] = [
     status: 201,
     response: {
       records: [
-        record(R2, 1, 5, "a2", { [F_ID]: R2, [F_NAME]: "Grace Hopper", [F_ORDERS]: 7, [F_STATUS]: "opt_lead" }),
-        record(R3, 1, 6, "a3", { [F_ID]: R3, [F_NAME]: "Alan Turing", [F_ORDERS]: 3 }),
+        record(R2, 1, 5, "a2", { "Record ID": R2, Name: "Grace Hopper", Orders: 7, Status: "Lead" }),
+        record(R3, 1, 6, "a3", { "Record ID": R3, Name: "Alan Turing", Orders: 3 }),
       ],
     },
   },
@@ -218,7 +228,7 @@ export const API_SAMPLES: ApiSample[] = [
     note: "Only the fields you send change. version is optional: when sent and the record has changed since, you get 409.",
     request: { fields: { Orders: 13 }, version: 1 },
     status: 200,
-    response: { record: record(R1, 2, 4, "a1", { [F_ID]: R1, [F_NAME]: "Ada Lovelace", [F_ORDERS]: 13, [F_STATUS]: "opt_active" }, "2026-10-22T08:17:06.294Z") },
+    response: { record: record(R1, 2, 4, "a1", { "Record ID": R1, Name: "Ada Lovelace", Orders: 13, Status: "Active" }, "2026-10-22T08:17:06.294Z") },
   },
   {
     id: "batch-update",
@@ -230,8 +240,8 @@ export const API_SAMPLES: ApiSample[] = [
     status: 200,
     response: {
       records: [
-        record(R2, 2, 5, "a2", { [F_ID]: R2, [F_NAME]: "Grace Hopper", [F_ORDERS]: 8, [F_STATUS]: "opt_lead" }, "2026-10-22T08:17:06.386Z"),
-        record(R3, 2, 6, "a3", { [F_ID]: R3, [F_NAME]: "Alan Turing", [F_ORDERS]: 3, [F_STATUS]: "opt_lead" }, "2026-10-22T08:17:06.386Z"),
+        record(R2, 2, 5, "a2", { "Record ID": R2, Name: "Grace Hopper", Orders: 8, Status: "Lead" }, "2026-10-22T08:17:06.386Z"),
+        record(R3, 2, 6, "a3", { "Record ID": R3, Name: "Alan Turing", Orders: 3, Status: "Lead" }, "2026-10-22T08:17:06.386Z"),
       ],
     },
   },
@@ -260,7 +270,7 @@ export const API_SAMPLES: ApiSample[] = [
     path: "/v1/version",
     tokenType: "none",
     status: 200,
-    response: { name: "TableOS", version: "0.16.4", commit: "7f47bce", startedAt: "2026-10-22T08:16:19.474Z" },
+    response: { name: "TableOS", version: "0.16.5", commit: "7f47bce", startedAt: "2026-10-22T08:16:19.474Z" },
   },
 ];
 

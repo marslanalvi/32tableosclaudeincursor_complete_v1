@@ -24,6 +24,7 @@ import { registerAutomationsRoutes } from "../modules/automations/routes.js";
 import { registerInterfaceRoutes } from "../modules/interfaces/routes.js";
 import { registerMembersRoutes } from "../modules/members/routes.js";
 import { registerPublicApiRoutes } from "../modules/public-api/routes.js";
+import { registerReadableFieldNames } from "../modules/public-api/readable-fields.js";
 import { registerSyncRoutes } from "../modules/sync/routes.js";
 import { registerIntegrationRoutes } from "../modules/integrations/routes.js";
 import { buildOpenApiDocument } from "./openapi.js";
@@ -135,6 +136,8 @@ export async function buildFastify(ctx: AppContext) {
     }
   });
 
+  // Before idempotency so replayed responses are stored in the same shape.
+  registerReadableFieldNames(app, ctx);
   await registerIdempotency(app, ctx);
 
   app.setErrorHandler((error, request, reply) => {
