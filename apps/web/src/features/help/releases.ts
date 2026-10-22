@@ -8,6 +8,12 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.4",
+    date: "2026-10-22",
+    title: "Sample JSON in the API reference.",
+    items: ["Help → API reference shows a sample request and response for every endpoint, plus sample error responses."],
+  },
+  {
     version: "0.16.3",
     date: "2026-10-22",
     title: "Safer cell editing and a sturdier API.",

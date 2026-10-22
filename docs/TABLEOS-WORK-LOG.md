@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.16.3**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.4**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,11 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.16.4: sample JSON in the API reference
+
+* `apps/web/src/features/help/api-samples.ts`: `API_SAMPLES` (14 endpoints) and `API_ERROR_SAMPLES` (422 ×2, 409, 403, 401) as objects, rendered with `JSON.stringify(…, null, 2)` by `ApiSampleBlock` in `help-content.tsx` (method and path, token type, note, request body, status, response). Bodies captured from the local server with `.data/r25-api-samples.mjs` (output `.data/r25-api-samples.json`); the base schema is trimmed to the sample fields.
+* Check: `.data/r2-shell/r25-ui.mjs` (all 19 headings visible, all 27 JSON blocks parse); screenshots `r25-api-sample-query.png`, `r25-api-sample-error.png`.
 
 ## v0.16.3: fix phase 1 (data safety, security, public API)
 

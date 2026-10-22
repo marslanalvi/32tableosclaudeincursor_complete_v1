@@ -2,6 +2,7 @@ import { createContext, useContext, type ReactNode } from "react";
 import { FIELD_TYPES } from "@tabula/field-ui";
 import { APP_COMMIT, APP_VERSION } from "../../lib/version.ts";
 import { RELEASES } from "./releases.ts";
+import { API_ERROR_SAMPLES, API_SAMPLES, type ApiSample } from "./api-samples.ts";
 import s from "./help.module.css";
 
 export interface HelpTopic {
@@ -28,6 +29,34 @@ const K = ({ children }: { children: ReactNode }) => <kbd className={s.kbd}>{chi
 const Note = ({ children }: { children: ReactNode }) => <div className={s.note}>{children}</div>;
 const Warn = ({ children }: { children: ReactNode }) => <div className={s.warn}>{children}</div>;
 const Pre = ({ children }: { children: string }) => <pre className={s.pre}>{children}</pre>;
+
+const STATUS_TEXT: Record<number, string> = { 200: "OK", 201: "Created", 204: "No Content", 401: "Unauthorized", 403: "Forbidden", 409: "Conflict", 422: "Unprocessable Entity" };
+
+function ApiSampleBlock({ sample }: { sample: ApiSample }) {
+  return (
+    <>
+      <h3 id={`sample-${sample.id}`}>{sample.title}</h3>
+      <p>
+        <code>
+          {sample.method} {sample.path}
+        </code>{" "}
+        · {sample.tokenType === "none" ? "no token needed" : `token type: ${sample.tokenType}`}
+        {sample.note ? <> · {sample.note}</> : null}
+      </p>
+      {sample.request !== undefined ? (
+        <>
+          <p>Request body</p>
+          <Pre>{JSON.stringify(sample.request, null, 2)}</Pre>
+        </>
+      ) : null}
+      <p>
+        Response <code>{`${sample.status} ${STATUS_TEXT[sample.status] ?? ""}`.trim()}</code>
+        {sample.response === undefined ? " (empty body)" : null}
+      </p>
+      {sample.response !== undefined ? <Pre>{JSON.stringify(sample.response, null, 2)}</Pre> : null}
+    </>
+  );
+}
 
 function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
   return (
@@ -825,7 +854,7 @@ ROUND({Amount} * 1.2, 2)`}</Pre>
     group: "Developers",
     title: "API reference",
     summary: "Record endpoints that accept a table ID (or base and table ID), with examples.",
-    keywords: "api rest endpoint http curl json records query create update delete batch pagination filter sort table id base id",
+    keywords: "api rest endpoint http curl json sample example request response body records query create update delete batch pagination filter sort table id base id",
     body: () => (
       <>
         <p>
@@ -911,6 +940,15 @@ ${origin}/v1/bases/{baseId}/tables/{tableId}/records…`}</Pre>
   body: JSON.stringify({ pageSize: 100 }),
 });
 const { records, nextCursor } = await res.json();`}</Pre>
+        <h2>Sample JSON for every endpoint</h2>
+        <p>
+          Real requests and responses from a <b>Customers</b> table with <b>Name</b> (text), <b>Orders</b> (number) and <b>Status</b> (single
+          select) fields. Every path also works as <code>/v1/bases/{"{baseId}"}/tables/{"{tableId}"}/…</code>. Send{" "}
+          <code>Authorization: Bearer tos_…</code> with each request and <code>Content-Type: application/json</code> when there is a body.
+        </p>
+        {API_SAMPLES.map((sample) => (
+          <ApiSampleBlock key={sample.id} sample={sample} />
+        ))}
         <h2>Errors</h2>
         <Table
           head={["Status", "Meaning"]}
@@ -924,6 +962,13 @@ const { records, nextCursor } = await res.json();`}</Pre>
             ["429", "Too many requests; wait and retry."],
           ]}
         />
+        <p>
+          Errors are <code>application/problem+json</code> with a <code>code</code>, a readable <code>detail</code> and a <code>requestId</code>{" "}
+          to quote when asking for help.
+        </p>
+        {API_ERROR_SAMPLES.map((sample) => (
+          <ApiSampleBlock key={sample.id} sample={sample} />
+        ))}
         <h2>Version</h2>
         <p>
           <code>GET /v1/version</code> (no token needed) returns the running TableOS version and build, and every response carries an{" "}

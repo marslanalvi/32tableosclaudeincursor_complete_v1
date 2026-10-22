@@ -8,6 +8,14 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.4] - 2026-10-22
+
+### Added
+- **Help → API reference: sample JSON for every endpoint** (list bases, base and table schema, query,
+  list, read one, group, create, batch create, update, batch update, delete, batch delete, version),
+  each with its method and path, token type, request body and response, captured from a real server.
+  Sample error bodies for 422 (invalid body, unknown field), 409, 403 and 401.
+
 ## [0.16.3] - 2026-10-22
 
 Fix phase 1 of the team's test round (data safety, security and the public API).

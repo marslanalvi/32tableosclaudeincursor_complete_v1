@@ -80,4 +80,5 @@ Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was intr
 `v0.16.0`: roles phase 3 — two-factor required for everyone, 30-day idle sessions, share links for Creators with "allow copy" enforced, Owners/Creators always edit fields, automation "Runs as", hidden notifications for closed bases, move base to another workspace, member emails for managers only, Activity log;
 `v0.16.1`: realtime served by the API (live changes in production), protected default Grid view, delete workspace from Home;
 `v0.16.2`: short BullMQ job history (Redis OOM), realtime tickets fall back to memory;
-`v0.16.3`: fix phase 1 of the test round — Esc cancels long-text edits, multi-line JSON paste stays in one cell and invalid JSON is refused, real version in production builds, `GET /v1/tables/{tableId}` and `GET …/records`, API tolerant of `//`, trailing slashes and bare tokens with clearer errors, "Via API" in record history).
+`v0.16.3`: fix phase 1 of the test round — Esc cancels long-text edits, multi-line JSON paste stays in one cell and invalid JSON is refused, real version in production builds, `GET /v1/tables/{tableId}` and `GET …/records`, API tolerant of `//`, trailing slashes and bare tokens with clearer errors, "Via API" in record history;
+`v0.16.4`: sample request/response JSON for every endpoint and for errors in Help → API reference).
