@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AttachmentViewerHost, fieldTypeIcon, renderCellValue } from "@tabula/field-ui";
+import { AttachmentViewerHost, fieldTypeIcon, renderCellValue } from "@tableos/field-ui";
 import {
   queryRecords,
   type PublicField,

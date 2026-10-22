@@ -1,9 +1,9 @@
-import type { CellValue } from "@tabula/fields";
+import type { CellValue } from "@tableos/fields";
 import { getMergedFieldValue, upsertRecordFromDto } from "./merge.js";
 import type {
   PendingMutation,
   QueryHash,
-  TabulaRecord,
+  TableOSRecord,
   RecordId,
   RecordStoreSnapshot,
   ServerChangePayload,
@@ -12,7 +12,7 @@ import type {
 } from "./types.js";
 
 export class RecordStore {
-  private readonly records = new Map<RecordId, TabulaRecord>();
+  private readonly records = new Map<RecordId, TableOSRecord>();
   private readonly windows = new Map<QueryHash, WindowPage>();
   private readonly pending = new Map<string, PendingMutation>();
   private listeners = new Set<StoreListener>();
@@ -31,7 +31,7 @@ export class RecordStore {
     return this.snapshot;
   }
 
-  getRecord(id: RecordId): TabulaRecord | undefined {
+  getRecord(id: RecordId): TableOSRecord | undefined {
     return this.records.get(id);
   }
 

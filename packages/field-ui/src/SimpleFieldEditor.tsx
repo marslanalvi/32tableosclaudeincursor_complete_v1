@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import type { CellValue, FieldConfig } from "@tabula/fields";
+import type { CellValue, FieldConfig } from "@tableos/fields";
 import { getFieldEditorMeta } from "./metadata.js";
 
 export interface SimpleFieldEditorProps {

@@ -2,7 +2,7 @@
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--tabula-color-bg);
+  background: var(--tableos-color-bg);
 }
 
 .topNav {
@@ -18,14 +18,14 @@
   gap: 10px;
   font-size: 20px;
   font-weight: 500;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .logo {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--tabula-color-primary);
+  background: var(--tableos-color-primary);
   color: #fff;
   display: inline-flex;
   align-items: center;
@@ -48,17 +48,17 @@
 }
 
 .headline {
-  font-size: var(--tabula-font-size-3xl);
+  font-size: var(--tableos-font-size-3xl);
   font-weight: 400;
   line-height: 1.2;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
   margin: 0 0 8px;
 }
 
 .sub {
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   margin: 0 0 32px;
-  font-size: var(--tabula-font-size-md);
+  font-size: var(--tableos-font-size-md);
 }
 
 .form {
@@ -77,29 +77,29 @@
   width: 100%;
   height: 48px;
   margin-top: 8px;
-  font-size: var(--tabula-font-size-lg);
+  font-size: var(--tableos-font-size-lg);
 }
 
 .error {
-  color: var(--tabula-color-danger);
-  background: var(--tabula-color-danger-subtle);
-  border-radius: var(--tabula-radius-sm);
+  color: var(--tableos-color-danger);
+  background: var(--tableos-color-danger-subtle);
+  border-radius: var(--tableos-radius-sm);
   padding: 10px 12px;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   margin: 0;
 }
 .errorWarn {
-  border: 1px solid var(--tabula-color-danger);
+  border: 1px solid var(--tableos-color-danger);
   font-weight: 500;
 }
 
 .hint {
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-text-subtle);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-text-subtle);
 }
 
 .footer {
   margin-top: 24px;
-  font-size: var(--tabula-font-size-md);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-md);
+  color: var(--tableos-color-text-muted);
 }

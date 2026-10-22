@@ -5,9 +5,9 @@
  * Ordering: `a_order` orders the b-records inside an a-record's list;
  * `b_order` orders the a-records inside a b-record's list.
  */
-import type { Database } from "@tabula/db";
-import { mergeLinkOps, type LinkSetOp } from "@tabula/links";
-import { keyBetween, keysBetween } from "@tabula/types";
+import type { Database } from "@tableos/db";
+import { mergeLinkOps, type LinkSetOp } from "@tableos/links";
+import { keyBetween, keysBetween } from "@tableos/types";
 import { sql, type Kysely, type Transaction } from "kysely";
 import { ApiError } from "../../http/errors.js";
 import { parsePid } from "../../lib/public-ids.js";

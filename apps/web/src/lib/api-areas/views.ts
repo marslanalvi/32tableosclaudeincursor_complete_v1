@@ -100,7 +100,7 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "";
 async function sendJson<T>(method: string, path: string, json: unknown, opId?: string): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (opId) {
-    headers["X-Tabula-Client-Op-Id"] = opId;
+    headers["X-TableOS-Client-Op-Id"] = opId;
     rememberClientOp(opId);
   }
   const res = await fetch(`${API_BASE}${path}`, {
@@ -183,7 +183,7 @@ export const viewsApi = {
       method: "PATCH",
       credentials: "include",
       keepalive: true,
-      headers: { "Content-Type": "application/json", "X-Tabula-Client-Op-Id": opId },
+      headers: { "Content-Type": "application/json", "X-TableOS-Client-Op-Id": opId },
       body: JSON.stringify(body),
     }).catch(() => {});
   },

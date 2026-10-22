@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { sql } from "kysely";
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import type { AppContext } from "../../lib/app-context.js";
 import { pid } from "../../lib/public-ids.js";
 import { signPayload, verifyPayload } from "../attachments/storage.js";
@@ -85,7 +85,7 @@ export interface ResolvedShare {
 
 /** Look up a share by its token. Does not check the password. */
 export async function findShareByToken(
-  db: TabulaDb,
+  db: TableOSDb,
   rawToken: string,
 ): Promise<ResolvedShare | ResolveFailure> {
   const parsed = parseShareToken(rawToken);
@@ -238,7 +238,7 @@ export const FORM_INPUT_TYPES = new Set([
   "barcode",
 ]);
 
-export async function loadPublicFields(db: TabulaDb, tableId: string): Promise<{
+export async function loadPublicFields(db: TableOSDb, tableId: string): Promise<{
   rows: PublicFieldRow[];
   primaryFieldId: string | null;
   tableName: string;
@@ -268,7 +268,7 @@ export interface LoadedView {
   config: ViewConfig;
 }
 
-export async function loadView(db: TabulaDb, viewId: string): Promise<LoadedView | null> {
+export async function loadView(db: TableOSDb, viewId: string): Promise<LoadedView | null> {
   const r = await sql<{
     id: string;
     table_id: string;
@@ -387,7 +387,7 @@ export async function hitRateLimit(
   limit: number,
   windowSec: number,
 ): Promise<boolean> {
-  const fullKey = `tabula:rl:${key}`;
+  const fullKey = `tableos:rl:${key}`;
   if (ctx.redis) {
     try {
       const n = await ctx.redis.incr(fullKey);

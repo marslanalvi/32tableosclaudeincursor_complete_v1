@@ -1,8 +1,8 @@
 import { sql, type Kysely, type Transaction } from "kysely";
-import type { TabulaDb } from "./create-db.js";
+import type { TableOSDb } from "./create-db.js";
 import type { Database } from "./database.js";
 
-type DbExecutor = TabulaDb | Transaction<Database>;
+type DbExecutor = TableOSDb | Transaction<Database>;
 
 async function setLocalConfig(
   trx: DbExecutor,
@@ -16,7 +16,7 @@ async function setLocalConfig(
  * Runs `fn` in a transaction with `SET LOCAL app.workspace_id` (via set_config is_local).
  */
 export async function withTenant<T>(
-  db: TabulaDb,
+  db: TableOSDb,
   workspaceId: string,
   fn: (trx: Transaction<Database>) => Promise<T>,
 ): Promise<T> {
@@ -28,7 +28,7 @@ export async function withTenant<T>(
 
 /** Admin/migrator path: bypass workspace RLS policies for the transaction. */
 export async function withBypassRls<T>(
-  db: TabulaDb | Kysely<Database>,
+  db: TableOSDb | Kysely<Database>,
   fn: (trx: Transaction<Database>) => Promise<T>,
 ): Promise<T> {
   return db.transaction().execute(async (trx) => {

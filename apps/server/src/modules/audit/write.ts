@@ -1,4 +1,4 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 
 export interface AuditEventInput {
@@ -34,7 +34,7 @@ export function setAuditLogger(logger: AuditLogger): void {
  * they are logged (they used to be silently swallowed).
  */
 export async function writeAuditEvent(
-  db: TabulaDb,
+  db: TableOSDb,
   event: AuditEventInput,
 ): Promise<void> {
   try {

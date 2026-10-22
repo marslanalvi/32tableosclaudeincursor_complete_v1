@@ -2,12 +2,12 @@ import {
   SESSION_COOKIE_NAME,
   generateSessionToken,
   hashSessionToken,
-} from "@tabula/auth";
-import { generateUuidV7 } from "@tabula/types";
+} from "@tableos/auth";
+import { generateUuidV7 } from "@tableos/types";
 import { sql } from "kysely";
 import type { FastifyReply } from "fastify";
-import type { TabulaDb } from "@tabula/db";
-import type { Env } from "@tabula/config";
+import type { TableOSDb } from "@tableos/db";
+import type { Env } from "@tableos/config";
 
 /**
  * A session ends after 30 days without activity (questionnaire B10); each request while in use
@@ -33,7 +33,7 @@ function cookieOptions(env: Env) {
 }
 
 export async function createSession(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   reply: FastifyReply,
   env: Env,
@@ -78,7 +78,7 @@ export function setSessionCookie(reply: FastifyReply, env: Env, token: string): 
  * used by the automation engine to call the public API as the automation owner.
  */
 export async function createServiceSession(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   ttlMinutes = 15,
 ): Promise<{ sessionId: string; token: string }> {
@@ -91,14 +91,14 @@ export async function createServiceSession(
       ${sessionId}, ${userId}, ${hashSessionToken(token)}, 'automation',
       now() + make_interval(mins => ${ttlMinutes}),
       now() + make_interval(mins => ${ttlMinutes}),
-      'tabula-automation'
+      'tableos-automation'
     )
   `.execute(db);
   return { sessionId, token };
 }
 
 export async function revokeSession(
-  db: TabulaDb,
+  db: TableOSDb,
   sessionId: string,
 ): Promise<void> {
   await sql`
@@ -106,7 +106,7 @@ export async function revokeSession(
   `.execute(db);
 }
 
-export async function revokeSessionByToken(db: TabulaDb, token: string): Promise<void> {
+export async function revokeSessionByToken(db: TableOSDb, token: string): Promise<void> {
   await sql`
     UPDATE core.sessions SET revoked_at = now()
     WHERE token_hash = ${hashSessionToken(token)} AND revoked_at IS NULL

@@ -1,5 +1,5 @@
-import { generateUuidV7 } from "@tabula/types";
-import type { TabulaDb } from "@tabula/db";
+import { generateUuidV7 } from "@tableos/types";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { nextOrderKey } from "../../lib/order-key.js";
 
@@ -10,7 +10,7 @@ export interface ContactDirectory {
 
 /** Ensures one contact_directory base with a Contacts table per workspace. */
 export async function ensureContactDirectory(
-  db: TabulaDb,
+  db: TableOSDb,
   params: {
     workspaceId: string;
     orgId: string;
@@ -107,7 +107,7 @@ export const CONTACT_FIELDS = [
 export type ContactKey = (typeof CONTACT_FIELDS)[number]["key"];
 
 async function ensureContactFields(
-  db: TabulaDb,
+  db: TableOSDb,
   tableId: string,
   workspaceId: string,
   baseId: string,
@@ -145,7 +145,7 @@ async function ensureContactFields(
 }
 
 /** slot per contact key for the directory table. */
-export async function contactSlots(db: TabulaDb, tableId: string): Promise<Partial<Record<ContactKey, number>>> {
+export async function contactSlots(db: TableOSDb, tableId: string): Promise<Partial<Record<ContactKey, number>>> {
   const rows = await sql<{ name: string; slot: number }>`
     SELECT name, slot FROM data.fields WHERE table_id = ${tableId} AND deleted_at IS NULL
   `.execute(db);

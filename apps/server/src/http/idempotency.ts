@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppContext } from "../lib/app-context.js";
@@ -36,7 +36,7 @@ function requestHash(method: string, path: string, body: unknown): Buffer {
 }
 
 async function resolveWorkspaceId(
-  db: TabulaDb,
+  db: TableOSDb,
   request: FastifyRequest,
 ): Promise<string | null> {
   const path = request.url.split("?")[0] ?? request.url;

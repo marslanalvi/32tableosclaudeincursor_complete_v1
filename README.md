@@ -30,8 +30,8 @@ Full criteria: [`architecture/29-roadmap-and-scope.md` §55.1](architecture/29-r
 | Links & computed | Links, lookups, rollups, formulas | Packages + partial server integration |
 | Views | Grid, form, gallery, kanban, calendar | Grid DOM v0 |
 | Collaboration | Realtime, presence, comments | Realtime gateway + worker handlers (in progress) |
-| Attachments | Upload, scan, previews | GCS signed URLs via `@tabula/storage` |
-| Sharing & forms | Share views, public forms | `@tabula/public` app (port 5174) |
+| Attachments | Upload, scan, previews | GCS signed URLs via `@tableos/storage` |
+| Sharing & forms | Share views, public forms | `@tableos/public` app (port 5174) |
 | Import/export | CSV/XLSX | Planned |
 | Search | Postgres FTS | Worker indexing hooks |
 | Automations | Out of MVP (hooks only) | Outbox + relay role |
@@ -113,7 +113,7 @@ docker compose -f infra/docker/docker-compose.yml up -d postgres redis
 | Relay | `relay` / `pnpm dev:relay` | — | Outbox → event bus |
 | Web SPA | `pnpm dev:web` | **5173** | Authenticated app |
 | Public SPA | `pnpm dev:public` | **5174** | Forms / shared views |
-| PostgreSQL | Docker | **5432** | `tabula` / `tabula` |
+| PostgreSQL | Docker | **5432** | `tableos` / `tableos` |
 | Redis | Docker | **6379** | |
 | Attachments | GCS | — | Set `GCS_BUCKET` (+ credentials) |
 
@@ -132,7 +132,7 @@ pnpm dev:public
 
 ## Environment variables
 
-Copy [`.env.example`](.env.example) to `.env`. Keys consumed by `@tabula/config`:
+Copy [`.env.example`](.env.example) to `.env`. Keys consumed by `@tableos/config`:
 
 | Variable | Required | Purpose |
 |---|---|---|

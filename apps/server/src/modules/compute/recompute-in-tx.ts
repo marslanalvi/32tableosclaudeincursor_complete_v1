@@ -3,7 +3,7 @@
  * Recomputes fields that depend on `changedFieldIds` for `targets`, plus
  * records reached through links.
  */
-import type { Database } from "@tabula/db";
+import type { Database } from "@tableos/db";
 import type { Redis } from "ioredis";
 import type { Transaction } from "kysely";
 import { runComputeInTx, type ComputeScope } from "./engine.js";

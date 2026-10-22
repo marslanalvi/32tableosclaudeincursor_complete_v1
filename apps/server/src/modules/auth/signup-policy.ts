@@ -1,4 +1,4 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { createNotifications } from "../notifications/create.js";
 
@@ -19,7 +19,7 @@ export type SignupDecision =
   | { kind: "domain"; orgId: string }
   | { kind: "denied" };
 
-export async function signupMode(db: TabulaDb): Promise<"open" | "restricted"> {
+export async function signupMode(db: TableOSDb): Promise<"open" | "restricted"> {
   const r = await sql<{ value: unknown }>`SELECT value FROM core.platform_settings WHERE key = 'signup_mode'`
     .execute(db)
     .catch(() => ({ rows: [] as { value: unknown }[] }));
@@ -36,7 +36,7 @@ export function allowedDomainsOf(settings: unknown): string[] {
   return Array.isArray(raw) ? raw.filter((d): d is string => typeof d === "string" && d.length > 0) : [];
 }
 
-export async function decideSignup(db: TabulaDb, emailNormalized: string): Promise<SignupDecision> {
+export async function decideSignup(db: TableOSDb, emailNormalized: string): Promise<SignupDecision> {
   if ((await signupMode(db)) === "open") return { kind: "create_org" };
   const any = await sql<{ n: number }>`SELECT 1 AS n FROM core.organizations WHERE status = 'active' LIMIT 1`.execute(db);
   if (!any.rows[0]) return { kind: "create_org" };
@@ -59,7 +59,7 @@ export async function decideSignup(db: TabulaDb, emailNormalized: string): Promi
 }
 
 /** Bell notification to Owners and Admins: someone joined through an allowed email domain. */
-export async function notifyDomainJoin(db: TabulaDb, orgId: string, user: { id: string; name: string; email: string }): Promise<void> {
+export async function notifyDomainJoin(db: TableOSDb, orgId: string, user: { id: string; name: string; email: string }): Promise<void> {
   try {
     const managers = await sql<{ user_id: string }>`
       SELECT user_id FROM core.organization_members

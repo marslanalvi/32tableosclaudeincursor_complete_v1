@@ -1,9 +1,9 @@
 import {
-  TabulaErrorCodes,
-  createTabulaError,
-  type TabulaError,
-  type TabulaErrorCode,
-} from "@tabula/types";
+  TableOSErrorCodes,
+  createTableOSError,
+  type TableOSError,
+  type TableOSErrorCode,
+} from "@tableos/types";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import { ForbiddenActionError } from "../modules/access/assert.js";
@@ -11,19 +11,24 @@ import { PlanLimitExceededError } from "../modules/billing/limits-service.js";
 
 export const PROBLEM_CONTENT_TYPE = "application/problem+json";
 
-export interface ProblemDocument extends TabulaError {
+export interface ProblemDocument extends TableOSError {
   type: string;
   requestId: string;
 }
 
-const ERROR_TYPE_BASE = "https://tabula.dev/errors";
+/** Error `type` links open the API reference's error list in this TableOS (set from APP_URL at start). */
+let errorTypeBase = "/help/api#error";
+
+export function setProblemTypeBase(appUrl: string): void {
+  errorTypeBase = `${appUrl.replace(/\/+$/, "")}/help/api#error`;
+}
 
 /**
- * Extended problem codes used by the HTTP layer on top of `TabulaErrorCodes`
- * (kept here so `@tabula/types` does not need to change).
+ * Extended problem codes used by the HTTP layer on top of `TableOSErrorCodes`
+ * (kept here so `@tableos/types` does not need to change).
  */
 export type ApiErrorCode =
-  | TabulaErrorCode
+  | TableOSErrorCode
   | "CONFLICT"
   | "INTERNAL_ERROR"
   | "BAD_REQUEST"
@@ -44,13 +49,13 @@ const API_ERROR_TITLES: Record<string, string> = {
 };
 
 export function problemType(code: string): string {
-  return `${ERROR_TYPE_BASE}/${code.toLowerCase().replace(/_/g, "-")}`;
+  return `${errorTypeBase}-${code.toLowerCase().replace(/_/g, "-")}`;
 }
 
 export function sendProblem(
   reply: FastifyReply,
   request: FastifyRequest,
-  error: TabulaError,
+  error: TableOSError,
 ): void {
   const body: ProblemDocument = {
     ...error,
@@ -85,11 +90,11 @@ export function apiProblem(
   code: ApiErrorCode,
   detail?: string,
   meta?: Record<string, unknown>,
-): TabulaError {
-  const known = (Object.values(TabulaErrorCodes) as string[]).includes(code);
-  const problem: TabulaError = known
-    ? createTabulaError(code as TabulaErrorCode, { status })
-    : { code: code as TabulaErrorCode, title: API_ERROR_TITLES[code] ?? code, status };
+): TableOSError {
+  const known = (Object.values(TableOSErrorCodes) as string[]).includes(code);
+  const problem: TableOSError = known
+    ? createTableOSError(code as TableOSErrorCode, { status })
+    : { code: code as TableOSErrorCode, title: API_ERROR_TITLES[code] ?? code, status };
   if (detail !== undefined) problem.detail = detail;
   if (meta !== undefined) problem.meta = meta;
   return problem;
@@ -110,12 +115,12 @@ export function validationProblem(
   request: FastifyRequest,
   reply: FastifyReply,
   detail: string,
-  errors?: TabulaError["errors"],
+  errors?: TableOSError["errors"],
 ): void {
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.VALIDATION_FAILED, {
+    createTableOSError(TableOSErrorCodes.VALIDATION_FAILED, {
       detail,
       ...(errors !== undefined ? { errors } : {}),
     }),
@@ -126,7 +131,7 @@ export function notFound(request: FastifyRequest, reply: FastifyReply, detail?: 
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.NOT_FOUND, {
+    createTableOSError(TableOSErrorCodes.NOT_FOUND, {
       ...(detail !== undefined ? { detail } : {}),
     }),
   );
@@ -136,7 +141,7 @@ export function unauthorized(request: FastifyRequest, reply: FastifyReply, detai
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.UNAUTHENTICATED, {
+    createTableOSError(TableOSErrorCodes.UNAUTHENTICATED, {
       ...(detail !== undefined ? { detail } : {}),
     }),
   );
@@ -146,7 +151,7 @@ export function forbidden(request: FastifyRequest, reply: FastifyReply, detail?:
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.FORBIDDEN, {
+    createTableOSError(TableOSErrorCodes.FORBIDDEN, {
       ...(detail !== undefined ? { detail } : {}),
     }),
   );
@@ -157,7 +162,7 @@ export function conflict(request: FastifyRequest, reply: FastifyReply, detail: s
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.VERSION_CONFLICT, { detail }),
+    createTableOSError(TableOSErrorCodes.VERSION_CONFLICT, { detail }),
   );
 }
 
@@ -181,7 +186,7 @@ const MESSAGE_CODE_MAP: Record<string, { status: number; code: ApiErrorCode; det
   LINK_CARDINALITY: { status: 422, code: "VALIDATION_FAILED", detail: "This link field only allows a single linked record" },
   LINK_FIELD_NOT_FOUND: { status: 404, code: "NOT_FOUND", detail: "Link field not found" },
   LINK_TARGET_NOT_FOUND: { status: 422, code: "VALIDATION_FAILED", detail: "Linked record not found" },
-  RECORD_NOT_FOUND: { status: 404, code: "NOT_FOUND", detail: "Record not found" },
+  RECORD_NOT_FOUND: { status: 404, code: "NOT_FOUND", detail: "Record not found in this table (it may have been deleted)" },
   FIELD_NOT_FOUND: { status: 404, code: "NOT_FOUND", detail: "Field not found" },
   TABLE_NOT_FOUND: { status: 404, code: "NOT_FOUND", detail: "Table not found" },
   VIEW_NOT_FOUND: { status: 404, code: "NOT_FOUND", detail: "View not found" },
@@ -301,29 +306,29 @@ function zodIssueMessage(e: ZodError["errors"][number]): string {
 }
 
 /** Map any thrown value to a problem document; null means "unexpected" (500). */
-export function problemFromError(err: unknown): TabulaError | null {
+export function problemFromError(err: unknown): TableOSError | null {
   if (err instanceof ApiError) {
     return apiProblem(err.status, err.code, err.message, err.meta);
   }
   if (err instanceof ZodError) {
     const errors = err.errors.map((e) => ({ field: e.path.join("."), message: zodIssueMessage(e) }));
     const tooLong = err.errors.find((e) => e.code === "too_big" && e.type === "string");
-    return createTabulaError(TabulaErrorCodes.VALIDATION_FAILED, {
+    return createTableOSError(TableOSErrorCodes.VALIDATION_FAILED, {
       detail: tooLong ? zodIssueMessage(tooLong) : "Invalid request body",
       errors,
     });
   }
   if (err instanceof PublicIdError) {
-    return createTabulaError(TabulaErrorCodes.VALIDATION_FAILED, { detail: err.message });
+    return createTableOSError(TableOSErrorCodes.VALIDATION_FAILED, { detail: err.message });
   }
   if (err instanceof ForbiddenActionError) {
-    return createTabulaError(TabulaErrorCodes.FORBIDDEN, {
+    return createTableOSError(TableOSErrorCodes.FORBIDDEN, {
       detail: actionRefusedText(err.action),
       meta: { action: err.action },
     });
   }
   if (err instanceof PlanLimitExceededError) {
-    return createTabulaError(TabulaErrorCodes.PLAN_LIMIT_EXCEEDED, {
+    return createTableOSError(TableOSErrorCodes.PLAN_LIMIT_EXCEEDED, {
       detail: err.message,
       ...(err.meta !== undefined ? { meta: err.meta } : {}),
     });
@@ -371,7 +376,7 @@ export function problemFromError(err: unknown): TabulaError | null {
   return null;
 }
 
-export function internalErrorProblem(): TabulaError {
+export function internalErrorProblem(): TableOSError {
   return apiProblem(500, "INTERNAL_ERROR", "An unexpected error occurred");
 }
 

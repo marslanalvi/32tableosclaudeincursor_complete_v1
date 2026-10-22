@@ -1,6 +1,6 @@
-import type { Database } from "@tabula/db";
+import type { Database } from "@tableos/db";
 import { sql, type Transaction } from "kysely";
-import { normalizeFieldType } from "@tabula/filter";
+import { normalizeFieldType } from "@tableos/filter";
 
 type DbTrx = Transaction<Database>;
 

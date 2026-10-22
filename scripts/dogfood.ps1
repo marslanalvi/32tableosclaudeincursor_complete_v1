@@ -1,4 +1,4 @@
-# Tabula local dogfood (Windows). Requires Docker, Node 22+, pnpm 9.
+# TableOS local dogfood (Windows). Requires Docker, Node 22+, pnpm 9.
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
 Set-Location $Root

@@ -1,5 +1,5 @@
-import { generateUuidV7 } from "@tabula/types";
-import type { TabulaDb } from "@tabula/db";
+import { generateUuidV7 } from "@tableos/types";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { pid } from "../../lib/public-ids.js";
 
@@ -16,7 +16,7 @@ export interface NewNotification {
   data?: Record<string, unknown>;
 }
 
-export async function createNotifications(db: TabulaDb, items: NewNotification[]): Promise<void> {
+export async function createNotifications(db: TableOSDb, items: NewNotification[]): Promise<void> {
   for (const n of items) {
     await sql`
       INSERT INTO core.notifications (
@@ -42,7 +42,7 @@ export function recordLink(baseId: string, tableId: string, recordId: string, ex
 }
 
 /** Primary-field text of a record (best effort; falls back to "Record N"). */
-export async function recordTitle(db: TabulaDb, tableId: string, recordId: string): Promise<string> {
+export async function recordTitle(db: TableOSDb, tableId: string, recordId: string): Promise<string> {
   const r = await sql<{ cells: Record<string, unknown>; computed: Record<string, unknown>; row_number: string; slot: number | null }>`
     SELECT r.cells, r.computed, r.row_number::text AS row_number, f.slot
     FROM data.records r

@@ -9,7 +9,7 @@ Audit reports that motivated this pass live in `docs/fix-plan/audit-*.md`.
 ## 1. Working rules (every workstream)
 
 1. **Only edit files you own** (ownership table in §9). If you must touch a file owned by someone else, keep the edit tiny, re-read the file immediately before editing, and touch only the region named in §9 "shared regions".
-2. **Packages are consumed from `dist/`.** After changing `packages/<name>/src`, run `npx pnpm@9.15.0 --filter @tabula/<name> build`. Never run the root `pnpm build`/`pnpm typecheck` (other workstreams are mid-edit).
+2. **Packages are consumed from `dist/`.** After changing `packages/<name>/src`, run `npx pnpm@9.15.0 --filter @tableos/<name> build`. Never run the root `pnpm build`/`pnpm typecheck` (other workstreams are mid-edit).
 3. Typecheck only what you touch:
    - server: `npx tsc -p apps/server/tsconfig.json --noEmit`
    - web: `npx tsc -p apps/web/tsconfig.app.json --noEmit`
@@ -18,10 +18,10 @@ Audit reports that motivated this pass live in `docs/fix-plan/audit-*.md`.
    Errors in files you don't own may be another workstream mid-edit: ignore those, never "fix" them.
 4. **Running stack (already up, hot-reloading; do not start/stop servers):**
    API `http://localhost:3200` · realtime `ws://localhost:3202` · web `http://localhost:5283` (proxies `/v1` and `/ws`) · public `http://localhost:5284`. Worker + relay also run. Logs: `.data/logs/<role>.log`. (Started detached via `scripts/dev-isolated.ps1`; stop with `scripts/dev-isolated-stop.ps1` — only the orchestrator restarts the stack.)
-   DB: `postgres://tabula:tabula@localhost:5432/tabula_cc` (docker container `docker-postgres-1`, `docker exec docker-postgres-1 psql -U tabula -d tabula_cc`). Redis DB 1.
-   Apply new migrations with: `DATABASE_URL=postgres://tabula:tabula@localhost:5432/tabula_cc npx pnpm@9.15.0 db:migrate`.
-   **Never touch the `tabula` database or ports 3000/3002/5173/3100/3102/5183/5184** — those belong to OTHER checkouts (`32TableOS`, `32TableOSCursor`). Never kill processes you didn't start.
-5. **Testing:** verify with real HTTP calls against `http://localhost:3200` (curl / node fetch with a cookie jar). Create your own test user: `POST /v1/auth/signup {email, password, name}` with an email like `ws-<letter>-<n>@tabula.test`. UI workstreams may use the browser pane **only in a tab they create** (`tabs_create`), never the existing tabs.
+   DB: `postgres://tableos:tableos@localhost:5432/tableos_cc` (docker container `docker-postgres-1`, `docker exec docker-postgres-1 psql -U tableos -d tableos_cc`). Redis DB 1.
+   Apply new migrations with: `DATABASE_URL=postgres://tableos:tableos@localhost:5432/tableos_cc npx pnpm@9.15.0 db:migrate`.
+   **Never touch the `tableos` database or ports 3000/3002/5173/3100/3102/5183/5184** — those belong to OTHER checkouts (`32TableOS`, `32TableOSCursor`). Never kill processes you didn't start.
+5. **Testing:** verify with real HTTP calls against `http://localhost:3200` (curl / node fetch with a cookie jar). Create your own test user: `POST /v1/auth/signup {email, password, name}` with an email like `ws-<letter>-<n>@tableos.test`. UI workstreams may use the browser pane **only in a tab they create** (`tabs_create`), never the existing tabs.
 6. **Migrations:** new files only, numbered from your reserved range (§9). Never edit an existing migration.
 7. **Line endings:** files are LF. If you script edits in Python on Windows, open with `newline=""`.
 8. **Do not commit.** The orchestrator commits per workstream after review.
@@ -34,7 +34,7 @@ Audit reports that motivated this pass live in `docs/fix-plan/audit-*.md`.
 
 - API speaks **public ids only**: `bas_ tbl_ fld_ rec_ viw_ usr_ wsp_ att_ cmt_ aut_ shr_ opt_`. Server converts with `pid()` / `parsePid()` (`apps/server/src/lib/public-ids.ts`). `parsePid` throws `PublicIdError` → 422.
 - Select options: `{ id: "opt_<random>", label: string, color: string }`. **Cells store option ids, never labels.**
-- Fractional order keys compare with `COLLATE "C"` (migration 0011). Use `keyBetween(a, b)` from `@tabula/types` (workstream B adds it; until then `nextOrderKey()`).
+- Fractional order keys compare with `COLLATE "C"` (migration 0011). Use `keyBetween(a, b)` from `@tableos/types` (workstream B adds it; until then `nextOrderKey()`).
 
 ## 3. Record wire format (all record-returning endpoints)
 
@@ -216,7 +216,7 @@ Field UI (C, `packages/field-ui`): `renderCellValue(field, value)`, `<FieldValue
 | A (first task) | `apps/server/src/modules/records/serialize.ts`: `serializeRecords(db, tableId, rows, opts?) → Promise<RecordWire[]>` implementing §3 (computed unwrap, meta fields, collaborator/link/attachment hydration) | B (write responses), E (public share records), D |
 | A | `packages/filter`: `operatorsForFieldType`, `operatorLabel`, `evaluateFilter(ast, record, fields, ctx)` | C, D, G (automation conditions) |
 | B | **Links are authoritative in `data.record_links`.** Cells no longer hold link arrays (B migrates/ignores legacy link cells). A's serializer reads links from `record_links`. | A |
-| B (early) | `keyBetween(a: string|null, b: string|null): string` exported from `@tabula/types` | B, D (view reorder), F (table reorder) |
+| B (early) | `keyBetween(a: string|null, b: string|null): string` exported from `@tableos/types` | B, D (view reorder), F (table reorder) |
 | F (first task) | `kernel/mutation.ts`: `mctx.afterCommit(fn: () => Promise<void> | void)`; realtime publish moved after commit | B (compute job enqueue), E, G |
 | F | `GET /v1/bases/:b/collaborators` → `{ collaborators: [{id:"usr_…", name, email, role}] }` | C (collaborator picker), E (mentions), G |
 | E | `apps/web/src/lib/api-areas/files.ts`: `uploadAttachment(baseId, file, onProgress?) → Promise<AttachmentWire>` (presign → PUT → complete); `GET /v1/bases/:b/attachments/:id` returns fresh signed URL | C (attachment cell + drawer) |
@@ -234,7 +234,7 @@ Interfaces (Airtable "Interfaces" designer) are **out of scope for this pass**; 
 (append dated notes here)
 
 ### 2026-10-06 — B: storage formats, helpers (early note; final details in B's report)
-- `keyBetween(a, b)` / `keysBetween(a, b, n)` are exported from `@tabula/types` (built). Generated keys never end in '0'; legacy timestamp keys are tolerated. Throws `RangeError` when `a >= b`.
+- `keyBetween(a, b)` / `keysBetween(a, b, n)` are exported from `@tableos/types` (built). Generated keys never end in '0'; legacy timestamp keys are tolerated. Throws `RangeError` when `a >= b`.
 - **Cell storage** (`data.records.cells`, keyed by slot) written by B's write path:
   text-like → string · number/currency/percent/rating/duration → number · checkbox → `true` (absent = false) · date → `"YYYY-MM-DD"` · datetime → ISO UTC · single_select → `"opt_…"` · multi_select → `["opt_…"]` ·
   **collaborator → array of raw user uuids** · **attachment → array of raw attachment uuids** · barcode → `{ "text": string }` · json → any JSON ·
@@ -248,7 +248,7 @@ Interfaces (Airtable "Interfaces" designer) are **out of scope for this pass**; 
 - **`POST …/records/query`** body: `{ filter?, sort?: [{field|fieldId, direction}], search?, viewId?, pageSize? (1–500, default 100), cursor?, fields?: ["fld_…"], includeTotalCount? }` → `{ records, nextCursor, totalCount? }`. `totalCount` is returned on the first page (no cursor) by default, or whenever `includeTotalCount: true`. Cursors are opaque, tied to the sort spec (changing the sort with an old cursor → 422 `INVALID_CURSOR`). Ties always break by manual order, then id. A view's saved filter ignores conditions on deleted fields, and a view's saved sorts on deleted fields are dropped. The request filter/sort/projection with an unknown field → 422.
 - **`GET …/records/:r`** `?fields=fld_a,fld_b` (optional) → `{record}` (404 if deleted or missing, 422 for a malformed id).
 - **`POST …/records/group`** body: `{ filter?, search?, viewId?, groupBy?: [{fieldId, direction?}] (0–3), aggregates?: [{op: count|sum|avg|min|max|filled|empty|unique, fieldId?}] }` → `{ groups: [{ key: string, value, values: unknown[], count, aggregates: { "<op>" | "<op>:<fieldId as sent>": number|string|null } }] }`. If `groupBy` is omitted, the response is a single group covering all matching records (use it for the summary bar). Group values use wire shapes: collaborator → user objects, link → `[{id, name}]`, select → option id; empty group → `null`. min/max on date fields return a date or ISO string.
-- **Filter semantics** (`@tabula/filter`, parity between SQL and `evaluateFilter` is tested):
+- **Filter semantics** (`@tableos/filter`, parity between SQL and `evaluateFilter` is tested):
   - A condition missing its operand (`undefined`, `null`, `""`, `[]`, `exactDate` without `date`, `pastNDays` without `n`) is dropped, like Airtable. A group whose conditions are all dropped matches everything.
   - Text ops are case-insensitive. `neq`/`notContains`/`noneOf` match empty cells.
   - Datetime comparisons are by calendar day, in the field's `config.timeZone`, else the requesting user's `core.users.time_zone`, else UTC.
@@ -262,7 +262,7 @@ Interfaces (Airtable "Interfaces" designer) are **out of scope for this pass**; 
   - A formula with no `resultType` also supports `gt/gte/lt/lte` (numeric).
   - Extra relative dates: `nDaysAgo` and `nDaysFromNow` (both with `n`). Extra range: `thisYear`.
   - Unknown fields or operators, operators not valid for the type, and bad operands → `FilterError` → HTTP 422 problem+json.
-- **Exports from `@tabula/filter`:**
+- **Exports from `@tableos/filter`:**
   - Operators: `operatorsForFieldType(type, config?)`, `operatorLabel(op, type?, config?)`, `operatorNeedsValue(op)`, `RELATIVE_DATE_OPTIONS`, `WITHIN_RANGE_OPTIONS`.
   - Evaluation: `evaluateFilter(ast, record, fields, ctx?)` and `createFilterPredicate(ast, fields, ctx?)`.
     - `record` is a wire record `{fields: {fld_…: value}}`.
@@ -289,10 +289,10 @@ Interfaces (Airtable "Interfaces" designer) are **out of scope for this pass**; 
 
 ### 2026-10-07 — F: kernel, realtime, events/jobs, history, base shell
 - **Kernel** (`apps/server/src/kernel/mutation.ts`): `mctx.afterCommit(fn)` runs `fn` after the surrounding transaction commits (registration order; errors logged, never thrown; dropped on rollback). When you pass your own `trx` to `withBaseTx(…, trx)`, open it with `runTransactionWithAfterCommit(db, fn)` so nested callbacks wait for the outer commit (`afterCommitOf(trx, fn)` registers on such a trx directly). The realtime Redis publish is an after-commit callback. The kernel adds to every outbox payload: `tableId` (when the change touches exactly one table), `tableIds`, `recordId` (for `aggregateType: "record"`), and `clientMutationId`. The outbox `actor` is the real `{type, id, via}`.
-- **Client mutation id**: the API reads `X-Tabula-Client-Op-Id` (fallback `Idempotency-Key`) into the change log and onto realtime frames as `clientMutationId`. Web `request()` sets `X-Tabula-Client-Op-Id` on every mutating call outside `/v1/auth/*`, plus the same value as `Idempotency-Key` for `/v1/bases/*` and `/v1/workspaces/*`. Pass `clientOpId` in `request()`'s init to choose the id. `isOwnClientOp(id)` (api.ts) tells whether a frame came from this tab. (D's 2026-10-07 report that `records/query` returns an empty body when it has an Idempotency-Key no longer reproduces: query, a replayed query and a replayed create all return full bodies.)
-- **Realtime protocol** (`@tabula/realtime-protocol`): the `change` frame is `{type:"change", baseId, seq, kind?, tableIds, tableId?, recordTableIds, recordIds, recordsChanged, schemaChanged, clientMutationId, ops (public-id hints), actor:{type, id:"usr_…"|null}}`. Only public ids, never raw cells. Presence: the client sends `{type:"presence", baseId, state:{tableId?, viewId?, recordId?, cell?:{recordId, fieldId}}}`. The server answers with full snapshots `{type:"presence", full:true, peers:[{connId, user:{id, name, email}, color, state, updatedAt}]}`. Entries expire after 90 s; the client heartbeats every 30 s. `subscribe {baseId, afterSeq?}` replays up to 500 missed changes, or sends `resync_required {reason: catch_up_truncated|change_log_gap|client_ahead, headSeq}`. Subscribing twice on one socket is a no-op.
+- **Client mutation id**: the API reads `X-TableOS-Client-Op-Id` (fallback `Idempotency-Key`) into the change log and onto realtime frames as `clientMutationId`. Web `request()` sets `X-TableOS-Client-Op-Id` on every mutating call outside `/v1/auth/*`, plus the same value as `Idempotency-Key` for `/v1/bases/*` and `/v1/workspaces/*`. Pass `clientOpId` in `request()`'s init to choose the id. `isOwnClientOp(id)` (api.ts) tells whether a frame came from this tab. (D's 2026-10-07 report that `records/query` returns an empty body when it has an Idempotency-Key no longer reproduces: query, a replayed query and a replayed create all return full bodies.)
+- **Realtime protocol** (`@tableos/realtime-protocol`): the `change` frame is `{type:"change", baseId, seq, kind?, tableIds, tableId?, recordTableIds, recordIds, recordsChanged, schemaChanged, clientMutationId, ops (public-id hints), actor:{type, id:"usr_…"|null}}`. Only public ids, never raw cells. Presence: the client sends `{type:"presence", baseId, state:{tableId?, viewId?, recordId?, cell?:{recordId, fieldId}}}`. The server answers with full snapshots `{type:"presence", full:true, peers:[{connId, user:{id, name, email}, color, state, updatedAt}]}`. Entries expire after 90 s; the client heartbeats every 30 s. `subscribe {baseId, afterSeq?}` replays up to 500 missed changes, or sends `resync_required {reason: catch_up_truncated|change_log_gap|client_ahead, headSeq}`. Subscribing twice on one socket is a no-op.
 - **Web realtime** (`features/base/BaseSessionProvider.tsx`): one socket per open base, with reconnect backoff in `RealtimeClient`. It invalidates per §7 (`["records", b, t]`, `["record", b, t, r]`, `["bases", b]` + `["views", b]` on schema changes, `["undo-state", b]`). `useBaseSession().setPresence(patch)` merges presence (the base shell reports the table and view, and the `?record=` param is tracked automatically). C/D can call `setPresence({cell: {recordId, fieldId}})` for the selected cell. Other users' presence is in `usePresenceStore` / `useOtherUsers()`.
-- **Event bus** (`@tabula/events` BullMQ): fan-out per consumer group. `subscribe(topic, group, handler)` registers `group` in the Redis set `tabula:evt-groups:<topic>` and consumes queue `evt__<topic>__<group>`. `publish` adds the event to every registered group's queue (job id = event id, so a re-published row is deduped). Different groups each get every event; processes in the same group share the work. Queue objects and their Redis connection are cached per bus. The relay claims outbox rows with `FOR UPDATE SKIP LOCKED` and has an overlap guard. Worker consumers today: `collab-notifications`, `search-indexer` (each logs `"Domain event consumed"` with the group and event id). The automation engine (G) reads `data.outbox_events` directly.
+- **Event bus** (`@tableos/events` BullMQ): fan-out per consumer group. `subscribe(topic, group, handler)` registers `group` in the Redis set `tableos:evt-groups:<topic>` and consumes queue `evt__<topic>__<group>`. `publish` adds the event to every registered group's queue (job id = event id, so a re-published row is deduped). Different groups each get every event; processes in the same group share the work. Queue objects and their Redis connection are cached per bus. The relay claims outbox rows with `FOR UPDATE SKIP LOCKED` and has an overlap guard. Worker consumers today: `collab-notifications`, `search-indexer` (each logs `"Domain event consumed"` with the group and event id). The automation engine (G) reads `data.outbox_events` directly.
 - **Endpoints** (F):
   - `GET /v1/bases/:b/collaborators` → `{collaborators:[{id:"usr_…", name, email, role}]}`.
   - `PATCH /v1/bases/:b {name}` → `{base:{id, name}}`. `DELETE /v1/bases/:b` → 204. `POST /v1/bases/:b/duplicate {name?, withRecords?}` → `{id, name}`. All three need `base.manage_schema` (403 otherwise) and return 404 for a missing base. Names are trimmed; blank → 422.
@@ -368,7 +368,7 @@ Interfaces (Airtable "Interfaces" designer) are **out of scope for this pass**; 
   - The engine runs inside the worker (`entrypoints/worker.ts`) and reads `data.outbox_events` directly.
   - Changed fields are computed by diffing `base_changes.ops` against `inverse_ops`.
   - Migration `0015` adds `data.automations.enabled_at`. It is set when an automation is turned on, and events older than it never trigger the automation.
-  - Actions call the HTTP API with header `x-tabula-client-op-id: aut:<runId>`. Changes caused by a run never re-trigger that automation, and causation depth is capped at 8.
+  - Actions call the HTTP API with header `x-tableos-client-op-id: aut:<runId>`. Changes caused by a run never re-trigger that automation, and causation depth is capped at 8.
   - **E:** form submissions are written as actor `system` with `via:"api"`. The consumer detects them through `data.share_submissions` and waits up to 5 s for that row. Passing `via:"form"` (and the form view id) into the submit mutation's change payload would remove the wait.
 - **Auth:**
   - Per-IP limits are configurable via `AUTH_SIGNUP_MAX_PER_IP` and `AUTH_LOGIN_MAX_PER_IP`. Defaults are 30 and 50 in production, 2000 elsewhere, so dev test signups no longer hit 429.
@@ -394,7 +394,7 @@ Interfaces (Airtable "Interfaces" designer) are **out of scope for this pass**; 
 - **Grid summary bar:** while not every page is loaded, the summary uses `recordsApi.aggregate` (query key `["records", b, t, "summary", viewId, filter, search, ops]`, so the normal `["records", b, t]` invalidation refreshes it). Otherwise it is computed on the client. If the server rejects an op, the query retries without `unique` ops, and those cells show the client value with a trailing "+".
 - **`RecordDrawer`** accepts optional `hiddenFieldIds?: string[]` (shown under a "hidden fields" toggle) and `canEdit?: boolean` (default true), in addition to the §8 props.
 - **`FieldManager({baseId, table, onClose, viewId?, hiddenFieldIds?, onHiddenChange?})`:** pass `viewId` and the panel shows per-field "Visible" toggles that save the view's `hiddenFieldIds` itself. The controlled `hiddenFieldIds`/`onHiddenChange` pair still works. Without either, no toggles are shown.
-- **`@tabula/field-ui`:**
+- **`@tableos/field-ui`:**
   - `FieldUiServices.portal?(node): ReactNode`. When given, popovers and the link-record picker render through it. The web services pass `createPortal(node, document.body)`, so popups aren't clipped by grid or dialog overflow.
   - z-index: `.tfu-pop` 1150, `.tfu-modal-back` 1140, above dialogs at 1100.
   - The cell-mode date/datetime editor is a text input. It accepts typed dates (`12/25/2026`, `2026-12-25`, `Dec 25`, `today`, `tomorrow`, `2026-11-05 09:30`), plus a calendar button that opens the native picker. Form mode keeps the native inputs.
@@ -416,19 +416,19 @@ Interfaces (Airtable "Interfaces" designer) are **out of scope for this pass**; 
 
 ### 2026-10-07 - A (follow-up 2): group query 500 "could not determine data type of parameter $n"
 - Cause: `unique` aggregates on single/multi select, link, and lookup-of-select/link fields. The SQL builder created a sort key, added its parameters, then discarded the SQL, and Postgres rejects parameters it never sees. Fixed, and no group-query combination returns 5xx any more.
-- `@tabula/filter` additions:
+- `@tableos/filter` additions:
   - `groupValueKeyFor(f, a, p)` returns the group key only. Use it when you don't need the sort key. `groupKeyFor` still returns `{key, sort}`.
   - `SqlParams.mark()` / `rollback(mark)` drop parameters whose SQL you throw away.
 - Rule for anyone building SQL with `SqlParams`: every parameter you add must appear in the final SQL. Either use the expression or roll it back. The filter unit tests check this for every field kind.
 
 ### 2026-10-07 — C (follow-up): editor ids, uploads outside the grid, record-edit rights, full-height grid scrollbar
-- **`FieldValueEditor`** takes `id?: string` and `labelledBy?: string`. `id` goes on the editor's main control: the text, number, date, long text and checkbox inputs, the select/collaborator picker box (`role="combobox"`), the link-record and attach-file buttons, and the rating group. So `<label htmlFor={id}>` works for native inputs. Picker-style editors aren't native form controls, so also pass the label's own id as `labelledBy` (it becomes `aria-labelledby`). Rebuilt `@tabula/field-ui`.
+- **`FieldValueEditor`** takes `id?: string` and `labelledBy?: string`. `id` goes on the editor's main control: the text, number, date, long text and checkbox inputs, the select/collaborator picker box (`role="combobox"`), the link-record and attach-file buttons, and the rating group. So `<label htmlFor={id}>` works for native inputs. Picker-style editors aren't native form controls, so also pass the label's own id as `labelledBy` (it becomes `aria-labelledby`). Rebuilt `@tableos/field-ui`.
 - **D's `ValueEditor`** (`features/views/field-value.tsx`) forwards `id`/`labelledBy`, renders the shared editor in `mode="form"`, and wraps it in C's `FieldServices` provider. That gives forms and the filter builder working attachment uploads, collaborator lists, link-record search and "add option". `FormView` gives each label `id="form-<fieldId>-label"` and passes it as `labelledBy`. Any other place that renders `FieldValueEditor` outside the grid or drawer needs `<FieldServices baseId>` (exported from `features/grid/field-services.tsx`) around it, or uploads show "Uploads unavailable".
-- **`useBaseRole(baseId)`** (`features/grid/field-services.tsx`) returns `{role, canEditRecords, canEditSchema}`. These are `undefined` until loaded. The role is read from `GET /v1/bases/:b/collaborators` and matched to `/v1/auth/me`; query key `["base-role", baseId]`. `canEditRecords` is editor or higher; `canEditSchema` is creator or owner (matches `@tabula/permissions`).
+- **`useBaseRole(baseId)`** (`features/grid/field-services.tsx`) returns `{role, canEditRecords, canEditSchema}`. These are `undefined` until loaded. The role is read from `GET /v1/bases/:b/collaborators` and matched to `/v1/auth/me`; query key `["base-role", baseId]`. `canEditRecords` is editor or higher; `canEditSchema` is creator or owner (matches `@tableos/permissions`).
 - **`GridView`** gains optional `canEditRecords` and `canEditSchema` props. Both default to `useBaseRole`, and both are `false` while the role is loading. `canEdit` now means only "can change this view's config". Record editing, adding, deleting, pasting, filling and row reorder follow `canEditRecords`. Edit, insert, duplicate and delete field follow `canEditSchema`. So editors can edit records in a locked view, while commenters and viewers are read-only. `table-grid.tsx` passes `canEditRecords` to the grid, and `hiddenFieldIds={config.hiddenFieldIds}` plus `canEdit={canEditRecords}` to `RecordDrawer`.
 - **Grid paging:** the first page is 200 rows; later pages use the server maximum (500). When not grouped, the grid reserves height for rows not loaded yet (from the server's `totalCount`), so the scrollbar spans the whole table. Scrolling or jumping into that area keeps loading pages until the rows on screen are filled. The footer count follows filter + search, and shows "Loading…" while a new query replaces the old one.
 - **`FieldManager`** visibility toggles also invalidate `["views", baseId]` (F's views query), so the open grid updates at once.
-- **Removed** (dead after the fallbacks were dropped from `table-grid.tsx`): `features/grid/DomGrid.tsx`, `CanvasTableGrid.tsx`, `CellEditor.tsx`, `features/schema/FieldHeader.tsx`, `features/record/RecordExpandDrawer.tsx`, `features/record/record-drawer.module.css`. `features/grid/grid.module.css` now only has `.status`, which `table-grid.tsx` uses. Nothing in the repo imports `@tabula/grid` any more. `apps/web/package.json` still lists it as a dependency, and the package was not deleted.
+- **Removed** (dead after the fallbacks were dropped from `table-grid.tsx`): `features/grid/DomGrid.tsx`, `CanvasTableGrid.tsx`, `CellEditor.tsx`, `features/schema/FieldHeader.tsx`, `features/record/RecordExpandDrawer.tsx`, `features/record/record-drawer.module.css`. `features/grid/grid.module.css` now only has `.status`, which `table-grid.tsx` uses. Nothing in the repo imports `@tableos/grid` any more. `apps/web/package.json` still lists it as a dependency, and the package was not deleted.
 
 ## r2-grid: record revision history + view row numbers
 

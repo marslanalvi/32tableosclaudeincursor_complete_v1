@@ -74,7 +74,7 @@ CREATE TABLE data.outbox_events (
   base_id           uuid,
   event_type        text        NOT NULL CHECK (event_type ~ '^[a-z_]+\.[a-z_]+$'),
   schema_version    smallint    NOT NULL DEFAULT 1,
-  topic             text        NOT NULL DEFAULT 'tabula.domain-events.v1',
+  topic             text        NOT NULL DEFAULT 'tableos.domain-events.v1',
   partition_key     text        NOT NULL,
   aggregate_type    text        NOT NULL,
   aggregate_id      uuid        NOT NULL,

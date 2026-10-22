@@ -1,6 +1,6 @@
-import { decodePublicId } from "@tabula/types";
+import { decodePublicId } from "@tableos/types";
 import { sql } from "kysely";
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 
 export interface FieldRow {
   id: string;
@@ -10,7 +10,7 @@ export interface FieldRow {
 }
 
 export async function loadTableFields(
-  db: TabulaDb,
+  db: TableOSDb,
   tableId: string,
 ): Promise<FieldRow[]> {
   const result = await sql<FieldRow>`

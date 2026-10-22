@@ -116,9 +116,9 @@ let injected = false;
 export function ensureFieldUiStyles(): void {
   if (injected || typeof document === "undefined") return;
   injected = true;
-  if (document.getElementById("tabula-field-ui-styles")) return;
+  if (document.getElementById("tableos-field-ui-styles")) return;
   const el = document.createElement("style");
-  el.id = "tabula-field-ui-styles";
+  el.id = "tableos-field-ui-styles";
   el.textContent = CSS;
   document.head.appendChild(el);
 }

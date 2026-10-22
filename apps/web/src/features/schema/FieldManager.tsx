@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { FIELD_TYPES, fieldTypeIcon, fieldTypeLabel } from "@tabula/field-ui";
+import { FIELD_TYPES, fieldTypeIcon, fieldTypeLabel } from "@tableos/field-ui";
 import type { TableDto } from "../../lib/api.ts";
 import type { FieldWire } from "../../lib/api-areas/fields.ts";
 import { errorMessage } from "../../lib/api-areas/records.ts";

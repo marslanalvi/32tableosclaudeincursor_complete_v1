@@ -1,4 +1,4 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { ApiError } from "../../http/errors.js";
 import { idFromAny } from "../schema/field-dto.js";
@@ -18,7 +18,7 @@ function fieldKeys(body: unknown): string[] {
  * can't be added/removed and synced fields can't be changed by hand.
  */
 export async function assertSyncWritable(
-  db: TabulaDb,
+  db: TableOSDb,
   tableId: string,
   action: "record.create" | "record.update" | "record.delete",
   body: unknown,

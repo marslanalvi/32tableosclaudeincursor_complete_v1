@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
-import { handleRouteError, notFound, PROBLEM_CONTENT_TYPE } from "../../http/errors.js";
+import { handleRouteError, notFound, PROBLEM_CONTENT_TYPE, problemType } from "../../http/errors.js";
 import { resolveBaseContext } from "../access/helpers.js";
 import { compileForUser } from "../access/compile.js";
 import { assertCan } from "../access/assert.js";
@@ -59,7 +59,7 @@ function sendStackProblem(
     .code(409)
     .header("content-type", PROBLEM_CONTENT_TYPE)
     .send({
-      type: `https://tabula.dev/errors/${code.toLowerCase().replace(/_/g, "-")}`,
+      type: problemType(code),
       code,
       title: code === "NOTHING_TO_UNDO" ? "Nothing to undo" : "Nothing to redo",
       status: 409,

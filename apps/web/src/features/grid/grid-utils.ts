@@ -5,7 +5,7 @@ import {
   selectOptions,
   toNumber,
   type FieldLike,
-} from "@tabula/field-ui";
+} from "@tableos/field-ui";
 
 export const ROW_HEIGHTS = { short: 32, medium: 56, tall: 88, extra: 128 } as const;
 export const HEADER_H = 32;

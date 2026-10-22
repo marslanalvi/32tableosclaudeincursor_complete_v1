@@ -178,15 +178,15 @@ Roles (identical names on every cluster; passwords/IAM auth from Secrets Manager
 
 | Role | LOGIN | RLS | Used by | Privileges |
 |---|---|---|---|---|
-| `tabula_owner` | no | n/a | owns all objects | — |
-| `tabula_migrator` | yes | **BYPASSRLS** | CI migration job only | member of `tabula_owner`; DDL |
+| `tableos_owner` | no | n/a | owns all objects | — |
+| `tableos_migrator` | yes | **BYPASSRLS** | CI migration job only | member of `tableos_owner`; DDL |
 | `app_rw` | yes | enforced | `api`, `realtime`, `worker` request-scoped work | DML on tenant tables; no DDL; no TRUNCATE |
 | `app_admin` | yes | enforced, but has an explicit `USING (true)` policy | `scheduler` (purge, reconciler, partition maintenance glue), migration controller, support tooling | DML on all tenant rows; every session tagged with `application_name` and audited |
 | `app_readonly` | yes | enforced | analytics exports, support read-only consoles | SELECT only |
-| `tabula_relay` | yes | n/a | `relay` role | `rds_replication` (RDS) / `REPLICATION`; SELECT on outbox/base_changes |
-| `tabula_partman` | yes | n/a | `scheduler` partition maintenance | member of `tabula_owner` (creates/drops partitions); no DML grants on tenant data beyond what partman needs |
+| `tableos_relay` | yes | n/a | `relay` role | `rds_replication` (RDS) / `REPLICATION`; SELECT on outbox/base_changes |
+| `tableos_partman` | yes | n/a | `scheduler` partition maintenance | member of `tableos_owner` (creates/drops partitions); no DML grants on tenant data beyond what partman needs |
 
-Why `app_admin` is not BYPASSRLS: BYPASSRLS is a blanket switch that also bypasses `FORCE ROW LEVEL SECURITY` on tables we may later want to protect from maintenance code; an explicit permissive policy per table is greppable, reviewable and revocable per table. **BYPASSRLS is reserved for migrations** (`tabula_migrator`), which must be able to backfill across tenants.
+Why `app_admin` is not BYPASSRLS: BYPASSRLS is a blanket switch that also bypasses `FORCE ROW LEVEL SECURITY` on tables we may later want to protect from maintenance code; an explicit permissive policy per table is greppable, reviewable and revocable per table. **BYPASSRLS is reserved for migrations** (`tableos_migrator`), which must be able to backfill across tenants.
 
 Role defaults (set with `ALTER ROLE … SET`, which survives PgBouncer transaction pooling because PgBouncer opens server connections as that role):
 
@@ -219,7 +219,7 @@ Notes:
 * The UUIDv7 timestamp reveals creation time. Acceptable: IDs are not secrets. **Secrets are never IDs** — tokens, share secrets, webhook URL tokens are separate 256-bit random values stored hashed.
 * Clock skew between app nodes (≤ a few ms with chrony) only affects ordering *between* IDs, never uniqueness; we never use ID order as a correctness signal (we use `change_seq`).
 
-**Public ID encoding:** `<prefix>_<base62(uuid 128-bit big-endian)>`, left-padded to **22** chars with `0` (62²² > 2¹²⁸). Prefixes per spine §3 (`rec`, `tbl`, `fld`, …). Implemented in `@tabula/ids`:
+**Public ID encoding:** `<prefix>_<base62(uuid 128-bit big-endian)>`, left-padded to **22** chars with `0` (62²² > 2¹²⁸). Prefixes per spine §3 (`rec`, `tbl`, `fld`, …). Implemented in `@tableos/ids`:
 
 ```ts
 const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -304,7 +304,7 @@ GIN indexes on JSONB are used sparingly:
 Every configuration JSONB column has a sibling `…_schema_version smallint NOT NULL`. The TypeScript side owns a registry:
 
 ```ts
-// @tabula/config-docs
+// @tableos/config-docs
 export const viewConfig = defineDoc('view.config', {
   current: 4,
   schemas: { 1: ViewConfigV1, 2: ViewConfigV2, 3: ViewConfigV3, 4: ViewConfigV4 }, // Zod
@@ -395,7 +395,7 @@ All three use the schema-version mechanism of §6.8.1. Interface element IDs (`e
 |---|---|---|---|
 | `data.base_changes` | Every committed mutation batch per base: forward `ops`, `inverse_ops`, actor, via, `client_mutation_id` | Same transaction as the mutation | 30 days (D10) |
 | `data.record_revisions` | Cell-level history per record (`changed_slots`, `before`, `after` restricted to changed slots) | Same transaction (small) or async from `base_changes` for bulk imports (`via='import'` coalesced) | Plan: 14 d → 3 y |
-| `audit.audit_events` | Security/admin events (logins, grants, exports, policy changes, API token lifecycle, share link creation, admin reads) | Async via `tabula.audit.v1` topic; at-least-once, deduped on `id` | Hot 90 d, archive to S3 Parquet (Object Lock in Enterprise) |
+| `audit.audit_events` | Security/admin events (logins, grants, exports, policy changes, API token lifecycle, share link creation, admin reads) | Async via `tableos.audit.v1` topic; at-least-once, deduped on `id` | Hot 90 d, archive to S3 Parquet (Object Lock in Enterprise) |
 
 Record content changes are **not** audit events (volume); they are revisions. The audit trail records *that* a bulk export or deletion happened. See [22](22-audit-history-undo-trash.md) for undo/trash semantics.
 
@@ -526,7 +526,7 @@ Each shard has ≥ 2 physical streaming replicas (one per AZ). Usage:
 | Grid window fetches, record expands, search (MVP), exports, history browsing, run logs, API `GET`s | **Replica if fresh enough**, else primary |
 | Analytics/exports > 30 s | Dedicated replica (`hot_standby_feedback=off`, `max_standby_streaming_delay=5min`) |
 
-**Read-your-writes via base change watermark.** Every write response (HTTP and WebSocket ack) returns the committed `base_seq`. The client (and the server-side session cache) remembers `minSeq[baseId]`. A read for base B carries `X-Tabula-Min-Seq` (the SPA sets it automatically). The router:
+**Read-your-writes via base change watermark.** Every write response (HTTP and WebSocket ack) returns the committed `base_seq`. The client (and the server-side session cache) remembers `minSeq[baseId]`. A read for base B carries `X-TableOS-Min-Seq` (the SPA sets it automatically). The router:
 
 1. Looks up each replica's applied watermark for B. Replicas don't know `change_seq` directly, so we track **LSN**: the write path records `pg_current_wal_insert_lsn()` after commit into Redis `wm:{baseId} → (seq, lsn)` (cheap, fire-and-forget).
 2. Replica health poller samples `pg_last_wal_replay_lsn()` every 100 ms per replica.
@@ -586,10 +586,10 @@ Detailed per-table comments are in the DDL ([05](05-sql-schema.md)); headline pa
 
 | Layer | Mechanism | RPO | RTO |
 |---|---|---|---|
-| Cluster | RDS automated backups (daily snapshot + continuous WAL archiving), 35-day PITR window; cross-region snapshot copy daily into `tabula-backups` region | ≤ 5 min (cross-AZ Multi-AZ: 0 for AZ loss) | AZ failover 60–120 s; PITR full cluster 1–4 h by size |
+| Cluster | RDS automated backups (daily snapshot + continuous WAL archiving), 35-day PITR window; cross-region snapshot copy daily into `tableos-backups` region | ≤ 5 min (cross-AZ Multi-AZ: 0 for AZ loss) | AZ failover 60–120 s; PITR full cluster 1–4 h by size |
 | Logical | Weekly `pg_dump` of control plane (small) to S3; data plane: per-workspace logical export tool (same as migration copy) | 7 d | — |
-| Base-level | `data.base_snapshots` (user-visible; data in `tabula-snapshots`) | user-defined | minutes, restored **into a new base** |
-| Object storage | S3 versioning + replication on `tabula-attachments` and `tabula-snapshots` | ~15 min | — |
+| Base-level | `data.base_snapshots` (user-visible; data in `tableos-snapshots`) | user-defined | minutes, restored **into a new base** |
+| Object storage | S3 versioning + replication on `tableos-attachments` and `tableos-snapshots` | ~15 min | — |
 
 **Restoring a single workspace** (the common real-world request) uses a PITR clone of the shard to a temporary instance, then the workspace-move copy tool targeting either the original shard (after confirmation) or a fresh workspace. Never PITR a whole shared shard to fix one tenant.
 

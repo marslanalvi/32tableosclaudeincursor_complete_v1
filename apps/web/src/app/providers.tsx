@@ -1,4 +1,4 @@
-import { AttachmentViewerHost } from "@tabula/field-ui";
+import { AttachmentViewerHost } from "@tableos/field-ui";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useState } from "react";
 import { queryClient } from "../lib/query-client.ts";

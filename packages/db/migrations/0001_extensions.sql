@@ -1,4 +1,4 @@
--- Tabula MVP: extensions, uuidv7 polyfill, schemas (single Postgres cluster)
+-- TableOS MVP: extensions, uuidv7 polyfill, schemas (single Postgres cluster)
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE SCHEMA IF NOT EXISTS core;

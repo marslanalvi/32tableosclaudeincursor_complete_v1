@@ -5,8 +5,8 @@ import {
   hashPassword,
   verifyPassword,
   verifyTotp,
-} from "@tabula/auth";
-import { generateUuidV7 } from "@tabula/types";
+} from "@tableos/auth";
+import { generateUuidV7 } from "@tableos/types";
 import { sql } from "kysely";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";

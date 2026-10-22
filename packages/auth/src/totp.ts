@@ -1,6 +1,6 @@
 import { Secret, TOTP } from "otpauth";
 
-const ISSUER = "Tabula";
+const ISSUER = "TableOS";
 
 export interface TotpSecretBundle {
   /** Base32 secret for manual entry */

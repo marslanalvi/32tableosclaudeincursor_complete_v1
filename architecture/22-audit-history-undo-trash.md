@@ -117,12 +117,12 @@ flowchart LR
   CPAPI --> RL[relay]
   SHARD --> RL
   AUTHZ --> K
-  RL --> K[(Kafka tabula.audit.v1<br/>key org_id)]
+  RL --> K[(Kafka tableos.audit.v1<br/>key org_id)]
   K --> AW[audit writer<br/>one consumer per partition]
   AW --> APG[(audit Postgres<br/>hot 90 d)]
   AW --> RED[Redis lock per org chain]
   APG --> ARCH[archiver daily]
-  ARCH --> S3[(tabula-audit-archive<br/>Parquet + manifest<br/>Object Lock)]
+  ARCH --> S3[(tableos-audit-archive<br/>Parquet + manifest<br/>Object Lock)]
   K --> SIEM[SIEM exporter<br/>per audit_exports]
   S3 --> ATH[Athena / query service]
 ```
@@ -140,14 +140,14 @@ flowchart LR
 canonical(e) = JCS (RFC 8785) of {id, org_id, chain_date, chain_seq, occurred_at, workspace_id, base_id,
                                   actor_type, actor_id, on_behalf_of, via, ip, request_id, resource_type,
                                   resource_id, action, outcome, reason, before, after, metadata}
-hash_0(org, day)  = SHA-256("tabula-audit-v1" || org_id || day || final_hash(org, day-1))
+hash_0(org, day)  = SHA-256("tableos-audit-v1" || org_id || day || final_hash(org, day-1))
 hash_n            = SHA-256(hash_{n-1} || canonical(e_n))
 ```
 
 * Chaining across days (genesis includes the previous day's final hash) makes deletion of a whole day detectable.
-* Daily **sealing** job (00:15 UTC per region): for each org with events that day → writes a manifest `{org_id, day, count, first_seq, last_seq, final_hash, parquet_object_keys[], parquet_sha256[]}` signed with a KMS asymmetric key (`ECC_NIST_P256`, `Sign`), to `tabula-audit-archive/{region}/manifests/{org_id}/{day}.json` with **S3 Object Lock** (compliance mode, retention = org's audit retention; governance mode for non-Enterprise).
-* Event rows exported to Parquet: `tabula-audit-archive/{region}/events/org={org_id}/date={day}/part-*.parquet` (zstd), also Object-Locked.
-* Verification tool (`tabula-audit verify --org --from --to`) recomputes the chain from Postgres or Parquet and checks manifest signatures; runs weekly on a 1% sample of orgs and on demand for customers (Enterprise "Verify audit log" button returns a signed report).
+* Daily **sealing** job (00:15 UTC per region): for each org with events that day → writes a manifest `{org_id, day, count, first_seq, last_seq, final_hash, parquet_object_keys[], parquet_sha256[]}` signed with a KMS asymmetric key (`ECC_NIST_P256`, `Sign`), to `tableos-audit-archive/{region}/manifests/{org_id}/{day}.json` with **S3 Object Lock** (compliance mode, retention = org's audit retention; governance mode for non-Enterprise).
+* Event rows exported to Parquet: `tableos-audit-archive/{region}/events/org={org_id}/date={day}/part-*.parquet` (zstd), also Object-Locked.
+* Verification tool (`tableos-audit verify --org --from --to`) recomputes the chain from Postgres or Parquet and checks manifest signatures; runs weekly on a 1% sample of orgs and on demand for customers (Enterprise "Verify audit log" button returns a signed report).
 
 ### 26.4.2 Threats covered
 
@@ -164,7 +164,7 @@ hash_n            = SHA-256(hash_{n-1} || canonical(e_n))
 | Tier | Store | Window | Query |
 |---|---|---|---|
 | Hot | audit Postgres (monthly partitions) | 90 days for all plans | API, admin UI (filters, ≤ 1 s) |
-| Warm/cold | S3 Parquet (Object Lock) | per plan below | async query jobs via Athena (results to `tabula-exports`), SIEM backfill |
+| Warm/cold | S3 Parquet (Object Lock) | per plan below | async query jobs via Athena (results to `tableos-exports`), SIEM backfill |
 
 | Plan | Audit log UI/API | Archive retention |
 |---|---|---|
@@ -306,7 +306,7 @@ sequenceDiagram
   participant W0 as snapshot coordinator
   participant DB as shard replica (or primary)
   participant Wn as table export workers (N)
-  participant S3 as tabula-snapshots
+  participant S3 as tableos-snapshots
   SCH->>Q: snapshot job {baseId, kind}
   Q->>W0: process
   W0->>DB: BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY, then pg_export_snapshot()
@@ -377,7 +377,7 @@ Physical retention is complicated by shared monthly partitions across plans: par
 Every user action is one **command** executed in one transaction producing exactly **one** `base_changes` row (`kind`, `ops`, `inverse_ops`), see [15 §5](./15-events.md). Multi-record actions (paste 500 cells, delete 30 records, fill-down) are one command → one change → one undo step.
 
 ```ts
-// @tabula/changes
+// @tableos/changes
 type ChangeOp =
   | { op: 'cell.set'; tableId: string; recordId: string; slot: number; value?: Json; expectSeq?: number }
   | { op: 'set.add' | 'set.remove'; tableId: string; recordId: string; slot: number; items: string[] }   // multi_select, collaborators, attachments

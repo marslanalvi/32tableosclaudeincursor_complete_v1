@@ -2,8 +2,8 @@ import {
   compileSnapshot,
   type AccessGrantRow,
   type PermissionSnapshot,
-} from "@tabula/permissions";
-import type { TabulaDb } from "@tabula/db";
+} from "@tableos/permissions";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { requestMayAccess } from "../../kernel/request-context.js";
 import { orgRoleGrantsWorkspaceOwner } from "./workspace-access.js";
@@ -21,7 +21,7 @@ function cacheKey(userId: string, baseId: string): string {
 }
 
 async function loadGrantsForUser(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   workspaceId: string,
   baseId: string,
@@ -44,7 +44,7 @@ async function loadGrantsForUser(
 
 /** Org owners/admins get an implicit workspace `owner` grant. */
 async function orgOwnerGrant(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   orgId: string,
   workspaceId: string,
@@ -88,7 +88,7 @@ export function invalidateUserSnapshotCache(userId: string): void {
  * Org membership alone grants nothing (effectiveBaseRole = null).
  */
 export async function compileForUser(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   baseId: string,
 ): Promise<PermissionSnapshot> {
@@ -147,7 +147,7 @@ export async function compileForUser(
 
 /** Workspace-scoped snapshot (e.g. before a base exists). */
 export async function compileForWorkspace(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   workspaceId: string,
 ): Promise<PermissionSnapshot> {

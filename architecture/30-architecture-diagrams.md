@@ -284,10 +284,10 @@ flowchart LR
   end
   TX --> WAL["WAL - logical slot"]
   WAL --> RLY["relay"]
-  RLY --> T1["tabula.base-changes.v1 - key base_id"]
-  RLY --> T2["tabula.domain-events.v1 - key workspace or base"]
-  RLY --> T3["tabula.audit.v1 - key org_id"]
-  RLY --> T4["tabula.usage.v1 - key org_id"]
+  RLY --> T1["tableos.base-changes.v1 - key base_id"]
+  RLY --> T2["tableos.domain-events.v1 - key workspace or base"]
+  RLY --> T3["tableos.audit.v1 - key org_id"]
+  RLY --> T4["tableos.usage.v1 - key org_id"]
   T1 --> RTF["realtime fan-out"]
   T1 --> WHD["webhook dispatcher"]
   T1 --> SYX["sync exporters"]
@@ -646,7 +646,7 @@ sequenceDiagram
   API->>SH: INSERT base_changes, outbox_events, idempotency_keys
   API->>SH: COMMIT
   API->>RD: watermark seq and lsn, idem response
-  API-->>CL: 200 with records, ETag versions, X-Tabula-Base-Seq
+  API-->>CL: 200 with records, ETag versions, X-TableOS-Base-Seq
   SH-->>RL: logical decoding
   RL->>KF: publish events
   KF-->>CS: realtime, automations, webhooks, search, audit, usage

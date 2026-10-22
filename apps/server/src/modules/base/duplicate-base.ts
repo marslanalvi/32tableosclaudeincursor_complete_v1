@@ -1,5 +1,5 @@
-import type { Database, TabulaDb } from "@tabula/db";
-import { generateUuidV7 } from "@tabula/types";
+import type { Database, TableOSDb } from "@tableos/db";
+import { generateUuidV7 } from "@tableos/types";
 import { sql, type Transaction } from "kysely";
 import { nextOrderKey } from "../../lib/order-key.js";
 import { pid } from "../../lib/public-ids.js";
@@ -135,7 +135,7 @@ async function remapJsonColumn(
 }
 
 export async function duplicateBase(
-  db: TabulaDb,
+  db: TableOSDb,
   params: {
     sourceBaseId: string;
     targetWorkspaceId: string;

@@ -44,7 +44,7 @@ Related: [`11-filter-sort-group.md`](./11-filter-sort-group.md) (FilterNode), [`
 
 ## 1. Document conventions
 
-* Paths are relative to `https://api.tabula.example` and (except `/scim/v2`, `/.well-known`) start with `/v1`.
+* Paths are relative to `https://api.tableos.example` and (except `/scim/v2`, `/.well-known`) start with `/v1`.
 * **Permission** column uses Spine §9 action strings; **Scope** uses `17-…` §6. `session` means first-party cookie only (not available to tokens). `public` means unauthenticated (rate-limited by IP/share).
 * "Std errors" = `400 INVALID_REQUEST`, `401` family, `403 INSUFFICIENT_SCOPE|PERMISSION_DENIED`, `404 <RESOURCE>_NOT_FOUND`, `429 RATE_LIMITED`, `5xx`. Only **additional** codes are listed per operation.
 * Every mutating operation accepts `Idempotency-Key` unless marked `no-idem`. Every list is cursor-paginated (`pageSize`, `cursor` → `CursorPage<T>`) unless marked otherwise.
@@ -58,11 +58,11 @@ Related: [`11-filter-sort-group.md`](./11-filter-sort-group.md) (FilterNode), [`
 ```yaml
 openapi: 3.1.0
 info:
-  title: Tabula API
-  version: "v1"                         # path major; dated minor via Tabula-Version
-  x-tabula-current-version: "2026-10-01"
+  title: TableOS API
+  version: "v1"                         # path major; dated minor via TableOS-Version
+  x-tableos-current-version: "2026-10-01"
 servers:
-  - url: https://api.tabula.example
+  - url: https://api.tableos.example
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 security:
   - bearerAuth: []
@@ -85,9 +85,9 @@ components:
       type: oauth2
       flows:
         authorizationCode:
-          authorizationUrl: https://api.tabula.example/v1/auth/oauth/authorize
-          tokenUrl: https://api.tabula.example/v1/auth/oauth/token
-          refreshUrl: https://api.tabula.example/v1/auth/oauth/token
+          authorizationUrl: https://api.tableos.example/v1/auth/oauth/authorize
+          tokenUrl: https://api.tableos.example/v1/auth/oauth/token
+          refreshUrl: https://api.tableos.example/v1/auth/oauth/token
           scopes:
             records:read: Read records
             records:write: Create, update, delete records
@@ -116,7 +116,7 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: tabula_sid
+      name: tableos_sid
       description: First-party only; requires X-CSRF-Token on unsafe methods
     scimBearer:
       type: http
@@ -137,15 +137,15 @@ components:
   headers:
     IdempotencyKey: { schema: { type: string, minLength: 1, maxLength: 255 } }
     IfMatch:        { schema: { type: string, examples: ['"r17"'] } }
-    TabulaVersion:  { schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
+    TableOSVersion:  { schema: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$' } }
     RateLimit:      { schema: { type: string } }
     RateLimitPolicy:{ schema: { type: string } }
     RetryAfter:     { schema: { type: integer } }
     ETag:           { schema: { type: string } }
 ```
 
-**Common request headers:** `Authorization`, `Tabula-Version`, `Idempotency-Key`, `If-Match`, `If-None-Match`, `X-Request-Id`, `X-CSRF-Token` (cookie only), `Accept-Language`, `Tabula-Consistency: strong|eventual` (reads).
-**Common response headers:** `X-Request-Id`, `Tabula-Version`, `RateLimit`, `RateLimit-Policy`, `ETag` (versioned resources), `Idempotent-Replayed`, `Deprecation`, `Sunset`, `Location` (201/202).
+**Common request headers:** `Authorization`, `TableOS-Version`, `Idempotency-Key`, `If-Match`, `If-None-Match`, `X-Request-Id`, `X-CSRF-Token` (cookie only), `Accept-Language`, `TableOS-Consistency: strong|eventual` (reads).
+**Common response headers:** `X-Request-Id`, `TableOS-Version`, `RateLimit`, `RateLimit-Policy`, `ETag` (versioned resources), `Idempotent-Replayed`, `Deprecation`, `Sunset`, `Location` (201/202).
 
 ---
 
@@ -172,7 +172,7 @@ FieldType:
          single_select, multi_select, email, phone, url, rating, collaborator, attachment,
          barcode, link, contact, formula, lookup, rollup, count, autonumber, created_time,
          modified_time, created_by, modified_by, button, ai_generated, json]
-  x-tabula-open-enum: true          # clients must tolerate new values
+  x-tableos-open-enum: true          # clients must tolerate new values
 ```
 
 ### 3.2 Problem
@@ -203,7 +203,7 @@ Problem:
   additionalProperties: true        # code-specific extension members (retryAfterMs, currentResource, limit…)
 ErrorCode:
   type: string
-  x-tabula-open-enum: true
+  x-tableos-open-enum: true
   enum: [UNAUTHENTICATED, INVALID_TOKEN, TOKEN_EXPIRED, TOKEN_REVOKED, MFA_REQUIRED, CSRF_TOKEN_INVALID,
          INSUFFICIENT_SCOPE, PERMISSION_DENIED, FIELD_NOT_EDITABLE, VIEW_LOCKED, TOKEN_RESOURCE_RESTRICTED,
          IP_NOT_ALLOWED, SSO_REQUIRED, API_ACCESS_DISABLED, ORG_POLICY_VIOLATION, PLAN_LIMIT_EXCEEDED,
@@ -263,7 +263,7 @@ FilterCondition:
     fieldId:  { type: string, description: Field ID (or name when fieldKey=name) }
     operator:
       type: string
-      x-tabula-open-enum: true
+      x-tableos-open-enum: true
       description: Operator names per 11-filter-sort-group.md, validated per field type
       examples: [eq, neq, gt, gte, lt, lte, contains, not_contains, starts_with, is_empty, is_not_empty,
                  in, not_in, has_any_of, has_all_of, has_none_of, is_within, is_before, is_after, is_me]
@@ -484,7 +484,7 @@ DeletedResource:
 | `POST /v1/auth/oauth/revoke` | RFC 7009 revoke | client auth | `token, token_type_hint` → `200` | |
 | `POST /v1/auth/oauth/introspect` | RFC 7662 | confidential client | `token` → `200 { active, scope, client_id, sub, exp }` | |
 | `GET /.well-known/oauth-authorization-server` | RFC 8414 metadata | public | → `200` | |
-| `POST /v1/auth/ws-ticket` | Single-use WebSocket ticket | session or bearer (`records:read`) | `{ baseIds?: [] }` → `200 { ticket, expiresAt, url: "wss://rt.tabula.example/v1/ws" }` | |
+| `POST /v1/auth/ws-ticket` | Single-use WebSocket ticket | session or bearer (`records:read`) | `{ baseIds?: [] }` → `200 { ticket, expiresAt, url: "wss://rt.tableos.example/v1/ws" }` | |
 | `POST /v1/auth/password/forgot` / `:reset` | Password reset | public | `{ email }` → `202` always; `{ token, newPassword }` → `204` | `422 FIELD_VALIDATION_FAILED` (weak password) |
 | `POST /v1/auth/email/verify` | Verify email (signup / invitation) | public (token) | `{ token }` → `204` | `401 TOKEN_EXPIRED` |
 
@@ -558,7 +558,7 @@ ApiToken:
 | `GET/PATCH /v1/organizations/{orgId}/policies` | Enterprise policies | `org:admin` | JSON merge patch on `OrgPolicies` → `200` | `403 PLAN_LIMIT_EXCEEDED` (Enterprise-only keys) |
 | `GET/PUT /v1/organizations/{orgId}/sso` | SSO connection config | `org:admin` | `{ protocol: "saml"\|"oidc", metadataXml? \| metadataUrl? \| oidc: { issuer, clientId, clientSecret }, enforce: bool, jitProvisioning: bool, defaultRole }` → `200 SsoConnection` (SP entity ID, ACS URL) | `422 INVALID_REQUEST` (metadata parse) |
 | `POST /v1/organizations/{orgId}/sso:test` | Test SSO login | `org:admin` (session) | → `200 { redirectUrl }` | |
-| `GET /v1/organizations/{orgId}/scim` | SCIM endpoint info | `org:admin` | → `200 { baseUrl: "https://api.tabula.example/scim/v2/{orgId}", tokenPrefix, lastSyncAt, userCount, groupCount }` | |
+| `GET /v1/organizations/{orgId}/scim` | SCIM endpoint info | `org:admin` | → `200 { baseUrl: "https://api.tableos.example/scim/v2/{orgId}", tokenPrefix, lastSyncAt, userCount, groupCount }` | |
 | `POST /v1/organizations/{orgId}/scim:rotate-token` | Rotate SCIM bearer | `org:admin` + step-up | → `200 { token }` (once) | |
 | `GET/POST /v1/organizations/{orgId}/service-accounts` (+ `/{svcId}`, `/{svcId}/tokens`) | Service accounts & tokens | `org:admin` | `{ name, description }` → `201 ServiceAccount`; tokens like PATs | `403 PLAN_LIMIT_EXCEEDED` |
 | `GET /v1/organizations/{orgId}/oauth-apps` (+ approve/block) | OAuth app allow-list | `org:admin` | `PATCH { appId, status: "approved"\|"blocked" }` | |
@@ -936,7 +936,7 @@ Element endpoints exist because interface-only users have **no table-level acces
 | `GET /v1/bases/{baseId}/automations/{automationId}/runs/{runId}` | Run detail incl. step runs (inputs/outputs redacted for secrets) | `automations:read` | → `200 AutomationRun { id, status, trigger: { eventId, type, recordId? }, startedAt, finishedAt, steps: [StepRun] , causationDepth }` | |
 | `POST /v1/bases/{baseId}/automations/{automationId}/runs/{runId}:retry` | Retry failed run from failed step | `automations:write` | → `202 { runId }` | `409 CONFLICT` (not failed) |
 | `GET /v1/automation-catalog` | Trigger & action types (incl. connector actions) with JSON Schemas | `automations:read` | → `200 { triggers: [...], actions: [...] }` | |
-| `GET/POST/DELETE /v1/bases/{baseId}/inbound-webhooks[/{ihkId}]` (+ `:rotate-secret`) | Inbound webhook endpoints for "webhook received" triggers | `automations:write` | → `201 { id, url: "https://hooks.tabula.example/i/{token}", secret }` | |
+| `GET/POST/DELETE /v1/bases/{baseId}/inbound-webhooks[/{ihkId}]` (+ `:rotate-secret`) | Inbound webhook endpoints for "webhook received" triggers | `automations:write` | → `201 { id, url: "https://hooks.tableos.example/i/{token}", secret }` | |
 
 `TriggerConfig` / `StepConfig` schemas: normative in `14-automation-engine.md`.
 
@@ -1182,7 +1182,7 @@ Normative behavior: `20-import-export-sharing-integrations.md`.
 
 ## 26. Tag: SCIM v2 (RFC 7643/7644)
 
-Base: `https://api.tabula.example/scim/v2/{orgId}`; auth `scimBearer` (token in `core.scim_directories`, hashed). Content type `application/scim+json`. Errors use SCIM error schema (`urn:ietf:params:scim:api:messages:2.0:Error`), not problem+json.
+Base: `https://api.tableos.example/scim/v2/{orgId}`; auth `scimBearer` (token in `core.scim_directories`, hashed). Content type `application/scim+json`. Errors use SCIM error schema (`urn:ietf:params:scim:api:messages:2.0:Error`), not problem+json.
 
 | Method & path | Summary | Notes |
 |---|---|---|
@@ -1192,7 +1192,7 @@ Base: `https://api.tabula.example/scim/v2/{orgId}`; auth `scimBearer` (token in 
 | `GET /Users/{id}` | Get | `id` = `usr_…` |
 | `PUT /Users/{id}` / `PATCH /Users/{id}` | Replace / patch | `active: false` ⇒ deactivate member, revoke sessions & tokens, transfer ownership policy |
 | `DELETE /Users/{id}` | Deprovision | Same as deactivate (data retained); hard removal via admin UI |
-| `GET /Groups`, `POST /Groups`, `GET/PUT/PATCH/DELETE /Groups/{id}` | Teams | `scim_group_mappings` ↔ `teams`; member add/remove via PATCH ops; group → role grants are configured in Tabula, not via SCIM |
+| `GET /Groups`, `POST /Groups`, `GET/PUT/PATCH/DELETE /Groups/{id}` | Teams | `scim_group_mappings` ↔ `teams`; member add/remove via PATCH ops; group → role grants are configured in TableOS, not via SCIM |
 | Enterprise extension | `urn:ietf:params:scim:schemas:extension:enterprise:2.0:User` | `department`, `manager` stored as user attributes for row policies |
 
 ---

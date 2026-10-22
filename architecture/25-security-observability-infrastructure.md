@@ -71,7 +71,7 @@ flowchart LR
     OS[(OpenSearch)]
   end
   EG[Egress proxy - Smokescreen]
-  UC[User-content origin<br/>tabulausercontent.example]
+  UC[User-content origin<br/>tableosusercontent.example]
 
   U --> CF
   P --> CF
@@ -126,7 +126,7 @@ flowchart LR
 | Factor | Details |
 |---|---|
 | **TOTP** (RFC 6238) | 160-bit secret, SHA-1, 6 digits, 30 s step, accept ±1 step; **replay prevention**: store last accepted step counter per factor in `core.user_mfa_factors` and reject reuse. Secret envelope-encrypted (42.14). Enrollment requires confirming a code. |
-| **WebAuthn / passkeys** | `@simplewebauthn/server`; RP ID `tabula.example`; `userVerification: 'preferred'` (required for passwordless passkey login), attestation `none` (Enterprise may require `direct` + AAGUID allowlist for hardware keys); sign counter checked (warn on regress for non-synced authenticators); credential public key + transports stored in `core.user_mfa_factors`. Challenges stored in Redis `webauthn:chal:{sessionOrFlowId}` (TTL 5 min, single-use). |
+| **WebAuthn / passkeys** | `@simplewebauthn/server`; RP ID `tableos.example`; `userVerification: 'preferred'` (required for passwordless passkey login), attestation `none` (Enterprise may require `direct` + AAGUID allowlist for hardware keys); sign counter checked (warn on regress for non-synced authenticators); credential public key + transports stored in `core.user_mfa_factors`. Challenges stored in Redis `webauthn:chal:{sessionOrFlowId}` (TTL 5 min, single-use). |
 | **Recovery codes** | 10 codes × 10 chars (base32 Crockford, ~50 bits each) shown once; stored as HMAC-SHA256(pepper, code) (high entropy ⇒ fast hash fine); single-use; regenerating invalidates old set; using one triggers an email + audit event. |
 | SMS | **Not offered** (SIM swap risk); may be added only as a recovery-notification channel. |
 
@@ -156,7 +156,7 @@ sequenceDiagram
   end
   A->>P: INSERT sessions (token_hash, mfa_level, device, ip, expires)
   A->>R: sess:{tokenHash}
-  A-->>B: Set-Cookie __Host-tabula_sid (HttpOnly, Secure, SameSite=Lax) + __Host-tabula_csrf
+  A-->>B: Set-Cookie __Host-tableos_sid (HttpOnly, Secure, SameSite=Lax) + __Host-tableos_csrf
   A->>P: outbox session.created → audit
 ```
 
@@ -184,13 +184,13 @@ sequenceDiagram
 
 ### 42.4.2 Session token design
 
-* Token: 32 random bytes (CSPRNG) → base64url; cookie `__Host-tabula_sid` (no `Domain`, `Path=/`, `Secure`, `HttpOnly`, `SameSite=Lax`). `__Host-` prefix pins it to the app origin.
+* Token: 32 random bytes (CSPRNG) → base64url; cookie `__Host-tableos_sid` (no `Domain`, `Path=/`, `Secure`, `HttpOnly`, `SameSite=Lax`). `__Host-` prefix pins it to the app origin.
 * Stored: `core.sessions.token_hash = SHA-256(token)` (high entropy ⇒ no slow hash), plus `user_id`, `org context`, `created_at`, `last_seen_at`, `last_auth_at`, `mfa_level` (`none|totp|webauthn|sso`), `auth_method`, `device_label` (parsed UA), `ip`, `ip_country`, `idle_expires_at`, `absolute_expires_at`, `revoked_at`, `rotated_from`.
 * Cache: Redis `sess:{tokenHash}` → compact session JSON, TTL = min(remaining idle, 10 min). Cache invalidation on revoke publishes on `sess-revoke` pub/sub so realtime pods drop sockets of that session immediately.
 * **Timeouts** (defaults; org policy can tighten): idle **14 days**, absolute **30 days** for standard orgs; Enterprise configurable idle 15 min–30 days, absolute 1–90 days. `last_seen_at` updated at most every 5 min (write amplification guard).
 * **Rotation:** new token on login, MFA completion, step-up, privilege change (org role change), and every **24 h** of activity; the previous token remains valid for a **60 s grace** (concurrent in-flight requests/tabs) via `rotated_from`. Reuse of a rotated token after grace → revoke the whole session (theft signal) and audit.
 * **Device list** (`/settings/security`): sessions with device, location (country/city from IP), last active, current marker; revoke one / revoke all others. Admins can revoke all sessions of an org member; SCIM deactivation and password change revoke all sessions.
-* **Realtime ticket:** `POST /v1/auth/ws-ticket` → JWT `{iss:'tabula-api', aud:'tabula-realtime', sub: userId, sid: sessionIdHash, bases?: [...], jti, exp: now+30s}` signed **EdDSA (Ed25519)** with keys from Secrets Manager (`kid` rotation, JWKS shared internally). Gateway verifies, enforces single use via Redis `SET ws:ticket:{jti} NX EX 60`, binds the socket to `sid`; re-validates the session every 5 min and on `sess-revoke` events.
+* **Realtime ticket:** `POST /v1/auth/ws-ticket` → JWT `{iss:'tableos-api', aud:'tableos-realtime', sub: userId, sid: sessionIdHash, bases?: [...], jti, exp: now+30s}` signed **EdDSA (Ed25519)** with keys from Secrets Manager (`kid` rotation, JWKS shared internally). Gateway verifies, enforces single use via Redis `SET ws:ticket:{jti} NX EX 60`, binds the socket to `sid`; re-validates the session every 5 min and on `sess-revoke` events.
 * **Service-to-service JWT:** `aud` = target role, `exp` ≤ 5 min, carries `org_id`/`workspace_id` scope and `run_id` for sandbox callbacks; never accepted on public endpoints. In-cluster traffic additionally restricted by NetworkPolicies (44.6).
 
 ## 42.5 OAuth 2.1 authorization server (third-party apps)
@@ -211,7 +211,7 @@ sequenceDiagram
 * `core.sso_connections` stores our side (org, Jackson tenant/product refs, enforced flag, default role, attribute mapping); Jackson stores IdP metadata/certs.
 * SAML hardening: signed assertions **required** (response or assertion), SHA-256+; audience & recipient & destination checks; `NotBefore/NotOnOrAfter` with **2 min skew**; `InResponseTo` validation for SP-initiated; assertion ID **replay cache** (Redis, TTL = assertion validity); XML signature wrapping defenses (Jackson uses hardened libs; we run SAML conformance fuzz tests); IdP-initiated SSO **disabled by default**, opt-in per connection with RelayState allowlist.
 * OIDC: auth code + PKCE, `state` + `nonce`, `iss` check (RFC 9207), ID token signature from IdP JWKS.
-* **Domain verification:** `core.organization_domains` verified by DNS TXT `tabula-verification=<token>` (re-verified weekly). With **SSO enforcement**, users whose email is on a verified domain must log in via SSO (password login rejected with `SSO_REQUIRED`); **break-glass**: org owners may keep a password+WebAuthn login (policy toggle, audited).
+* **Domain verification:** `core.organization_domains` verified by DNS TXT `tableos-verification=<token>` (re-verified weekly). With **SSO enforcement**, users whose email is on a verified domain must log in via SSO (password login rejected with `SSO_REQUIRED`); **break-glass**: org owners may keep a password+WebAuthn login (policy toggle, audited).
 * **JIT provisioning:** first SSO login creates `core.users` + `organization_members` (role from mapping, default `member`), group claims mapped to teams if SCIM is not used. Email change via IdP is matched on stable `NameID`/`sub` stored in `user_identities`, not email.
 * Session lifetime for SSO users follows org policy; optional `ForceAuthn` for step-up.
 
@@ -224,29 +224,29 @@ sequenceDiagram
 
 ## 42.8 CSRF and origin model
 
-* **Origin topology:** the SPA is served from `app.tabula.example`; first-party API calls go **same-origin** to `app.tabula.example/api/v1/*` and WS to `app.tabula.example/rt` (CloudFront path behaviors → ALB). The public API host `api.tabula.example` accepts **bearer tokens only** and **rejects cookies** (ignores `Cookie` header entirely). This removes CORS-with-credentials from the design and confines CSRF surface to the app origin.
+* **Origin topology:** the SPA is served from `app.tableos.example`; first-party API calls go **same-origin** to `app.tableos.example/api/v1/*` and WS to `app.tableos.example/rt` (CloudFront path behaviors → ALB). The public API host `api.tableos.example` accepts **bearer tokens only** and **rejects cookies** (ignores `Cookie` header entirely). This removes CORS-with-credentials from the design and confines CSRF surface to the app origin.
 * Defenses on cookie-authenticated, state-changing requests:
   1. `SameSite=Lax` session cookie (blocks cross-site subresource/POST requests).
-  2. **Signed double-submit token**: cookie `__Host-tabula_csrf` (non-HttpOnly) = `base64url(random) + '.' + HMAC(key, sessionId + random)`; the SPA echoes it in `X-CSRF-Token`; server checks header == cookie and HMAC binds it to the session (defeats cookie-injection from sibling subdomains).
-  3. `Origin` (fallback `Sec-Fetch-Site`) must be `https://app.tabula.example` for non-GET.
+  2. **Signed double-submit token**: cookie `__Host-tableos_csrf` (non-HttpOnly) = `base64url(random) + '.' + HMAC(key, sessionId + random)`; the SPA echoes it in `X-CSRF-Token`; server checks header == cookie and HMAC binds it to the session (defeats cookie-injection from sibling subdomains).
+  3. `Origin` (fallback `Sec-Fetch-Site`) must be `https://app.tableos.example` for non-GET.
   4. No state changes on GET.
 * Login CSRF: login/SSO-start forms carry a pre-session CSRF token; OAuth/SSO flows use `state`.
 * Public forms (share origin) are unauthenticated; spam/abuse controls apply instead (42.17).
 
 ## 42.9 XSS & content security
 
-* **React escaping** by default; `dangerouslySetInnerHTML` banned by ESLint except in `@tabula/ui/SafeHtml`, which requires a `TrustedHTML` from our DOMPurify policy.
+* **React escaping** by default; `dangerouslySetInnerHTML` banned by ESLint except in `@tableos/ui/SafeHtml`, which requires a `TrustedHTML` from our DOMPurify policy.
 * **Rich text** (long text rich mode) is stored as **ProseMirror JSON**, not HTML (00 §4: `{doc, plain}`). Rendering maps nodes/marks through our schema → no HTML injection path. Server validates documents against the schema (unknown nodes/marks/attrs dropped; link `href` restricted to `http`, `https`, `mailto`, `tel`).
 * **HTML ingestion** (paste from web, imports, email-to-record, rich text from API in HTML form): sanitized **server-side** with DOMPurify (jsdom) using an allowlist profile, then converted to ProseMirror JSON; **client-side** DOMPurify again before any HTML is inserted (paste preview). Same profile in both places (shared config package).
 * **Markdown** (comments, descriptions, interface text elements): `markdown-it` with `html: false`, `linkify`, safe link validator, `rel="noopener noreferrer ugc nofollow"` and `target=_blank` for external links.
 * **URL fields / buttons:** open only `http(s)`, `mailto`, `tel`; others rendered as text. `javascript:`/`data:` blocked at write time and render time.
 * **CSP** (app origin; SPA shell is static from S3/CloudFront):
-  * Static shell → **hash-based** strict CSP (the shell's single inline bootstrap script is hashed at build): `script-src 'sha256-…' 'strict-dynamic'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types tabula-dompurify default; connect-src 'self' https://*.sentry.io; img-src 'self' https://*.tabulausercontent.example data: blob:; style-src 'self' 'unsafe-inline'`(vanilla-extract emits static CSS; `'unsafe-inline'` style kept only for Radix positioning styles — inline style attributes, not scripts); `report-to csp`.
+  * Static shell → **hash-based** strict CSP (the shell's single inline bootstrap script is hashed at build): `script-src 'sha256-…' 'strict-dynamic'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; require-trusted-types-for 'script'; trusted-types tableos-dompurify default; connect-src 'self' https://*.sentry.io; img-src 'self' https://*.tableosusercontent.example data: blob:; style-src 'self' 'unsafe-inline'`(vanilla-extract emits static CSS; `'unsafe-inline'` style kept only for Radix positioning styles — inline style attributes, not scripts); `report-to csp`.
   * **Server-rendered pages** (auth pages rendered by api, OAuth consent, SSO interstitials, share-page OG shell when rendered by edge function) → **per-response nonces** (`script-src 'nonce-{128-bit}' 'strict-dynamic'`). Both patterns are "strict CSP"; nonces need dynamic HTML, hashes suit static shells — we use each where it fits.
   * CSP violation reports → `/api/v1/csp-reports` → logs/metrics (sampled).
   * Additional headers: `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy` (camera/mic/geolocation off except where used), `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-site`.
-* **User-content domain:** attachments and previews are served from **`*.tabulausercontent.example`** (separate registrable domain → no cookie/origin sharing with the app) via CloudFront signed URLs (short TTL, 1 h default, bound to attachment & variant). For active types (HTML, SVG, XML, PDF in-browser) responses add `Content-Security-Policy: sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'` and `Content-Disposition: attachment` unless previewing an inert type; SVG thumbnails are **rasterized** server-side. PDF preview uses pdf.js inside a sandboxed iframe on the user-content origin.
-* **Embeds & extensions:** interface embed elements and future custom extensions run in `<iframe sandbox="allow-scripts">` on per-base subdomains of the user-content domain (`{baseHash}.ext.tabulausercontent.example`), communicating via a validated `postMessage` API with origin checks.
+* **User-content domain:** attachments and previews are served from **`*.tableosusercontent.example`** (separate registrable domain → no cookie/origin sharing with the app) via CloudFront signed URLs (short TTL, 1 h default, bound to attachment & variant). For active types (HTML, SVG, XML, PDF in-browser) responses add `Content-Security-Policy: sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'` and `Content-Disposition: attachment` unless previewing an inert type; SVG thumbnails are **rasterized** server-side. PDF preview uses pdf.js inside a sandboxed iframe on the user-content origin.
+* **Embeds & extensions:** interface embed elements and future custom extensions run in `<iframe sandbox="allow-scripts">` on per-base subdomains of the user-content domain (`{baseHash}.ext.tableosusercontent.example`), communicating via a validated `postMessage` API with origin checks.
 * **Interface/branding:** no arbitrary CSS/HTML from users (doc 24 §41.5).
 
 ## 42.10 SQL injection
@@ -263,18 +263,18 @@ sequenceDiagram
 
 ## 42.11 SSRF & egress control
 
-All user-directed outbound HTTP — outbound webhooks, automation "send HTTP request" actions, scripts' `fetch`, integration API calls, import-from-URL, attachment-from-URL, URL unfurls, HIBP — goes through **`@tabula/egress`**, a client that *only* talks to the **egress proxy**.
+All user-directed outbound HTTP — outbound webhooks, automation "send HTTP request" actions, scripts' `fetch`, integration API calls, import-from-URL, attachment-from-URL, URL unfurls, HIBP — goes through **`@tableos/egress`**, a client that *only* talks to the **egress proxy**.
 
 * **Proxy:** **Smokescreen** (Stripe's CONNECT/HTTP proxy) as a Deployment in the `egress` namespace with dedicated NAT gateway EIPs (published so customers can allowlist our IPs).
 * Rules: deny RFC 1918, loopback, link-local (`169.254.0.0/16` incl. IMDS `169.254.169.254`), `100.64.0.0/10` (CGNAT), `0.0.0.0/8`, multicast, `fc00::/7`, `fe80::/10`, `::1`, IPv4-mapped IPv6 forms, our VPC CIDRs and AWS service endpoints; ports allowlist `80, 443, 8080, 8443` (others via Enterprise allowlist).
 * **DNS rebinding protection:** Smokescreen resolves the hostname once, validates the **resolved IP**, and connects to that IP (no second resolution); redirects are followed by our client (max 5) and each hop re-validated through the proxy.
 * Defense in depth: Kubernetes NetworkPolicies/Security Groups deny direct internet egress from `workers`, `sandbox`, `api` pods except to the proxy and AWS VPC endpoints; **IMDSv2 required with hop limit 1** (pods can't reach node metadata; IRSA/Pod Identity for AWS creds).
 * Limits: connect timeout 5 s, total 30 s (webhooks 10 s), response body ≤ 10 MB (imports: stream to S3 with plan limit), header size ≤ 64 KB, no `file://`/`gopher://` (scheme allowlist).
-* Per-tenant identity: proxy requests carry `X-Tabula-Egress-Role` (`webhook|automation|integration|import|unfurl`) + `workspace_id` for logging and per-tenant rate limiting; abuse (scanning) detection alerts on high deny rates.
+* Per-tenant identity: proxy requests carry `X-TableOS-Egress-Role` (`webhook|automation|integration|import|unfurl`) + `workspace_id` for logging and per-tenant rate limiting; abuse (scanning) detection alerts on high deny rates.
 
 ## 42.12 File upload security
 
-Pipeline (D15, detail in doc 18): presigned multipart upload → `tabula-uploads-quarantine` → scan → promote to `tabula-attachments`.
+Pipeline (D15, detail in doc 18): presigned multipart upload → `tableos-uploads-quarantine` → scan → promote to `tableos-attachments`.
 
 * Presigned policy: exact key (`{workspaceId}/{baseId}/{attachmentId}/original`), `content-length-range` ≤ plan max file size, expiry 15 min, checksum (`x-amz-checksum-sha256`) required.
 * After upload: **magic-byte type detection** (`file-type`) overrides client MIME; mismatch flagged; executables/scripts allowed as files but always served `Content-Disposition: attachment`.
@@ -301,7 +301,7 @@ Pipeline (D15, detail in doc 18): presigned multipart upload → `tabula-uploads
 * **Application-level envelope encryption** for high-value secrets: `data.secrets`, `data.integration_connections` credentials, `core.user_mfa_factors` TOTP secrets, webhook signing secrets, SSO client secrets.
   * Per-workspace **DEK** (AES-256-GCM) generated via KMS `GenerateDataKey`, stored **wrapped** with the workspace's KMS key alias; plaintext DEKs cached in memory ≤ 5 min (LRU), never persisted.
   * Ciphertext format: `v1.{kid}.{nonce96}.{ciphertext}.{tag}` with **AAD = `table:column:row_id:workspace_id`** to prevent ciphertext swapping between rows/tenants.
-  * Library: our `@tabula/crypto` wrapping Node `crypto` (no hand-rolled primitives); key rotation = new DEK version; lazy re-encryption on write + background job.
+  * Library: our `@tableos/crypto` wrapping Node `crypto` (no hand-rolled primitives); key rotation = new DEK version; lazy re-encryption on write + background job.
 * **BYOK (Enterprise):** customer-managed KMS key in the customer's AWS account with a key policy granting our role `Encrypt/Decrypt/GenerateDataKey/ReEncrypt*` (grants auditable by the customer in their CloudTrail).
   * Requires a **dedicated shard** (D4). Two layers: (1) the shard's RDS storage, snapshots and backups are encrypted with the **customer's key** (RDS accepts a cross-account KMS key in the same region when the key policy grants our account); (2) optionally, **field-level envelope encryption** of designated sensitive fields' cell values with DEKs wrapped by the customer key. Layer 2 makes those fields non-filterable/non-sortable server-side (no sidecar index, no search indexing) — a documented trade-off, opt-in per field (ADR).
   * Attachments for BYOK orgs: S3 SSE-KMS with the customer key (cross-account key usable by S3).
@@ -330,7 +330,7 @@ Pipeline (D15, detail in doc 18): presigned multipart upload → `tabula-uploads
 * Stored: `HMAC-SHA256(server_pepper, secret)` (fast hash is appropriate for 256-bit secrets; pepper prevents offline verification from a DB leak). Shown **once**; UI shows `tab_pat_…<last4>`, name, scopes, resources, created, last used (updated ≤ every 5 min), expiry.
 * **Scopes** same vocabulary as OAuth (42.5) + **resource restrictions** (specific workspaces/bases) + optional IP allowlist (Enterprise). Effective permission = token scopes ∩ owner's current permissions (doc 19) — a demoted user's tokens lose access immediately.
 * Creating tokens requires step-up (42.3.5); org admins can list/revoke members' tokens touching org resources, require expiry, or disable PATs (service accounts only).
-* **Leak scanning:** join the **GitHub secret scanning partner program**: register regex `tab_(pat|sat|oat|ort)_[0-9A-Za-z]{22}_[0-9A-Za-z]{43}` and a verification endpoint `POST https://api.tabula.example/v1/security/secret-scanning/github` that verifies GitHub's ECDSA signature (keys fetched from GitHub's public key API, cached), checks the checksum and DB, **revokes** matching tokens automatically, emails the owner, and audits `api_token.revoked (reason=leaked_public)`. Also scan our own logs/support tickets for the pattern; Enterprise SIEM receives the event.
+* **Leak scanning:** join the **GitHub secret scanning partner program**: register regex `tab_(pat|sat|oat|ort)_[0-9A-Za-z]{22}_[0-9A-Za-z]{43}` and a verification endpoint `POST https://api.tableos.example/v1/security/secret-scanning/github` that verifies GitHub's ECDSA signature (keys fetched from GitHub's public key API, cached), checks the checksum and DB, **revokes** matching tokens automatically, emails the owner, and audits `api_token.revoked (reason=leaked_public)`. Also scan our own logs/support tickets for the pattern; Enterprise SIEM receives the event.
 
 ## 42.17 Rate limiting & abuse prevention
 
@@ -341,7 +341,7 @@ Layers: **AWS WAF** (managed rule groups: Core, Known Bad Inputs, IP reputation,
 | **Signup abuse** (spam workspaces, free-tier farming, phishing hosting) | WAF CAPTCHA/Challenge on signup for low bot-score; disposable email domain blocklist; per-IP/ASN signup velocity; email verification required before sharing/automation emails/public forms; new-account trust score (age, verification, payment) gates limits; device fingerprint hash (privacy-reviewed) for repeat offenders |
 | **Public form spam** | Honeypot field + time-to-submit heuristic; Cloudflare **Turnstile** (privacy-preserving, invisible; acceptable third-party) or AWS WAF CAPTCHA on suspicion; per-IP & per-form rate limits (default 10/min/IP, 1,000/h/form, owner-adjustable); payload size & attachment limits; link-count heuristic; owner-facing spam folder (`form.submitted` flagged) |
 | **Share link brute force** | 128-bit random tokens (`shr_` + secret part) — infeasible to guess; still: per-IP 404 rate limit on `/s/*` (WAF), password-protected shares hash with Argon2id + per-share attempt throttling (5/min/IP) + lockout notifications; share link expiry & domain restriction options |
-| **Automation email abuse** (phishing via our domain) | Emails sent from `notifications@mail.tabula.example` with user's name as display and `Reply-To` user address; never spoof customer domains (custom sending domains require DKIM/SPF verification — Enterprise); per-workspace daily caps by plan & trust score; new-workspace throttling; content scanning (URL reputation via Safe Browsing API, phishing keywords classifier); bounce/complaint handling → `core.email_suppressions`; automatic pause & review queue on complaint-rate > 0.1% |
+| **Automation email abuse** (phishing via our domain) | Emails sent from `notifications@mail.tableos.example` with user's name as display and `Reply-To` user address; never spoof customer domains (custom sending domains require DKIM/SPF verification — Enterprise); per-workspace daily caps by plan & trust score; new-workspace throttling; content scanning (URL reputation via Safe Browsing API, phishing keywords classifier); bounce/complaint handling → `core.email_suppressions`; automatic pause & review queue on complaint-rate > 0.1% |
 | **API abuse / scraping** | Per-token, per-base and per-org limits; query cost guard (doc 17); anomaly alerts on export volume |
 | **Crypto-mining / compute abuse in scripts** | CPU time limits, run budgets, egress anomaly detection, sandbox pool quotas per workspace |
 | **Hosting malicious content** (attachments, public shares) | ClamAV, URL reputation for share pages, abuse report endpoint (`abuse@`, in-page "Report"), takedown tooling for Trust & Safety with audit |
@@ -361,7 +361,7 @@ Tenant isolation is tested **continuously**, not just reviewed:
 
 ## 42.19 Audit logging
 
-* Store: `audit.audit_events` (monthly partitions, hot 90 days; archived to `tabula-audit-archive` as Parquet with **S3 Object Lock** (compliance mode for Enterprise retention up to 7 years)); fed by the `tabula.audit.v1` topic (00 §7) from the audit writer.
+* Store: `audit.audit_events` (monthly partitions, hot 90 days; archived to `tableos-audit-archive` as Parquet with **S3 Object Lock** (compliance mode for Enterprise retention up to 7 years)); fed by the `tableos.audit.v1` topic (00 §7) from the audit writer.
 * Event schema: `id, occurred_at, org_id, workspace_id?, base_id?, actor {type,id,ip,ua,session_id_hash,via, impersonator?}, action (canonical event name or admin action), target {type,id}, outcome (success|denied|failure), request_id, trace_id, metadata (diff of settings, never cell values)`.
 * Audited: all identity events (00 §6 Identity group), member/role/grant changes, sharing changes, SSO/SCIM config and provisioning actions, token lifecycle, exports/downloads of full bases, admin policy changes, support access grants and every staff action under them, permission-denied events (sampled for high volume), webhook/integration connections, automation publishes, AI policy changes, key (BYOK) events.
 * **Integrity:** append-only (writer role has `INSERT` only; no `UPDATE/DELETE` grants; partitions detached → archived), per-org daily **hash chain** (`hash_n = SHA-256(hash_{n-1} || canonical_event)`) with the daily root stored in the archive manifest → tamper evidence verifiable by customers on export.
@@ -415,7 +415,7 @@ Tenant isolation is tested **continuously**, not just reviewed:
 
 ## 43.1 Goals
 
-1. Answer "is Tabula healthy for **this customer** right now?" within 2 minutes (tenant-aware signals).
+1. Answer "is TableOS healthy for **this customer** right now?" within 2 minutes (tenant-aware signals).
 2. Every request, job, event and realtime frame is traceable end-to-end via one `trace_id` / `correlationId`.
 3. SLOs drive alerting (symptoms, not causes); dashboards help diagnose causes.
 4. No customer content or secrets in telemetry; PII minimized and redacted.
@@ -470,7 +470,7 @@ Canonical log line schema (all roles):
 ```json
 {
   "ts": "2026-10-03T14:05:00.123Z", "level": "info", "msg": "record.batch_update.completed",
-  "service": "tabula", "role": "api", "version": "2026.10.03-1a2b3c", "region": "us-east-1", "cell": "use1-c3",
+  "service": "tableos", "role": "api", "version": "2026.10.03-1a2b3c", "region": "us-east-1", "cell": "use1-c3",
   "env": "prod", "pod": "api-7d9f…",
   "request_id": "req_01J…", "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736", "span_id": "00f067aa0ba902b7",
   "correlation_id": "…", "causation_id": "evt_…",
@@ -492,17 +492,17 @@ Canonical log line schema (all roles):
 
 ## 43.4 Metrics
 
-Conventions: OTel semantic conventions where they exist; custom metrics prefixed `tabula_`; units in names (`_seconds`, `_bytes`, `_total`); histograms use **exponential/native histograms** to keep series counts low.
+Conventions: OTel semantic conventions where they exist; custom metrics prefixed `tableos_`; units in names (`_seconds`, `_bytes`, `_total`); histograms use **exponential/native histograms** to keep series counts low.
 
-**Cardinality rules:** allowed labels: `role`, `route` (templated), `method`, `status_class`, `queue`, `shard`, `cell`, `region`, `plan_tier`, `op_kind`, `field_type`, `view_type`, `outcome`. **Forbidden as labels:** `org_id`, `workspace_id`, `base_id`, `user_id`, `record_id`, raw URLs. Per-tenant visibility comes from (a) **exemplars** linking metrics to traces, (b) logs/traces queryable by tenant id, (c) a **top-N tenant** recording job that emits `tabula_tenant_*` series only for the 200 heaviest orgs (by usage counters), and (d) the usage pipeline (`tabula.usage.v1`).
+**Cardinality rules:** allowed labels: `role`, `route` (templated), `method`, `status_class`, `queue`, `shard`, `cell`, `region`, `plan_tier`, `op_kind`, `field_type`, `view_type`, `outcome`. **Forbidden as labels:** `org_id`, `workspace_id`, `base_id`, `user_id`, `record_id`, raw URLs. Per-tenant visibility comes from (a) **exemplars** linking metrics to traces, (b) logs/traces queryable by tenant id, (c) a **top-N tenant** recording job that emits `tableos_tenant_*` series only for the 200 heaviest orgs (by usage counters), and (d) the usage pipeline (`tableos.usage.v1`).
 
 ### 43.4.1 RED (request-driven) & USE (resources)
 
 | Signal | Metric | Labels |
 |---|---|---|
 | Rate / Errors / Duration (HTTP) | `http.server.request.duration` (histogram), `http.server.requests` | route, method, status_class, role |
-| gRPC/internal | `tabula_internal_call_duration_seconds` | target, outcome |
-| Jobs | `tabula_job_duration_seconds`, `tabula_job_total{outcome}`, `tabula_job_attempts` | queue |
+| gRPC/internal | `tableos_internal_call_duration_seconds` | target, outcome |
+| Jobs | `tableos_job_duration_seconds`, `tableos_job_total{outcome}`, `tableos_job_attempts` | queue |
 | CPU/memory/saturation | node/pod metrics (cAdvisor, kube-state-metrics), Node event-loop lag `nodejs_eventloop_lag_p99_seconds`, GC pause | role |
 | Postgres | connections, active/idle-in-tx, TPS, cache hit, replication lag, locks, deadlocks, xid age (postgres_exporter / CloudWatch) | shard |
 | Redis | memory, evictions, ops/s, latency, connected clients, BullMQ keys | cluster |
@@ -512,39 +512,39 @@ Conventions: OTel semantic conventions where they exist; custom metrics prefixed
 
 | Metric | Type | Labels | Meaning / target |
 |---|---|---|---|
-| `tabula_grid_page_duration_seconds` | histogram | view_type, plan_tier, shard, sidecar(bool) | server time for `records:query` window (p95 ≤ 250 ms) |
-| `tabula_record_write_duration_seconds` | histogram | op_kind (cell, batch, create, delete, link), transport (ws, rest) | command → commit (p95 ≤ 150 ms) |
-| `tabula_op_ack_latency_seconds` | histogram | transport | WS op received → op_ack sent |
-| `tabula_compute_sync_duration_seconds` | histogram | — | synchronous recompute inside write tx |
-| `tabula_compute_lag_seconds` | gauge (oldest `computed_stale` age) | shard | deferred compute lag (p95 ≤ 10 s) |
-| `tabula_computed_stale_rows` | gauge | shard | backlog size |
-| `tabula_automation_run_latency_seconds` | histogram | trigger_type | event occurred → run started (p95 ≤ 5 s) |
-| `tabula_automation_run_duration_seconds` | histogram | outcome | run total |
-| `tabula_automation_runs_total` | counter | outcome (success, failed, skipped_loop, budget_exceeded), trigger_type | failure rate |
-| `tabula_queue_depth` | gauge | queue, state (waiting, delayed, active) | BullMQ depth |
-| `tabula_queue_oldest_job_age_seconds` | gauge | queue | **age is the alerting signal**, not depth |
-| `tabula_relay_lag_seconds` | gauge | shard | commit time → published to Kafka |
-| `tabula_replication_slot_lag_bytes` | gauge | shard, slot | `pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)` — disk-fill risk |
-| `tabula_ws_connections` | gauge | realtime pod, cell | active sockets |
-| `tabula_ws_subscriptions` | gauge | — | active base subscriptions |
-| `tabula_realtime_fanout_latency_seconds` | histogram | — | change commit → frame written to sockets (p95 ≤ 150 ms) |
-| `tabula_realtime_resync_total` | counter | reason (gap_too_old, too_many) | client resyncs |
-| `tabula_search_index_lag_seconds` | gauge | shard | event time → indexed (p95 ≤ 30 s) |
-| `tabula_webhook_delivery_latency_seconds`, `tabula_webhook_deliveries_total{outcome}` | histogram/counter | — | outbound webhooks |
-| `tabula_permission_snapshot_build_seconds`, `tabula_permission_cache_hit_ratio` | histogram/gauge | — | doc 19 |
-| `tabula_schema_cache_hit_ratio` | gauge | — | Redis schema snapshots |
-| `tabula_file_scan_duration_seconds`, `tabula_attachments_rejected_total` | histogram/counter | — | file pipeline |
-| `tabula_ai_invocation_duration_seconds`, `tabula_ai_tokens_total`, `tabula_ai_cost_usd_total` | histogram/counter | model, feature | doc 21 |
-| `tabula_egress_requests_total{decision}` | counter | role, decision (allow/deny) | SSRF attempts |
-| `tabula_auth_logins_total{outcome}`, `tabula_mfa_challenges_total` | counter | method | security monitoring |
-| `tabula_rate_limited_total` | counter | scope | abuse/limits |
+| `tableos_grid_page_duration_seconds` | histogram | view_type, plan_tier, shard, sidecar(bool) | server time for `records:query` window (p95 ≤ 250 ms) |
+| `tableos_record_write_duration_seconds` | histogram | op_kind (cell, batch, create, delete, link), transport (ws, rest) | command → commit (p95 ≤ 150 ms) |
+| `tableos_op_ack_latency_seconds` | histogram | transport | WS op received → op_ack sent |
+| `tableos_compute_sync_duration_seconds` | histogram | — | synchronous recompute inside write tx |
+| `tableos_compute_lag_seconds` | gauge (oldest `computed_stale` age) | shard | deferred compute lag (p95 ≤ 10 s) |
+| `tableos_computed_stale_rows` | gauge | shard | backlog size |
+| `tableos_automation_run_latency_seconds` | histogram | trigger_type | event occurred → run started (p95 ≤ 5 s) |
+| `tableos_automation_run_duration_seconds` | histogram | outcome | run total |
+| `tableos_automation_runs_total` | counter | outcome (success, failed, skipped_loop, budget_exceeded), trigger_type | failure rate |
+| `tableos_queue_depth` | gauge | queue, state (waiting, delayed, active) | BullMQ depth |
+| `tableos_queue_oldest_job_age_seconds` | gauge | queue | **age is the alerting signal**, not depth |
+| `tableos_relay_lag_seconds` | gauge | shard | commit time → published to Kafka |
+| `tableos_replication_slot_lag_bytes` | gauge | shard, slot | `pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)` — disk-fill risk |
+| `tableos_ws_connections` | gauge | realtime pod, cell | active sockets |
+| `tableos_ws_subscriptions` | gauge | — | active base subscriptions |
+| `tableos_realtime_fanout_latency_seconds` | histogram | — | change commit → frame written to sockets (p95 ≤ 150 ms) |
+| `tableos_realtime_resync_total` | counter | reason (gap_too_old, too_many) | client resyncs |
+| `tableos_search_index_lag_seconds` | gauge | shard | event time → indexed (p95 ≤ 30 s) |
+| `tableos_webhook_delivery_latency_seconds`, `tableos_webhook_deliveries_total{outcome}` | histogram/counter | — | outbound webhooks |
+| `tableos_permission_snapshot_build_seconds`, `tableos_permission_cache_hit_ratio` | histogram/gauge | — | doc 19 |
+| `tableos_schema_cache_hit_ratio` | gauge | — | Redis schema snapshots |
+| `tableos_file_scan_duration_seconds`, `tableos_attachments_rejected_total` | histogram/counter | — | file pipeline |
+| `tableos_ai_invocation_duration_seconds`, `tableos_ai_tokens_total`, `tableos_ai_cost_usd_total` | histogram/counter | model, feature | doc 21 |
+| `tableos_egress_requests_total{decision}` | counter | role, decision (allow/deny) | SSRF attempts |
+| `tableos_auth_logins_total{outcome}`, `tableos_mfa_challenges_total` | counter | method | security monitoring |
+| `tableos_rate_limited_total` | counter | scope | abuse/limits |
 
-Frontend RUM metrics (43.7) are converted into histograms by the Collector: `tabula_rum_grid_first_paint_seconds`, `tabula_rum_grid_frame_duration_ms`, `tabula_rum_inp_ms`, `tabula_rum_remote_change_latency_seconds`, `tabula_rum_ws_reconnects_total`.
+Frontend RUM metrics (43.7) are converted into histograms by the Collector: `tableos_rum_grid_first_paint_seconds`, `tableos_rum_grid_frame_duration_ms`, `tableos_rum_inp_ms`, `tableos_rum_remote_change_latency_seconds`, `tableos_rum_ws_reconnects_total`.
 
 ## 43.5 Distributed tracing
 
 * **OTel Node SDK** with auto-instrumentation for `http`, `fastify`, `pg`, `ioredis`, `kafkajs`, `undici`; manual spans for domain steps (`permission.check`, `compute.recalc`, `filter.compile`, `automation.step`).
-* **Propagation** (W3C Trace Context + Baggage with an allowlist of keys: `tabula.org_id`, `tabula.base_id`, `tabula.request_id`):
+* **Propagation** (W3C Trace Context + Baggage with an allowlist of keys: `tableos.org_id`, `tableos.base_id`, `tableos.request_id`):
 
 | Hop | Mechanism |
 |---|---|
@@ -556,12 +556,12 @@ Frontend RUM metrics (43.7) are converted into histograms by the Collector: `tab
 | Sandbox | run-scoped JWT carries `traceparent` claim; host-function callbacks continue the trace |
 | Egress proxy | `traceparent` added to outbound webhook requests (customers can correlate) |
 
-* **Sampling:** head sampling 10% for normal traffic (100% for errors via tail), **tail sampling at the Collector gateway**: keep all traces with errors, latency > p99 per route, `tabula.debug=1` baggage, and traces for orgs on a temporary debug list; probabilistic 5% otherwise. Spans for high-volume realtime frames sampled at 0.1%.
+* **Sampling:** head sampling 10% for normal traffic (100% for errors via tail), **tail sampling at the Collector gateway**: keep all traces with errors, latency > p99 per route, `tableos.debug=1` baggage, and traces for orgs on a temporary debug list; probabilistic 5% otherwise. Spans for high-volume realtime frames sampled at 0.1%.
 * Trace retention: 14 days (Tempo); exemplars in Mimir histograms point to retained traces.
 
 ## 43.6 Error tracking (Sentry)
 
-* **Backend:** `@sentry/node` with OTel integration (shares trace ids), environment + release (`tabula@2026.10.03-1a2b3c`), tags: role, route, queue, shard, cell, plan_tier, org_id (as tag, not in message). `beforeSend` scrubs request bodies, headers, and known secret patterns; `sendDefaultPii: false`.
+* **Backend:** `@sentry/node` with OTel integration (shares trace ids), environment + release (`tableos@2026.10.03-1a2b3c`), tags: role, route, queue, shard, cell, plan_tier, org_id (as tag, not in message). `beforeSend` scrubs request bodies, headers, and known secret patterns; `sendDefaultPii: false`.
 * **Frontend:** `@sentry/react` with error boundaries per feature (doc 24 §40.3.4), source maps uploaded from CI (not published publicly; `hidden-source-map`), breadcrumbs filtered (no input values, no URLs with tokens), **Session Replay disabled by default** (privacy: grid content); may be enabled only for internal/staff orgs with all text masked.
 * **Release health:** crash-free sessions/users per release; canary gate reads Sentry release health (44.8) — new release with error rate > 1.5× baseline blocks promotion.
 * Ownership rules map paths/tags to teams; alerts for new issue types in prod to team Slack channels; regressions reopen issues.
@@ -642,7 +642,7 @@ flowchart TB
   CF[CloudFront<br/>app, share, api, usercontent distributions]
   WAF[AWS WAF + Shield Advanced]
   S3web[(S3: SPA assets<br/>app + share builds)]
-  UC[(S3: tabula-attachments / variants<br/>via signed URLs on usercontent domain)]
+  UC[(S3: tableos-attachments / variants<br/>via signed URLs on usercontent domain)]
   ALB[ALB per cell<br/>HTTPS, WS upgrade]
 
   subgraph EKS["EKS cluster per region-cell"]
@@ -706,25 +706,25 @@ flowchart TB
 
 Notes:
 * `relay` connects **directly** to each shard primary (replication connections bypass PgBouncer).
-* `realtime` consumes `tabula.base-changes.v1` (V1) — in the MVP profile, relay → BullMQ/Redis pub-sub per D11.
+* `realtime` consumes `tableos.base-changes.v1` (V1) — in the MVP profile, relay → BullMQ/Redis pub-sub per D11.
 * Two Redis deployments by role (D12/D13): **cache cluster** (eviction allowed, `allkeys-lru` on cache keyspace only — sessions/rate-limits in a separate logical DB with `volatile-*` policy) and **queue cluster** (BullMQ; AOF everysec; `noeviction`).
 
 ## 44.2 Regions, cells and network
 
 * **Cell** = one EKS cluster + one ALB + a set of data shards + Redis + (shared regional) MSK/OpenSearch, sized for ~5–10k active workspaces. Workspaces are pinned to a shard (D3) and therefore to a cell; `core.shards.region` / cell id drives routing. The SPA and CDN are global; the API routes a request to the owning cell via:
   * MVP/V1: a single cell per region; all cells in a region share the control plane.
-  * Multi-cell: CloudFront → **cell router** (lightweight `api` routing layer in a "front" cell, or Lambda@Edge for `bas_`-prefixed paths) using a cached `base_directory`/`workspace_directory` lookup → forwards to the owning cell's ALB. Realtime tickets embed the target cell, so WS connects directly to the right cell host (`rt-{cell}.tabula.example`).
+  * Multi-cell: CloudFront → **cell router** (lightweight `api` routing layer in a "front" cell, or Lambda@Edge for `bas_`-prefixed paths) using a cached `base_directory`/`workspace_directory` lookup → forwards to the owning cell's ALB. Realtime tickets embed the target cell, so WS connects directly to the right cell host (`rt-{cell}.tableos.example`).
 * **Regions:** primary `us-east-1` at launch; `eu-central-1` for EU data residency (V1/Enterprise). The **control plane** is global (D2) — for EU residency, user identity/org metadata needed for login is replicated, while **base content, attachments, search, backups, audit** remain in the EU cell. (Full EU-only control plane = separate "sovereign" deployment; out of scope until demanded.)
 * **VPC:** one per region/environment, /16, three AZs; subnets: public (ALB, NAT), private-app (EKS nodes, /19 each for pod IPs with VPC CNI prefix delegation), private-data (RDS, ElastiCache, MSK, OpenSearch). VPC endpoints for S3 (gateway), KMS, Secrets Manager, ECR, STS, CloudWatch Logs (interface) — reduces NAT cost and keeps AWS API traffic private.
 * **Security groups** per role (`sg-api`, `sg-realtime`, `sg-worker`, `sg-sandbox` (egress to proxy only), `sg-db-shard`, …); DB SGs accept only PgBouncer/relay/migrator SGs.
 
 ## 44.3 Container images
 
-* **One application image** (`tabula-server`) for all process roles (D1); role chosen by entrypoint/args (`node dist/entrypoints/api.js`, `worker.js --queues=compute,search-index` …). Benefits: identical code across roles, one SBOM/signature, simpler rollouts. Separate images:
-  * `tabula-sandbox` (isolated-vm runtime + script host; no app secrets, minimal deps),
-  * `tabula-fileproc` (libvips, ffmpeg, pdfium, ClamAV client — native deps isolated from the main image; runs on the sandbox pool),
-  * `tabula-sso` (SAML Jackson, pinned upstream release, rebuilt by us),
-  * `tabula-migrate` (= server image with `migrate` entrypoint; listed separately for clarity),
+* **One application image** (`tableos-server`) for all process roles (D1); role chosen by entrypoint/args (`node dist/entrypoints/api.js`, `worker.js --queues=compute,search-index` …). Benefits: identical code across roles, one SBOM/signature, simpler rollouts. Separate images:
+  * `tableos-sandbox` (isolated-vm runtime + script host; no app secrets, minimal deps),
+  * `tableos-fileproc` (libvips, ffmpeg, pdfium, ClamAV client — native deps isolated from the main image; runs on the sandbox pool),
+  * `tableos-sso` (SAML Jackson, pinned upstream release, rebuilt by us),
+  * `tableos-migrate` (= server image with `migrate` entrypoint; listed separately for clarity),
   * SPA builds are **not** images — static assets go to S3 with immutable hashed names; `index.html` uploaded last with `Cache-Control: no-cache`.
 * Dockerfile pattern: multi-stage (`pnpm fetch` → `pnpm install --offline --frozen-lockfile` → `turbo build --filter=server` → `pnpm deploy --prod` → runtime on `cgr.dev/chainguard/node:22` (distroless, non-root UID 65532)); `NODE_OPTIONS=--enable-source-maps --max-old-space-size=<75% of limit>`; read-only root FS; `tini` not needed (distroless node handles signals; app implements graceful shutdown).
 * Graceful shutdown: `SIGTERM` → stop accepting (readiness false), drain HTTP (25 s), realtime sends `reconnect` hint frames with jittered delay then closes, workers finish current job or release lock (BullMQ `close()` with timeout) → `terminationGracePeriodSeconds`: api 30, realtime 60, workers 120.
@@ -752,12 +752,12 @@ Notes:
 
 | Namespace | Workloads | Notes |
 |---|---|---|
-| `tabula-edge` | api, sso | PDB minAvailable 66%, topology spread across AZs |
-| `tabula-realtime` | realtime | connection-heavy; long `terminationGracePeriod` |
-| `tabula-workers` | worker deployments per queue group, scheduler, relay | relay: one Deployment per shard group, leader election via Postgres advisory lock / K8s Lease |
-| `tabula-sandbox` | sandbox runners, file processors | `RuntimeClass gvisor`; no SA token automount; NetworkPolicy egress → egress proxy + api internal callback only |
-| `tabula-egress` | Smokescreen | only namespace allowed to reach NAT/internet |
-| `tabula-data` | PgBouncer per shard (2 replicas each), migration Jobs | |
+| `tableos-edge` | api, sso | PDB minAvailable 66%, topology spread across AZs |
+| `tableos-realtime` | realtime | connection-heavy; long `terminationGracePeriod` |
+| `tableos-workers` | worker deployments per queue group, scheduler, relay | relay: one Deployment per shard group, leader election via Postgres advisory lock / K8s Lease |
+| `tableos-sandbox` | sandbox runners, file processors | `RuntimeClass gvisor`; no SA token automount; NetworkPolicy egress → egress proxy + api internal callback only |
+| `tableos-egress` | Smokescreen | only namespace allowed to reach NAT/internet |
+| `tableos-data` | PgBouncer per shard (2 replicas each), migration Jobs | |
 | `observability` | collectors, pganalyze collectors | |
 | `platform` | argo, kyverno, keda, external-secrets, karpenter | restricted admin |
 
@@ -778,8 +778,8 @@ Pod security: PSS `restricted` everywhere (enforced by Kyverno), `runAsNonRoot`,
 | Role | Scaler | Signal | Bounds (per cell, V1 starting point) |
 |---|---|---|---|
 | api | HPA | CPU 60% + custom `http_inflight_requests` per pod (prometheus-adapter) | 6–60 |
-| realtime | HPA | `tabula_ws_connections` per pod target 8,000; CPU 60% | 4–40; scale-down slow (stabilization 15 min) to avoid reconnect churn |
-| worker:`compute` | **KEDA** | `tabula_queue_oldest_job_age_seconds{queue="compute"}` > 5 s and depth (Prometheus scaler) | 2–40 |
+| realtime | HPA | `tableos_ws_connections` per pod target 8,000; CPU 60% | 4–40; scale-down slow (stabilization 15 min) to avoid reconnect churn |
+| worker:`compute` | **KEDA** | `tableos_queue_oldest_job_age_seconds{queue="compute"}` > 5 s and depth (Prometheus scaler) | 2–40 |
 | worker:`automation-trigger`/`automation-step` | KEDA | queue depth + age; Kafka lag of trigger matcher group | 2–80 |
 | worker:`webhook-out`, `email`, `notification` | KEDA | depth/age | 1–30 |
 | worker:`search-index` | KEDA | Kafka consumer lag (Kafka scaler) | 1–20 |
@@ -810,7 +810,7 @@ flowchart LR
 ```
 
 * **GitHub Actions** workflows: `ci.yml` (PR), `release.yml` (main → build/sign/push to ECR, update GitOps repo image tags via PR bot), `migrate.yml` (orchestrated shard migrations, manual approval for `contract` phase), `nightly.yml` (perf, full isolation fuzz, DAST, dependency audit). Remote caching via Turborepo (self-hosted cache in S3) keeps PR CI ≤ 12 min p50.
-* **GitOps:** `tabula-deploy` repo with Helm charts + Kustomize overlays per environment/cell; **Argo CD** syncs; **Argo Rollouts** for api/realtime/workers with canary steps and `AnalysisTemplate`s querying Prometheus (5xx rate, p95 latency, SLO burn) and Sentry (release crash rate). Realtime canaries shift *new connections* only (existing sockets stay on old pods until natural reconnect or drain).
+* **GitOps:** `tableos-deploy` repo with Helm charts + Kustomize overlays per environment/cell; **Argo CD** syncs; **Argo Rollouts** for api/realtime/workers with canary steps and `AnalysisTemplate`s querying Prometheus (5xx rate, p95 latency, SLO burn) and Sentry (release crash rate). Realtime canaries shift *new connections* only (existing sockets stay on old pods until natural reconnect or drain).
 * **Release cadence:** continuous deploy to staging on every merge; production trains multiple times per day (automated promotion when analysis passes), with deploy freezes configurable (e.g., holiday windows).
 * **Frontend deploy:** SPA assets uploaded to S3 under `/assets/{hash}`; `index.html` switch is the "deploy" (atomic); canary for SPA via CloudFront continuous deployment (staging distribution with header/weight-based routing 5%) or feature flags; old assets retained 30 days so open tabs keep lazy-loading chunks. `X-Min-Client-Version` (doc 24) forces reload on incompatible changes.
 * **Feature flags:** `core.feature_flags` (00 §5.1) with targeting by org/workspace/user/plan/percentage, served via `feature:{flag}` Redis cache; SDK implements **OpenFeature** provider interface (server & web) so a vendor (LaunchDarkly/Unleash) can replace it. Rules: every risky feature behind a flag; flags have owners and expiry; stale flags (> 90 days at 100%) fail a lint job. Kill switches (42.23) are flags with a protected change path.
@@ -830,13 +830,13 @@ AWS accounts per environment class via AWS Organizations: `shared-services` (ECR
 
 ## 44.9 Secrets in infrastructure
 
-Summary (detail 42.15): Secrets Manager per account → External Secrets → K8s Secrets (KMS-encrypted etcd) mounted as files; IRSA/Pod Identity per role with least-privilege IAM (e.g., `worker-export` may `PutObject` on `tabula-exports/*` only; `api` may `GetObject` on attachments only via presign, not list); KMS key policies separate *usage* roles from *admin* roles; break-glass IAM role with hardware-MFA, alarmed on use.
+Summary (detail 42.15): Secrets Manager per account → External Secrets → K8s Secrets (KMS-encrypted etcd) mounted as files; IRSA/Pod Identity per role with least-privilege IAM (e.g., `worker-export` may `PutObject` on `tableos-exports/*` only; `api` may `GetObject` on attachments only via presign, not list); KMS key policies separate *usage* roles from *admin* roles; break-glass IAM role with hardware-MFA, alarmed on use.
 
 ## 44.10 Database migrations in deploys
 
 Owned by [`27-data-flows-transactions-migrations.md`](./27-data-flows-transactions-migrations.md) §51 (runner on Kysely `Migrator`, `tools/shard-migrate` orchestrator, ledgers). Deployment integration:
 
-1. **Expand** migrations (additive: new tables/columns nullable, new indexes `CONCURRENTLY`, new partitions) run **before** the new app version rolls out — as an Argo CD **PreSync hook Job** (`tabula-migrate`) for the control plane and audit, and as an **orchestrated wave** across shards: canary shard (staff/internal workspaces) → 10% → 50% → 100%, with per-shard `lock_timeout = 3s`, `statement_timeout` per step, retries with backoff, progress in `core.migration_runs` (proposed in doc 27).
+1. **Expand** migrations (additive: new tables/columns nullable, new indexes `CONCURRENTLY`, new partitions) run **before** the new app version rolls out — as an Argo CD **PreSync hook Job** (`tableos-migrate`) for the control plane and audit, and as an **orchestrated wave** across shards: canary shard (staff/internal workspaces) → 10% → 50% → 100%, with per-shard `lock_timeout = 3s`, `statement_timeout` per step, retries with backoff, progress in `core.migration_runs` (proposed in doc 27).
 2. App rollout (canary → full). App versions are compatible with schema N and N+1 (**N/N-1 rule**); the app refuses to start if required expand migrations are missing on a shard it connects to.
 3. **Backfills** run as `long_operations` on the `maintenance` queue, throttled by shard load (pause when replica lag > 10 s or CPU > 70%).
 4. **Contract** migrations (drop columns/old indexes, add `NOT NULL` via `NOT VALID` constraints + `VALIDATE`) in a **later release**, after all roles report the new version, gated by manual approval in `migrate.yml`.
@@ -849,9 +849,9 @@ Owned by [`27-data-flows-transactions-migrations.md`](./27-data-flows-transactio
 |---|---|---|---|
 | RDS (control, shards, audit) | Automated backups with **PITR** | **35 days** (max) | — |
 | RDS | Daily snapshots via **AWS Backup** plans | daily 35 d, weekly 13 weeks, monthly 12 months | **cross-region copy** (DR region) + **cross-account copy** into the `backup` account vault with **Vault Lock** (compliance mode; ransomware protection) |
-| Per-base logical snapshots | `base_snapshots` → `tabula-snapshots` (versioned S3) | per plan (doc 22) | replicated |
+| Per-base logical snapshots | `base_snapshots` → `tableos-snapshots` (versioned S3) | per plan (doc 22) | replicated |
 | S3 attachments/variants/snapshots/audit-archive | **Versioning** + lifecycle (noncurrent versions 30 days; audit per retention); **CRR** to DR region for attachments, snapshots, audit-archive, backups | — | DR region; Object Lock for audit (Enterprise) and backups |
-| `tabula-backups` bucket | Exports of control-plane critical tables (nightly `pg_dump` of `core` + Jackson schema, encrypted) for independent restore path | 90 days | cross-region, cross-account |
+| `tableos-backups` bucket | Exports of control-plane critical tables (nightly `pg_dump` of `core` + Jackson schema, encrypted) for independent restore path | 90 days | cross-region, cross-account |
 | Redis (queue cluster) | AOF + daily snapshot | 7 days | not authoritative — Postgres reconciler re-enqueues (D12) |
 | Redis (cache) | none | — | rebuildable |
 | Kafka | 7-day topic retention; **not backed up** | — | replayable from Postgres (`base_changes` 30 d, outbox) |
@@ -930,8 +930,8 @@ Cost levers: Graviton everywhere possible; spot for workers; S3 Intelligent-Tier
 | Columns on `core.oauth_grants` | `family_id`, `current_refresh_hash`, `previous_refresh_hash`, `generation`, `resource_selection jsonb` | refresh rotation & reuse detection (42.5) |
 | Columns on `core.user_mfa_factors` | `last_used_step` (TOTP replay), `sign_count`, `aaguid`, `transports` | 42.3.3 |
 | Redis namespaces | `ws:ticket:{jti}`, `webauthn:chal:{flowId}`, `mfa:flow:{flowId}`, `pwreset:{tokenHash}`, `emailverify:{tokenHash}`, `hibp:{prefix}`, `saml:replay:{assertionId}`, `sess-revoke` (pub/sub channel) | auth flows (42.3–42.6) |
-| Bucket | `tabula-web-assets` (SPA static builds; versioned, 30-day retention of old assets) | 44.7 frontend deploy; not in 00 §11 |
-| Domain | `tabulausercontent.example` (+ `*.ext.` subdomains for sandboxed embeds) and `share.tabula.example` | 42.9 isolation |
+| Bucket | `tableos-web-assets` (SPA static builds; versioned, 30-day retention of old assets) | 44.7 frontend deploy; not in 00 §11 |
+| Domain | `tableosusercontent.example` (+ `*.ext.` subdomains for sandboxed embeds) and `share.tableos.example` | 42.9 isolation |
 | Endpoint | `POST /v1/security/secret-scanning/github` (GitHub partner verification + auto-revoke) | 42.16 |
 | Endpoint | `POST /api/v1/telemetry/rum`, `POST /api/v1/csp-reports` (first-party only) | 43.7, 42.9 |
 | Kafka header convention | `traceparent`, `tracestate` copied from envelope on every produced record | 43.5 |

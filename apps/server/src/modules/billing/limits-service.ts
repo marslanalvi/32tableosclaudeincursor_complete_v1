@@ -1,4 +1,4 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 
 export interface PlanLimits {
@@ -30,7 +30,7 @@ export class PlanLimitExceededError extends Error {
 }
 
 export class LimitsService {
-  constructor(private readonly db: TabulaDb) {}
+  constructor(private readonly db: TableOSDb) {}
 
   async getOrgPlan(orgId: string): Promise<OrgPlanSnapshot> {
     const row = await sql<{

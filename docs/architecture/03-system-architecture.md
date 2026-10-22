@@ -8,7 +8,7 @@
 
 ## 1. Overview
 
-Tabula is a **modular monolith** (D1) — one TypeScript codebase, one server image — deployed as **process roles** over a **two-plane data architecture** (D2):
+TableOS is a **modular monolith** (D1) — one TypeScript codebase, one server image — deployed as **process roles** over a **two-plane data architecture** (D2):
 
 * **Control plane**: global facts needed before we know which shard to talk to — identity, sessions, orgs, workspaces, grants, billing, notifications, and the routing directories.
 * **Data plane**: N Postgres shards ("cells"), each hosting many workspaces' base content; workspace affinity (D3).
@@ -45,7 +45,7 @@ Why grants live in the control plane while restrictions live on the shard (and h
 
 ## 3. Process roles
 
-Same image (`tabula/server`), different entrypoints (spine §2; details in [`26` §45.5](./26-architecture-style-stack-repo-services.md#455-process-roles)):
+Same image (`tableos/server`), different entrypoints (spine §2; details in [`26` §45.5](./26-architecture-style-stack-repo-services.md#455-process-roles)):
 
 | Role | Responsibility | State | Talks to | Scale signal | Typical V1 size (per region) |
 |---|---|---|---|---|---|
@@ -155,7 +155,7 @@ Browser / API client
       3. authenticate: cookie session / bearer token  8. PermissionSnapshot load (Redis perm:…) + assert action
       4. rate limit: token, base, IP (Redis rl:…)     9. idempotency check (Idempotency-Key → idem:… / table)
       5. org policy gates (IP allowlist, SSO-only)   10. handler → module facade → kernel.withBaseTx / query
-                                                    11. response: problem+json on error; ETag; X-Tabula-Base-Seq
+                                                    11. response: problem+json on error; ETag; X-TableOS-Base-Seq
 ```
 
 Middleware budgets (p99, warm caches): auth 0.5 ms, rate limit 0.5 ms (one Redis round trip, pipelined with idempotency fast path), routing 0.1 ms (in-process hit), permission snapshot 0.5 ms. A request with all caches warm makes **one** Redis round trip before touching Postgres.
@@ -225,8 +225,8 @@ Every response that returns base data includes `asOfSeq` so the client can subsc
 shard COMMIT
   → WAL → logical replication slot (pgoutput, publication on outbox_events + base_changes)
   → relay (one active per shard, lease in Postgres, standby ready)
-  → V1: Kafka topics tabula.base-changes.v1 (key base_id), tabula.domain-events.v1 (key workspace_id|base_id),
-        tabula.audit.v1, tabula.usage.v1 ; MVP: BullMQ queues + Redis pub/sub rt:base:{baseId}
+  → V1: Kafka topics tableos.base-changes.v1 (key base_id), tableos.domain-events.v1 (key workspace_id|base_id),
+        tableos.audit.v1, tableos.usage.v1 ; MVP: BullMQ queues + Redis pub/sub rt:base:{baseId}
   → consumer groups (idempotent, per [`15`](./15-events.md)): automation matcher, webhook dispatcher,
     search indexer, notification router, audit writer, usage meter, AI field runner, contact timeline,
     compute (deferred), realtime fan-out
@@ -240,7 +240,7 @@ Protocol and scaling are owned by [`16`](./16-realtime.md). Shape:
 
 1. Client obtains a single-use ws-ticket (`POST /v1/auth/ws-ticket`), connects to `/ws`, authenticates, and `subscribe {baseId, fromSeq}`.
 2. Gateway checks the base permission snapshot; joins the base's fan-out set; replays `seq > fromSeq` from `base_changes` (replica) if needed.
-3. Committed changes arrive from the event backbone — MVP: Redis pub/sub `rt:base:{baseId}`; V1: per-gateway-node Kafka consumer groups on `tabula.base-changes.v1` ([`15`](./15-events.md)), with WebSocket subscriptions concentrated by base (consistent hashing of `baseId` on the subscribe path) so that each node handles a bounded set of bases.
+3. Committed changes arrive from the event backbone — MVP: Redis pub/sub `rt:base:{baseId}`; V1: per-gateway-node Kafka consumer groups on `tableos.base-changes.v1` ([`15`](./15-events.md)), with WebSocket subscriptions concentrated by base (consistent hashing of `baseId` on the subscribe path) so that each node handles a bounded set of bases.
 4. For each change: per-connection **redaction** (`PayloadRedactor` port: hidden tables/fields, row policies, interface scopes) then send in seq order. Clients detect gaps (`seq ≠ last+1`) and request catch-up.
 5. Presence (`presence:{baseId}` hash, TTL) and cursors are Redis-only, never persisted. Heartbeat `WS_HEARTBEAT` = 25 s.
 6. Writes from WebSocket ops go through the **same** write path (§6) inside the realtime role's call to the records facade, or are proxied to `api` — [`16`](./16-realtime.md) decides; either way the ack carries the committed seq.
@@ -280,7 +280,7 @@ Capacity and placement: soft/hard limits per shard in [`04` §6.3.1](./04-databa
 | Control plane | single, US | single global CP in US; EU region holds read replica for low-latency auth reads | option: regional CP partition for orgs requiring identity residency |
 | Org placement | n/a | `organizations.home_region` chosen at creation; all its workspaces placed on shards in that region | dedicated shards per region |
 | Data in region | all | base content, attachments (regional buckets), search indices, Kafka, audit store, backups (cross-region replication **within** jurisdiction, e.g., EU→EU) | + KMS CMK per org |
-| Processing in region | all | workers/realtime/api serving EU bases run in EU; ALB routing by host `eu.api.tabula.example` and by redirect when a US endpoint receives an EU base request (`421 Misdirected` with `Location` hint) | AI provider routing to in-region endpoints only |
+| Processing in region | all | workers/realtime/api serving EU bases run in EU; ALB routing by host `eu.api.tableos.example` and by redirect when a US endpoint receives an EU base request (`421 Misdirected` with `Location` hint) | AI provider routing to in-region endpoints only |
 | Data outside region | — | identity (email, name), org/workspace names, `base_directory` names, billing — documented in DPA | regional CP removes this |
 
 Moving an org between regions = workspace moves to shards in the target region + attachment copy (long operation, admin-initiated).
@@ -480,7 +480,7 @@ sequenceDiagram
     API->>R: SET schema snapshot
   end
   API-->>C: schema or 304
-  C->>API: GET view rows first window 200, X-Tabula-Min-Seq
+  C->>API: GET view rows first window 200, X-TableOS-Min-Seq
   API->>API: compile filter sort group to SQL plan
   alt replica watermark ok
     API->>SR: keyset query with sidecar join, LIMIT 201

@@ -8,6 +8,16 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.8",
+    date: "2026-10-22",
+    title: "TableOS everywhere, clearer API messages.",
+    items: [
+      "Everything is named TableOS, including API error links, headers and emails. You'll be asked to sign in once more.",
+      "API errors link to Help → API reference; version conflicts say which version the record is at.",
+      "The link picker shows a few values of each record so similar records can be told apart.",
+    ],
+  },
+  {
     version: "0.16.7",
     date: "2026-10-22",
     title: "Undo field changes, search that finds cells, clearer permissions.",

@@ -1,9 +1,9 @@
 {
-  "name": "@tabula/db",
+  "name": "@tableos/db",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "tabula": {
+  "tableos": {
     "tier": "T2a",
     "env": "node"
   },
@@ -22,12 +22,12 @@
     "seed": "node --import tsx src/cli/seed.ts"
   },
   "dependencies": {
-    "@tabula/types": "workspace:*",
+    "@tableos/types": "workspace:*",
     "kysely": "^0.27.5",
     "pg": "^8.13.1"
   },
   "devDependencies": {
-    "@tabula/tsconfig": "workspace:*",
+    "@tableos/tsconfig": "workspace:*",
     "@types/node": "^22.10.2",
     "@types/pg": "^8.11.10",
     "tsx": "^4.19.2",

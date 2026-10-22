@@ -1,4 +1,4 @@
-import { decodePublicId } from "@tabula/types";
+import { decodePublicId } from "@tableos/types";
 
 /**
  * Mentions in comment bodies. Supported syntaxes:

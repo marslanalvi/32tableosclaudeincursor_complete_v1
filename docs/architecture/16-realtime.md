@@ -37,7 +37,7 @@ flowchart LR
   GW -->|"op frames forwarded: POST /internal/v1/bases/{id}/mutations"| API
   API -->|"write tx: records + base_changes + outbox"| PG[("shard Postgres")]
   PG -->|"logical replication"| RL["relay"]
-  RL -->|"tabula.base-changes.v1 (key base_id)"| K[("Kafka")]
+  RL -->|"tableos.base-changes.v1 (key base_id)"| K[("Kafka")]
   K -->|"consumer group per gateway node (broadcast)"| GW
   RL -.->|"MVP: Redis pub/sub rt:base:{baseId}"| GW
   GW <-->|"presence hash + pub/sub, ws routes, perm snapshots"| R[("Redis")]
@@ -58,7 +58,7 @@ Design choices:
 | **Forward to `api` internal endpoint** | Single write path, pooled DB connections stay in `api`, gateway stateless | One intra-cluster hop |
 | Client always writes via REST (no WS writes) | Simplest server | Per-request overhead (TLS session/HTTP framing, auth middleware) per keystroke burst; ordering across concurrent HTTP requests from one tab must be enforced client-side |
 
-**Decision:** WS `op` frames are the primary interactive write transport (ordered per connection, low overhead) and are **forwarded** to `api`. REST remains the fallback and the bulk path (> 1,000 records, doc 24 §38.7.8) and carries the same `clientMutationId` via `X-Tabula-Client-Op-Id` ([`17`](./17-api-architecture.md) §SPA). Both paths produce identical `op_ack`/`op_reject` frames on the WebSocket.
+**Decision:** WS `op` frames are the primary interactive write transport (ordered per connection, low overhead) and are **forwarded** to `api`. REST remains the fallback and the bulk path (> 1,000 records, doc 24 §38.7.8) and carries the same `clientMutationId` via `X-TableOS-Client-Op-Id` ([`17`](./17-api-architecture.md) §SPA). Both paths produce identical `op_ack`/`op_reject` frames on the WebSocket.
 
 ---
 
@@ -68,9 +68,9 @@ Design choices:
 
 Browsers cannot set `Authorization` headers on WebSocket upgrades, and we do not want session cookies on the cross-origin realtime host. Therefore:
 
-1. `POST /v1/auth/ws-ticket` (session cookie + CSRF header, or bearer token) → `200 { "ticket": "wst_…", "expiresAt": "…", "url": "wss://rt.tabula.example/v1/ws" }` ([`31-api-specification.md`](./31-api-specification.md)). *Note: doc 24 refers to `/v1/realtime/tickets` with a 60 s TTL — this document and doc 17/31 are canonical: `POST /v1/auth/ws-ticket`, **30 s**, single-use.*
+1. `POST /v1/auth/ws-ticket` (session cookie + CSRF header, or bearer token) → `200 { "ticket": "wst_…", "expiresAt": "…", "url": "wss://rt.tableos.example/v1/ws" }` ([`31-api-specification.md`](./31-api-specification.md)). *Note: doc 24 refers to `/v1/realtime/tickets` with a 60 s TTL — this document and doc 17/31 are canonical: `POST /v1/auth/ws-ticket`, **30 s**, single-use.*
 2. Ticket = 32 random bytes (base62), stored in Redis `wst:{sha256(ticket)}` → `{ principalType, principalId, orgId, sessionId, mfaLevel, ip, ua, issuedAt }` with `EX 30`. Single use: the gateway `GETDEL`s it.
-3. Client connects `wss://rt.tabula.example/v1/ws?ticket=wst_…` (subprotocol header `Sec-WebSocket-Protocol: tabula.v1`). The gateway validates ticket, checks `Origin` against the allowlist, checks the session is still live (`sess:{tokenHash}` → status) and binds the principal to the connection.
+3. Client connects `wss://rt.tableos.example/v1/ws?ticket=wst_…` (subprotocol header `Sec-WebSocket-Protocol: tableos.v1`). The gateway validates ticket, checks `Origin` against the allowlist, checks the session is still live (`sess:{tokenHash}` → status) and binds the principal to the connection.
 4. **Re-validation:** every 5 minutes and on `session.revoked` (domain event → Redis pub/sub `sessrevoke:{sessionId}` consumed by gateways), the gateway re-checks the session; revoked ⇒ close `4401`.
 
 ### 3.2 Lifecycle
@@ -85,7 +85,7 @@ sequenceDiagram
   C->>API: POST /v1/auth/ws-ticket
   API->>R: SET wst:hash {principal} EX 30
   API-->>C: ticket, url
-  C->>GW: WSS upgrade ?ticket (subprotocol tabula.v1)
+  C->>GW: WSS upgrade ?ticket (subprotocol tableos.v1)
   GW->>R: GETDEL wst:hash
   GW-->>C: hello (connId, protocol, heartbeat, server time)
   C->>GW: subscribe base (sinceSeq = lastSeq)
@@ -124,7 +124,7 @@ Connection state lives only in the gateway's memory; `ws:route:{connId}` in Redi
 * JSON text frames, UTF-8, ≤ 256 KB per frame (server splits larger payloads; client frames > 256 KB are rejected `4400`). permessage-deflate enabled (context takeover off server-side to cap memory).
 * Every frame has `type`. Client → server frames that expect a reply carry `rid` (request id, client-generated, echoed).
 * IDs on the wire are **public prefixed IDs** (`bas_…`, `rec_…`, `fld_…`); cell maps are keyed by **field ID** on the wire (clients don't need slots; the gateway projects slot → field ID using the schema snapshot).
-* Protocol version negotiated by subprotocol `tabula.v1`; additive fields allowed within v1 (clients ignore unknown fields and unknown `type`s, except they must handle `resync_required` and `error`).
+* Protocol version negotiated by subprotocol `tableos.v1`; additive fields allowed within v1 (clients ignore unknown fields and unknown `type`s, except they must handle `resync_required` and `error`).
 
 ### 4.2 Message catalogue
 
@@ -154,7 +154,7 @@ Connection state lives only in the gateway's memory; `ws:route:{connId}` in Redi
 **hello**
 
 ```json
-{ "type": "hello", "connId": "c_01J9Z6Q4…", "protocol": "tabula.v1",
+{ "type": "hello", "connId": "c_01J9Z6Q4…", "protocol": "tableos.v1",
   "heartbeatSec": 25, "serverTime": "2026-10-03T14:05:00.120Z",
   "limits": { "maxFrameBytes": 262144, "maxOpsPerFrame": 100, "maxInflightFrames": 8, "maxSubscriptions": 50 } }
 ```
@@ -288,9 +288,9 @@ A connection may hold ≤ 50 subscriptions; a client normally holds one `base` s
 
 ### 5.2 Fan-out: V1 (Kafka)
 
-Each gateway pod runs a Kafka consumer in its **own consumer group** (`realtime-fanout-{podId}`) over **all partitions** of `tabula.base-changes.v1` — a broadcast. On each message it looks up `subsByBase.get(baseId)`; if empty, the message is dropped after a hash lookup.
+Each gateway pod runs a Kafka consumer in its **own consumer group** (`realtime-fanout-{podId}`) over **all partitions** of `tableos.base-changes.v1` — a broadcast. On each message it looks up `subsByBase.get(baseId)`; if empty, the message is dropped after a hash lookup.
 
-Is broadcast affordable? Estimate V1 region: 5,000 changes/s peak × ~1.5 KB (compressed on wire ~300 B) ≈ 1.5–7.5 MB/s per pod. JSON parse is avoided for bases with no subscribers by reading the `tabula_base` **header** first. 100 pods ⇒ 100× broker egress (~0.75 GB/s) — the dominating cost at scale.
+Is broadcast affordable? Estimate V1 region: 5,000 changes/s peak × ~1.5 KB (compressed on wire ~300 B) ≈ 1.5–7.5 MB/s per pod. JSON parse is avoided for bases with no subscribers by reading the `tableos_base` **header** first. 100 pods ⇒ 100× broker egress (~0.75 GB/s) — the dominating cost at scale.
 
 | Approach | When |
 |---|---|
@@ -378,7 +378,7 @@ sequenceDiagram
 ```
 
 * Served from `base_changes` on a **read replica** if `replica.change_seq ≥ sinceSeq`-head check passes, else primary (doc 10 `minSeq` rule).
-* Masking identical to gateway projection (shared code: `projectChange()` lives in `@tabula/realtime-projection` used by both api and realtime roles).
+* Masking identical to gateway projection (shared code: `projectChange()` lives in `@tableos/realtime-projection` used by both api and realtime roles).
 * Limits: `limit ≤ 1000` changes or 2 MB per page. If `headSeq − sinceSeq > 10,000` or `sinceSeq` is older than the retained window (30 days, D10) → `409 { code: "RESYNC_REQUIRED" }`.
 * Bulk changes appear as `refresh_hint` entries (same rule as live).
 
@@ -440,7 +440,7 @@ Redis pub/sub loss (MVP), gateway pod restart, Kafka consumer starting at `lates
    * Within the tx: load `PermissionSnapshot` (epoch-checked, doc 19), validate via field types, check `schemaVersion` compatibility (§8.5), lock the record row(s) `FOR UPDATE`, apply ops, update `cell_meta`, recompute same-record formulas (D7), allocate seq (`base_runtime`), write `base_changes` (with `client_mutation_id`), outbox, commit.
 4. Result → gateway → `op_ack {seq, changeId}` or `op_reject {code}`; stored in the `idem:mut` key for 24 h.
 
-For REST-originated writes carrying `X-Tabula-Client-Op-Id`, the API, after commit, publishes the ack to `ws:route:{connId}` (client sends its `connId` in `X-Tabula-Conn-Id`) via Redis pub/sub `wsdirect:{podId}` so the originating tab receives `op_ack` on its socket too; the REST response also contains `seq` (either suffices — the client resolves on whichever arrives first).
+For REST-originated writes carrying `X-TableOS-Client-Op-Id`, the API, after commit, publishes the ack to `ws:route:{connId}` (client sends its `connId` in `X-TableOS-Conn-Id`) via Redis pub/sub `wsdirect:{podId}` so the originating tab receives `op_ack` on its socket too; the REST response also contains `seq` (either suffices — the client resolves on whichever arrives first).
 
 ### 7.3 Client side: optimistic apply, ack, rebase, rollback
 
@@ -705,5 +705,5 @@ Undo (D25) is a server command (`POST /v1/bases/{baseId}/changes:undo { changeId
 | Redis `wst:{ticketHash}` (ws tickets), `idem:mut:{baseId}:{mid}` (mutation dedupe; fits `idem:{scope}:{key}`), pub/sub `wsdirect:{podId}`, `sessrevoke:{sessionId}`, sharded pub/sub `presence:{baseId}`, `ydoc:owner:{docKey}` | Redis (spine §10) | §3, §7, §9 |
 | `record_rich_docs` columns `state_vector`, `version` | columns | Yjs persistence (V1+) |
 | Internal endpoint `POST /internal/v1/bases/{baseId}/mutations` (mTLS, not in public OpenAPI) | API | Forwarded op frames (§2.1) |
-| Header `X-Tabula-Conn-Id` (alongside `X-Tabula-Client-Op-Id`) | API convention | Route REST-originated acks to the originating socket |
+| Header `X-TableOS-Conn-Id` (alongside `X-TableOS-Client-Op-Id`) | API convention | Route REST-originated acks to the originating socket |
 | Reconcile doc 24 naming: ticket endpoint `POST /v1/auth/ws-ticket` (30 s) | doc fix | §3.1 |

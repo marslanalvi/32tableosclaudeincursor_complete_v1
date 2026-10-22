@@ -16,11 +16,11 @@ import styles from "./comments.module.css";
 const REACTIONS = ["👍", "❤️", "😄", "🎉", "👀", "✅"];
 const MARKUP_RE = /@\[([^\]\n]{1,200})\]\((usr_[A-Za-z0-9]+)\)/g;
 const AVATAR_COLORS = [
-  "var(--tabula-color-signature-peach)",
-  "var(--tabula-color-signature-mint)",
-  "var(--tabula-color-signature-yellow)",
-  "var(--tabula-color-signature-cream)",
-  "var(--tabula-color-signature-mustard)",
+  "var(--tableos-color-signature-peach)",
+  "var(--tableos-color-signature-mint)",
+  "var(--tableos-color-signature-yellow)",
+  "var(--tableos-color-signature-cream)",
+  "var(--tableos-color-signature-mustard)",
 ];
 const MAX_FILES = 10;
 

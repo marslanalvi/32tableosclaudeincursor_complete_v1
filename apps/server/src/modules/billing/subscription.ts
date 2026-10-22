@@ -1,9 +1,9 @@
-import { generateUuidV7 } from "@tabula/types";
-import type { TabulaDb } from "@tabula/db";
+import { generateUuidV7 } from "@tableos/types";
+import type { TableOSDb } from "@tableos/db";
 import { sql, type Transaction } from "kysely";
-import type { Database } from "@tabula/db";
+import type { Database } from "@tableos/db";
 
-type DbExecutor = TabulaDb | Transaction<Database>;
+type DbExecutor = TableOSDb | Transaction<Database>;
 
 export async function createFreeSubscriptionInTx(
   trx: DbExecutor,
@@ -31,7 +31,7 @@ export async function createFreeSubscriptionInTx(
 }
 
 export async function upgradeOrgToTeamPlan(
-  db: TabulaDb,
+  db: TableOSDb,
   orgId: string,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {

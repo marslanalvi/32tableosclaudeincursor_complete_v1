@@ -1,10 +1,10 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { parsePid } from "../../lib/public-ids.js";
 import { PublicIdError } from "../../http/errors.js";
 
 export async function resolveBillingOrgId(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   orgPublicId?: string,
 ): Promise<string | null> {

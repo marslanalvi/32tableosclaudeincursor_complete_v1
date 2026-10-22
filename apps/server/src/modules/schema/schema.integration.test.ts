@@ -2,17 +2,17 @@
  * Live-API integration suite for workstream B: field types, schema ops,
  * links, computed fields and record writes.
  *
- * Requires a running API (TABULA_API_URL, default http://localhost:3200).
+ * Requires a running API (TABLEOS_API_URL, default http://localhost:3200).
  * Run: node --import tsx --test src/modules/schema/schema.integration.test.ts
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodePublicId, encodePublicId, generateUuidV7 } from "@tabula/types";
+import { decodePublicId, encodePublicId, generateUuidV7 } from "@tableos/types";
 // @ts-ignore -- no @types/pg in this workspace; test-only helper
 import pg from "pg";
 
-const API = process.env["TABULA_API_URL"] ?? "http://localhost:3200";
-const DB_URL = process.env["DATABASE_URL"] ?? "postgres://tabula:tabula@localhost:5432/tabula_cc";
+const API = process.env["TABLEOS_API_URL"] ?? "http://localhost:3200";
+const DB_URL = process.env["DATABASE_URL"] ?? "postgres://tableos:tableos@localhost:5432/tableos_cc";
 
 type Res<T = any> = { status: number; body: T };
 
@@ -79,7 +79,7 @@ async function tableInfo(table: string): Promise<any> {
 test("signup + new base gets an Airtable-like default table", async () => {
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const su = ok(
-    await api("POST", "/v1/auth/signup", { email: `ws-b-${stamp}@tabula.test`, password: "Passw0rd!Passw0rd!", name: "Bea Builder" }),
+    await api("POST", "/v1/auth/signup", { email: `ws-b-${stamp}@tableos.test`, password: "Passw0rd!Passw0rd!", name: "Bea Builder" }),
     201,
     "signup",
   );

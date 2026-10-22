@@ -1,9 +1,9 @@
 {
-  "name": "@tabula/filter",
+  "name": "@tableos/filter",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "tabula": {
+  "tableos": {
     "tier": "T1",
     "env": "isomorphic"
   },
@@ -20,10 +20,10 @@
     "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
-    "@tabula/fields": "workspace:*"
+    "@tableos/fields": "workspace:*"
   },
   "devDependencies": {
-    "@tabula/tsconfig": "workspace:*",
+    "@tableos/tsconfig": "workspace:*",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
   }

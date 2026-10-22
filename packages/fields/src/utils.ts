@@ -1,4 +1,4 @@
-import { decodePublicId, encodePublicId, generateUuidV7, type PublicIdPrefix } from "@tabula/types";
+import { decodePublicId, encodePublicId, generateUuidV7, type PublicIdPrefix } from "@tableos/types";
 
 /** Thrown for invalid cell values or field configs (maps to HTTP 422). */
 export class FieldValidationError extends Error {

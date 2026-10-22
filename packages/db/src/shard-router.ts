@@ -1,7 +1,7 @@
-import type { TabulaDb } from "./create-db.js";
+import type { TableOSDb } from "./create-db.js";
 
 export class ShardRouter {
-  constructor(private readonly db: TabulaDb) {}
+  constructor(private readonly db: TableOSDb) {}
 
   /** Resolve shard placement for a workspace (MVP: single cluster; dsn omitted when secret ref is local). */
   async forWorkspace(workspaceId: string): Promise<{ shardId: string; dsn?: string }> {

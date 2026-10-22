@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 
 /**
@@ -24,7 +24,7 @@ function hashToken(token: string): Buffer {
 }
 
 export async function createChallenge(
-  db: TabulaDb,
+  db: TableOSDb,
   kind: ChallengeKind,
   opts: { userId?: string | null; data?: Record<string, unknown>; ttlMs: number; token?: string },
 ): Promise<string> {
@@ -50,7 +50,7 @@ export async function createChallenge(
 
 /** Look up a live (unexpired, unconsumed) challenge by token. */
 export async function findChallenge(
-  db: TabulaDb,
+  db: TableOSDb,
   kind: ChallengeKind,
   token: string,
 ): Promise<ChallengeRow | null> {
@@ -66,7 +66,7 @@ export async function findChallenge(
 
 /** Latest live challenge of a kind for a user (used for mfa_enroll). */
 export async function findUserChallenge(
-  db: TabulaDb,
+  db: TableOSDb,
   kind: ChallengeKind,
   userId: string,
 ): Promise<ChallengeRow | null> {
@@ -82,7 +82,7 @@ export async function findUserChallenge(
 }
 
 /** Atomically consume a challenge; false when someone else already consumed it. */
-export async function consumeChallenge(db: TabulaDb, id: string): Promise<boolean> {
+export async function consumeChallenge(db: TableOSDb, id: string): Promise<boolean> {
   const res = await sql`
     UPDATE core.auth_challenges SET consumed_at = now()
     WHERE id = ${id} AND consumed_at IS NULL
@@ -91,7 +91,7 @@ export async function consumeChallenge(db: TabulaDb, id: string): Promise<boolea
 }
 
 /** Record a failed attempt; returns the new attempt count. */
-export async function bumpChallengeAttempts(db: TabulaDb, id: string): Promise<number> {
+export async function bumpChallengeAttempts(db: TableOSDb, id: string): Promise<number> {
   const res = await sql<{ attempts: number }>`
     UPDATE core.auth_challenges SET attempts = attempts + 1
     WHERE id = ${id}

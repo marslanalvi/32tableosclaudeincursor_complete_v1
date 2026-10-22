@@ -40,7 +40,7 @@ Related documents: [03 — System Architecture](03-system-architecture.md) · [0
 
 ### 45.1 What this product actually demands
 
-Architecture style must be chosen against the product's real forces, not fashion. The forces that dominate Tabula:
+Architecture style must be chosen against the product's real forces, not fashion. The forces that dominate TableOS:
 
 | # | Force | Concrete evidence (from the spine and sibling docs) | Pull toward |
 |---|---|---|---|
@@ -107,11 +107,11 @@ Consequences we accept:
 
 ### 45.5 Process roles
 
-Same container image (`ghcr.io/tabula/server`), different entrypoints (spine §2). The role decides which modules' **adapters** are started; all modules' code is present but only the relevant HTTP routes, consumers, and jobs are registered.
+Same container image (`ghcr.io/tableos/server`), different entrypoints (spine §2). The role decides which modules' **adapters** are started; all modules' code is present but only the relevant HTTP routes, consumers, and jobs are registered.
 
 ```mermaid
 flowchart TB
-  subgraph IMG["Image: tabula/server (apps/server)"]
+  subgraph IMG["Image: tableos/server (apps/server)"]
     direction LR
     API["api<br/>Fastify HTTP: public REST + first-party<br/>routes from every module"]
     RT["realtime<br/>WebSocket gateway<br/>subscriptions, presence, fan-out"]
@@ -119,10 +119,10 @@ flowchart TB
     SC["scheduler<br/>leader-elected cron"]
     RL["relay<br/>logical replication per shard to Kafka or BullMQ"]
   end
-  subgraph SBX["Image: tabula/sandbox-runner"]
+  subgraph SBX["Image: tableos/sandbox-runner"]
     SB["sandbox<br/>isolated-vm pools, no ambient creds,<br/>egress via allowlist proxy"]
   end
-  subgraph FP["Image: tabula/server + native layer (V1: tabula/file-worker)"]
+  subgraph FP["Image: tableos/server + native layer (V1: tableos/file-worker)"]
     FW["worker --queues=file-scan,file-process<br/>libvips, ffmpeg, ClamAV client"]
   end
   API --> PG[("Postgres control + shards")]
@@ -264,7 +264,7 @@ What changes when a module is extracted:
 | Async side effects | Outbox event → relay → Kafka → consumer in `worker` | Unchanged; consumer group simply moves to the new deployable |
 | Transactions | May participate via `*InTx` | **Must not**: extracted services never participate in core write txns; any `*InTx` method on the facade is a blocker for extraction |
 | Auth context | `AuthContext` object | Signed internal token (short-lived JWT, audience = service) carrying principal + permission-snapshot reference; service verifies via JWKS |
-| Config/flags | Shared process config | Same `@tabula/config` package, own env |
+| Config/flags | Shared process config | Same `@tableos/config` package, own env |
 | Observability | Same trace | W3C `traceparent` propagated; service-level SLOs added |
 | Data | Owned tables in shard DB | Initially still in shard DB with a dedicated DB role limited to owned tables (`GRANT` per table); optionally moved later |
 | Failure mode | Exception | Timeout/unavailable → explicit degraded behavior must be designed (below) |
@@ -273,10 +273,10 @@ What changes when a module is extracted:
 
 | Candidate | Why it is a candidate | Trigger to extract | Interface after extraction | Degraded mode if down |
 |---|---|---|---|---|
-| **Realtime gateway** | Long-lived connections, memory-bound, independent scaling (X3); no txn participation (X6) | > 150k concurrent connections or > 30% of compute cost; or need for edge PoPs | Consumes `tabula.base-changes.v1`; calls `access` for permission snapshots via internal API (cached, epoch-validated); catch-up reads `base_changes` through a read-only API or read replica | Clients fall back to polling `GET …/changes?since=seq` (same cursor protocol) |
-| **File processing** | Native libs, hostile inputs (X1, X2) | **Planned for V1** as image split (`tabula/file-worker`), same codebase | Consumes `file-scan`/`file-process` jobs; writes `attachments`/`attachment_variants` through attachments module code in the same repo (still DB-direct with restricted DB role) | Attachments stay `processing`; originals downloadable after scan |
+| **Realtime gateway** | Long-lived connections, memory-bound, independent scaling (X3); no txn participation (X6) | > 150k concurrent connections or > 30% of compute cost; or need for edge PoPs | Consumes `tableos.base-changes.v1`; calls `access` for permission snapshots via internal API (cached, epoch-validated); catch-up reads `base_changes` through a read-only API or read replica | Clients fall back to polling `GET …/changes?since=seq` (same cursor protocol) |
+| **File processing** | Native libs, hostile inputs (X1, X2) | **Planned for V1** as image split (`tableos/file-worker`), same codebase | Consumes `file-scan`/`file-process` jobs; writes `attachments`/`attachment_variants` through attachments module code in the same repo (still DB-direct with restricted DB role) | Attachments stay `processing`; originals downloadable after scan |
 | **Search indexer** | Async, lag-tolerant, bulk (X6), OpenSearch client and mapping logic | V1 OpenSearch rollout with > 5k docs/s sustained | Kafka consumer `search-indexer`; reads records via internal bulk read API or replica | Search falls back to Postgres FTS (MVP path kept) or shows "index catching up" |
-| **AI gateway** | Provider credentials, cost governance, distinct release cadence (X4), egress controls | Multiple consumers outside monolith, or regulated customers demanding dedicated egress | `POST /internal/ai/invoke` (streaming), idempotent by `aij_` id; metering events to `tabula.usage.v1` | AI fields stay `pending`; automations retry with backoff |
+| **AI gateway** | Provider credentials, cost governance, distinct release cadence (X4), egress controls | Multiple consumers outside monolith, or regulated customers demanding dedicated egress | `POST /internal/ai/invoke` (streaming), idempotent by `aij_` id; metering events to `tableos.usage.v1` | AI fields stay `pending`; automations retry with backoff |
 | **Automation runner** | Bursty, tenant-noisy, runs user-defined steps (X3, X5) | > 30% worker CPU, or dedicated automation team | Consumes `automation-step` queue; record actions call **records public API** (internal, service token) — not in-process txn | Runs queue; reconciler resumes |
 | **Sandbox** | Untrusted code (X1) | **Already separate** (separate image, separate node pool) | `RunScript` RPC over mTLS: `{code, inputs, limits, egressPolicy}` → `{outputs, logs, usage}` | Script steps fail with retryable error |
 
@@ -289,35 +289,35 @@ Principles used to choose:
 1. **One language end to end (TypeScript)** — the formula engine, filter evaluator, field codecs and permission evaluator run identically on client and server (D8). That isomorphism is a product feature (instant formula preview, optimistic cell rendering, client-side filtering of realtime ops) and a correctness feature (one implementation, one test suite).
 2. **Boring where possible, custom only where the product is the differentiator** — the grid, formula engine, compute engine and record store are custom; everything else is a mature library or managed service.
 3. **Libraries over frameworks** for the backend: we need full control of SQL, transactions and process roles.
-4. **Every dependency has an exit** — wrapped behind a package interface (`@tabula/storage`, `@tabula/search`, `@tabula/ai`, `@tabula/jobs`, `EventBus`).
+4. **Every dependency has an exit** — wrapped behind a package interface (`@tableos/storage`, `@tableos/search`, `@tableos/ai`, `@tableos/jobs`, `EventBus`).
 5. **Licences:** MIT/Apache-2.0/BSD/ISC preferred; MPL acceptable; no AGPL/SSPL in the shipped product (self-hosted infra components under such licences are evaluated separately).
 
 ### 46.1 Frontend
 
 | Concern | Choice **[Ours]** | Why | Considered and rejected |
 |---|---|---|---|
-| Language | **TypeScript 5.x, `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`** | Shared types with server via `@tabula/types`; the cell value model is a discriminated union per field type — the checker catches mistakes the grid would otherwise render | Plain JS (no); ReScript/Elm (hiring, ecosystem) |
+| Language | **TypeScript 5.x, `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`** | Shared types with server via `@tableos/types`; the cell value model is a discriminated union per field type — the checker catches mistakes the grid would otherwise render | Plain JS (no); ReScript/Elm (hiring, ecosystem) |
 | Framework | **React 19** | Largest ecosystem for complex editors (Tiptap/ProseMirror bindings, Radix, DnD), concurrent rendering for heavy views, `useSyncExternalStore` for our RecordStore, hiring | **Solid** (finer reactivity, smaller ecosystem; our hottest surface — the grid — is canvas and framework-agnostic anyway); **Svelte 5** (same ecosystem argument); **Vue** (fine, but the React ecosystem for editors/design primitives is deeper) |
 | Build | **Vite 6 (SPA)**, Rollup-based prod build, route-level code splitting | D18: auth-gated, highly interactive app; SSR gives little and complicates realtime state | **Next.js app router** (SSR/RSC adds a Node rendering tier and caching semantics we don't need for an authenticated grid app; kept for marketing); webpack (slower) |
 | Routing | **TanStack Router** | Type-safe params/search params (view state lives in the URL: `?view=viw_…&record=rec_…`); loaders integrate with TanStack Query | React Router 7 (good, weaker type safety for search params) |
 | Server state (metadata) | **TanStack Query v5** | Caching/invalidation of bases, tables, fields, views, members, automation lists; invalidation driven by realtime schema ops | SWR (fewer features); RTK Query (Redux coupling); Apollo (no GraphQL, D16) |
-| Record data | **Custom `RecordStore`** (`@tabula/record-store`): normalized by record id, window-paged, applies realtime ops by `seq`, optimistic layer keyed by `clientMutationId`, `useSyncExternalStore` selectors | Record data is too large and too frequently mutated for a generic query cache; server ops must merge with pending optimistic ops in seq order ([16](16-realtime.md), [24](24-frontend-grid-state-design-system.md)) | TanStack Query for records (cache granularity per query; poor for 100k-row windows); Redux (boilerplate, perf on high-frequency updates); MobX (implicit reactivity hard to reason about at 50k cells) |
+| Record data | **Custom `RecordStore`** (`@tableos/record-store`): normalized by record id, window-paged, applies realtime ops by `seq`, optimistic layer keyed by `clientMutationId`, `useSyncExternalStore` selectors | Record data is too large and too frequently mutated for a generic query cache; server ops must merge with pending optimistic ops in seq order ([16](16-realtime.md), [24](24-frontend-grid-state-design-system.md)) | TanStack Query for records (cache granularity per query; poor for 100k-row windows); Redux (boilerplate, perf on high-frequency updates); MobX (implicit reactivity hard to reason about at 50k cells) |
 | UI state | **Zustand** (small stores per surface: selection, editing, panels) | Minimal API, selector subscriptions, no provider pyramid | Jotai (fine; atom sprawl at our scale); Redux Toolkit (heavier) |
-| UI primitives | **Radix UI primitives** + own design system `@tabula/ui` | Accessible, unstyled, composable (menus, popovers, dialogs, comboboxes); we own the look | MUI/Chakra/Mantine (opinionated styling, bundle weight, hard to match a dense spreadsheet UI); Headless UI (fewer primitives); **React Aria** (excellent a11y — acceptable alternative; its date pickers may be used inside date field editors) |
+| UI primitives | **Radix UI primitives** + own design system `@tableos/ui` | Accessible, unstyled, composable (menus, popovers, dialogs, comboboxes); we own the look | MUI/Chakra/Mantine (opinionated styling, bundle weight, hard to match a dense spreadsheet UI); Headless UI (fewer primitives); **React Aria** (excellent a11y — acceptable alternative; its date pickers may be used inside date field editors) |
 | Styling | **Tailwind CSS v4**, design tokens as CSS custom properties (`--tb-color-*`, `--tb-space-*`), `class-variance-authority` for variants | Zero runtime; tokens map 1:1 to the canvas grid theme (the grid reads the same CSS variables); fast iteration | Runtime CSS-in-JS (emotion/styled-components: runtime cost, React 19 streaming friction); vanilla-extract (good, slower iteration); CSS Modules only (no token discipline) |
-| Grid | **Custom canvas grid** (`@tabula/grid`), prior art Glide Data Grid (MIT) | 100k+ rows × hundreds of fields at 60 fps, per-field-type canvas renderers, frozen columns, grouping, row heights, fill handle, multi-cell selection, realtime cell flashes — DOM grids hit layout/GC limits | **AG Grid** (excellent, but enterprise licence cost; DOM virtualization fights our cell model and grouping semantics); **Glide Data Grid as a dependency** (great start; grouping, summary bar and editing model diverge, so we reuse ideas not the package); TanStack Table (headless logic; used for small admin tables) |
+| Grid | **Custom canvas grid** (`@tableos/grid`), prior art Glide Data Grid (MIT) | 100k+ rows × hundreds of fields at 60 fps, per-field-type canvas renderers, frozen columns, grouping, row heights, fill handle, multi-cell selection, realtime cell flashes — DOM grids hit layout/GC limits | **AG Grid** (excellent, but enterprise licence cost; DOM virtualization fights our cell model and grouping semantics); **Glide Data Grid as a dependency** (great start; grouping, summary bar and editing model diverge, so we reuse ideas not the package); TanStack Table (headless logic; used for small admin tables) |
 | Virtualized lists (non-grid) | **TanStack Virtual** | Kanban columns, gallery, interface record lists, comment threads | react-window (less flexible for variable sizes) |
 | Drag and drop | **dnd-kit** (kanban, menus, interface builder) + grid-native DnD on canvas | Accessible keyboard DnD, sensors, collision strategies | react-beautiful-dnd (deprecated); pragmatic-drag-and-drop (good perf; fallback if dnd-kit maintenance stalls) |
-| API client | **`@tabula/api-client`** generated from OpenAPI (`openapi-typescript` types + thin `fetch` wrapper: retries, idempotency keys, problem+json) | Same contract as the public API (D16); generated types prevent drift | tRPC (couples clients to server internals; public API must be REST anyway); axios (unneeded over fetch) |
-| Forms (config dialogs, field settings, automation panels) | **React Hook Form + Zod resolver** (schemas from `@tabula/fields`/`@tabula/types`) | Uncontrolled inputs perform well for large config forms; the same Zod schemas validate on the server | Formik (re-render heavy, low maintenance); TanStack Form (promising, younger — revisit) |
-| End-user public forms | `@tabula/field-ui` editors inside `apps/public`, validated by `@tabula/fields` codecs | One validation implementation per field type | A separate form library (duplicates field semantics) |
-| Charts (dashboards, chart elements, summary sparklines) | **Apache ECharts 5** behind a thin `@tabula/ui/charts` wrapper (modular imports, canvas renderer) | Canvas handles 10k–100k points; broad catalogue (bar/line/area/pie/scatter/heatmap/funnel/gauge/treemap); built-in dataZoom/brush/tooltips; themeable from our tokens; ARIA descriptions; Apache-2.0 | **Recharts** (SVG + React reconciliation degrade beyond a few thousand points; limited chart types — wrong for dashboards over large tables); **visx** (low-level D3 primitives: maximal control, but we would build every chart, legend and interaction ourselves); Highcharts (commercial licence); Chart.js (fewer types, weaker large-data interaction); Vega-Lite (heavier runtime, harder theming) |
+| API client | **`@tableos/api-client`** generated from OpenAPI (`openapi-typescript` types + thin `fetch` wrapper: retries, idempotency keys, problem+json) | Same contract as the public API (D16); generated types prevent drift | tRPC (couples clients to server internals; public API must be REST anyway); axios (unneeded over fetch) |
+| Forms (config dialogs, field settings, automation panels) | **React Hook Form + Zod resolver** (schemas from `@tableos/fields`/`@tableos/types`) | Uncontrolled inputs perform well for large config forms; the same Zod schemas validate on the server | Formik (re-render heavy, low maintenance); TanStack Form (promising, younger — revisit) |
+| End-user public forms | `@tableos/field-ui` editors inside `apps/public`, validated by `@tableos/fields` codecs | One validation implementation per field type | A separate form library (duplicates field semantics) |
+| Charts (dashboards, chart elements, summary sparklines) | **Apache ECharts 5** behind a thin `@tableos/ui/charts` wrapper (modular imports, canvas renderer) | Canvas handles 10k–100k points; broad catalogue (bar/line/area/pie/scatter/heatmap/funnel/gauge/treemap); built-in dataZoom/brush/tooltips; themeable from our tokens; ARIA descriptions; Apache-2.0 | **Recharts** (SVG + React reconciliation degrade beyond a few thousand points; limited chart types — wrong for dashboards over large tables); **visx** (low-level D3 primitives: maximal control, but we would build every chart, legend and interaction ourselves); Highcharts (commercial licence); Chart.js (fewer types, weaker large-data interaction); Vega-Lite (heavier runtime, harder theming) |
 | Rich text | **Tiptap (ProseMirror)** + **Yjs** (`y-prosemirror`) for collaborative rich long text (V1+, D9) | ProseMirror's schema-constrained documents map to stored `{doc, plain}`; Tiptap extension model; Yjs is the mature text CRDT with awareness for cursors. Yjs updates are **transported over our own WebSocket gateway** and persisted to `record_rich_docs` | Lexical (younger collaborative story); Slate (API churn); Quill (weak structured model); Automerge (heavier for text). Hocuspocus server considered — rejected to avoid another stateful service |
-| Date/time | **Temporal** (native where shipped, `temporal-polyfill` otherwise) in `@tabula/formula` and `@tabula/fields`; `Intl.DateTimeFormat` for display | Correct time-zone/DST arithmetic for `DATEADD`, `WORKDAY`, `DATETIME_DIFF`; immutable; isomorphic and deterministic | **date-fns-tz** (built on `Date`, no TZ-aware arithmetic → DST bugs in formulas; acceptable only for formatting, so not needed); Luxon (good, but Temporal is the standard); Day.js/Moment (mutability, plugins, Moment deprecated) |
+| Date/time | **Temporal** (native where shipped, `temporal-polyfill` otherwise) in `@tableos/formula` and `@tableos/fields`; `Intl.DateTimeFormat` for display | Correct time-zone/DST arithmetic for `DATEADD`, `WORKDAY`, `DATETIME_DIFF`; immutable; isomorphic and deterministic | **date-fns-tz** (built on `Date`, no TZ-aware arithmetic → DST bugs in formulas; acceptable only for formatting, so not needed); Luxon (good, but Temporal is the standard); Day.js/Moment (mutability, plugins, Moment deprecated) |
 | i18n | **FormatJS (`react-intl`)** + ICU messages; `Intl.NumberFormat` for numbers/currency | ICU plurals/selects | i18next (fine; ICU only via plugin) |
 | Unit/component tests | **Vitest** + **Testing Library** + **MSW** | Fast, Vite-native, same runner as server | Jest (slower with ESM/TS) |
 | E2E | **Playwright** (multi-context realtime collaboration tests, trace viewer) | Two users editing one base in a single test | Cypress (single-tab model hurts collaboration tests) |
-| Visual | Playwright canvas screenshots + Storybook for `@tabula/ui` (Chromatic or Lost Pixel) | Canvas grid regressions are visual | — |
+| Visual | Playwright canvas screenshots + Storybook for `@tableos/ui` (Chromatic or Lost Pixel) | Canvas grid regressions are visual | — |
 | Property tests | **fast-check** (formula engine; filter SQL compiler vs JS evaluator equivalence; LWW merge) | Finds engine edge cases | — |
 | Error tracking | Sentry browser SDK, source maps uploaded in CI | — | — |
 
@@ -342,7 +342,7 @@ Principles used to choose:
 | SSO | **BoxyHQ SAML Jackson** (self-hosted OSS) behind `SsoProvider` (D19); WorkOS as buy alternative | SAML is a security minefield; use a focused implementation | Hand-rolled SAML; Auth0/Cognito as identity system of record |
 | Email | **Amazon SES** adapter; **React Email** templates rendered server-side | Cost, deliverability; SNS bounce/complaint → `email_suppressions` | SendGrid/Postmark (adapter permits switching) |
 | Payments | **Stripe** (Billing, Tax, Customer Portal) | Seat + metered billing | Paddle/Chargebee |
-| Formula engine | **TypeScript** (`@tabula/formula`) compiled closures | Isomorphic (D8); cost is dominated by I/O and JSONB, not closure evaluation (millions of simple evaluations per second per core) | **Rust/WASM** (faster evaluation, but duplicate type system and marshaling of cell values across the WASM boundary costs more than evaluating typical formulas) — revisit only for bulk recompute of > 1M records if profiling shows evaluation dominates |
+| Formula engine | **TypeScript** (`@tableos/formula`) compiled closures | Isomorphic (D8); cost is dominated by I/O and JSONB, not closure evaluation (millions of simple evaluations per second per core) | **Rust/WASM** (faster evaluation, but duplicate type system and marshaling of cell values across the WASM boundary costs more than evaluating typical formulas) — revisit only for bulk recompute of > 1M records if profiling shows evaluation dominates |
 | Media | **sharp (libvips)**, **ffmpeg**, **ClamAV** (`clamd` over TCP) | Standard, memory-efficient | ImageMagick (heavier, larger attack surface) |
 | Import parsing | `papaparse` (streaming CSV), `exceljs` streaming reader | Bounded memory | SheetJS CE (distribution/licensing changes) |
 | API docs | OpenAPI 3.1 from TypeBox; **Scalar** renderer in `apps/docs-portal` | No drift | Hand-written reference |
@@ -351,7 +351,7 @@ Principles used to choose:
 
 | Area | Language | Trigger |
 |---|---|---|
-| Realtime gateway at very high connection counts | Node + uWebSockets.js first; Go/Rust if still insufficient | X3 (§45.8). The protocol in `@tabula/realtime-protocol` is schema-defined so a non-TS gateway can be generated |
+| Realtime gateway at very high connection counts | Node + uWebSockets.js first; Go/Rust if still insufficient | X3 (§45.8). The protocol in `@tableos/realtime-protocol` is schema-defined so a non-TS gateway can be generated |
 | Sandbox infrastructure (microVM orchestration, egress proxy) | Rust/Go, or off-the-shelf Envoy | When microVM workloads launch |
 | Bulk data tools (shard moves, multi-GB CSV parsing) | Go/Rust CLIs in `tools/` | Throughput benchmarks |
 | Formula engine | **Stays TypeScript** | Any alternative implementation must keep the TS engine as reference and pass cross-implementation property tests |
@@ -406,7 +406,7 @@ In-house identity core (D19): opaque session tokens hashed in `core.sessions` an
 
 | Concern | Choice **[Ours]** | Why |
 |---|---|---|
-| Abstraction | `@tabula/ai` provider interface (`complete`, `stream`, `embed`) + AI gateway module (D22) | Routing, metering, caching, policy in one place |
+| Abstraction | `@tableos/ai` provider interface (`complete`, `stream`, `embed`) + AI gateway module (D22) | Routing, metering, caching, policy in one place |
 | Default provider | Anthropic Claude via `@anthropic-ai/sdk`: `claude-sonnet-5` default, `claude-haiku-4-5-20251001` for high-volume classification/extraction, `claude-opus-5-5` for agents/complex reasoning (D22) | Quality, tool use, long context |
 | Other providers | Pluggable adapters (OpenAI-compatible endpoints; Bedrock-hosted models for residency) | Customer policy |
 | Structured output | JSON-schema-constrained output validated with the target field's codec; bounded retry on violation | AI values must conform to field types |
@@ -440,7 +440,7 @@ In-house identity core (D19): opaque session tokens hashed in `core.sessions` an
 | Polyrepo | Independent versioning | Isomorphic packages need publishing and version pinning for every engine change; cross-repo refactors stall; boundary drift | Rejected |
 | Monorepo + Nx | Richer generators/graph | Heavier conventions; Turborepo + dependency-cruiser covers our needs | Alternative |
 
-**Decision on `apps/public` (shared views, public forms, published interfaces):** a **separate lightweight Vite SPA** served from a **separate origin** (`share.tabula.example`), with the `api` role serving a tiny HTML shell per share token (`GET /s/{token}`, `GET /f/{token}`) that injects Open Graph meta, `noindex` by default, CSP nonce and preloaded share bootstrap JSON. **No React SSR tier.**
+**Decision on `apps/public` (shared views, public forms, published interfaces):** a **separate lightweight Vite SPA** served from a **separate origin** (`share.tableos.example`), with the `api` role serving a tiny HTML shell per share token (`GET /s/{token}`, `GET /f/{token}`) that injects Open Graph meta, `noindex` by default, CSP nonce and preloaded share bootstrap JSON. **No React SSR tier.**
 
 | Option | Pros | Cons |
 |---|---|---|
@@ -448,12 +448,12 @@ In-house identity core (D19): opaque session tokens hashed in `core.sessions` an
 | **Separate SPA + server-injected shell** (chosen) | Small bundle (forms ≈ 120 KB gz target), origin isolation (no app cookies on share origin; share pages embeddable via iframe with their own CSP/`frame-ancestors`), reuses `field-ui`/`grid` packages | Second build target |
 | Next.js/Remix SSR | Best first paint for forms, SEO | A Node rendering tier with its own scaling, caching and security review; SEO is not a goal (shares are `noindex` by default). **Revisit** if form completion metrics show first-paint problems on slow devices |
 
-`apps/marketing` (Next.js or Astro, static-first) is **optional** and may live in a separate repo owned by marketing; it shares only `@tabula/ui` tokens.
+`apps/marketing` (Next.js or Astro, static-first) is **optional** and may live in a separate repo owned by marketing; it shares only `@tableos/ui` tokens.
 
 ### 47.2 Tree
 
 ```text
-tabula/
+tableos/
 ├─ apps/
 │  ├─ web/                         # Vite + React 19 SPA (authenticated product)
 │  │  ├─ src/
@@ -481,7 +481,7 @@ tabula/
 │  │  │     ├─ notification/  search/  audit/  import-export/  realtime/
 │  │  │     └─ <module>/
 │  │  │        ├─ index.ts         # PUBLIC facade: types + create<Module>(deps) factory (only importable file)
-│  │  │        ├─ events.ts        # PUBLIC: payload types of events this module emits (re-export from @tabula/events)
+│  │  │        ├─ events.ts        # PUBLIC: payload types of events this module emits (re-export from @tableos/events)
 │  │  │        ├─ ports.ts         # PUBLIC: interfaces this module needs from higher modules (§45.7)
 │  │  │        ├─ module.yaml      # owner, owned tables, read exemptions, emits, consumes, queues, ports
 │  │  │        ├─ api/             # Fastify route plugins (TypeBox schemas), request→command mapping, no SQL
@@ -534,7 +534,7 @@ tabula/
 │  ├─ terraform/
 │  │  ├─ modules/                  # vpc, eks, rds-shard, rds-control, elasticache, msk, s3, cloudfront, opensearch, waf, kms
 │  │  └─ envs/                     # dev, staging, prod-us, prod-eu (+ dedicated-shard stacks)
-│  ├─ helm/tabula/                 # one chart; values per role (api, realtime, worker-<group>, scheduler, relay, sandbox)
+│  ├─ helm/tableos/                 # one chart; values per role (api, realtime, worker-<group>, scheduler, relay, sandbox)
 │  ├─ k8s/                         # cluster add-ons: KEDA ScaledObjects, Argo Rollouts, NetworkPolicies, PDBs
 │  └─ docker/                      # base images (distroless node), file-worker native layer, local docker-compose
 ├─ tools/
@@ -552,7 +552,7 @@ tabula/
 
 ### 47.3 Package tiers and dependency rules
 
-Every package and app carries a tag in its `package.json` (`"tabula": { "tier": "...", "env": "..." }`) that lint rules read.
+Every package and app carries a tag in its `package.json` (`"tableos": { "tier": "...", "env": "..." }`) that lint rules read.
 
 | Tier | Packages | May depend on | Environment |
 |---|---|---|---|
@@ -607,7 +607,7 @@ flowchart TB
 | Type-check | `turbo run typecheck` (project references) | — |
 | Unit | `turbo run test --filter=...[origin/main]` | affected only |
 | Integration | Testcontainers suites for affected server modules | — |
-| Migration dry-run | `tools/shard-migrate plan` against a schema-only clone of prod per plane + lock analysis (§51 in doc 27) | no blocking DDL without `-- tabula:allow-lock` annotation |
+| Migration dry-run | `tools/shard-migrate plan` against a schema-only clone of prod per plane + lock analysis (§51 in doc 27) | no blocking DDL without `-- tableos:allow-lock` annotation |
 | E2E | Playwright smoke on ephemeral environment | — |
 | Build images | `server`, `sandbox-runner`, `web`, `public` (SBOM + signing via cosign) | — |
 | Deploy | Argo CD sync per environment; Argo Rollouts canary per role | SLO-based automated analysis |
@@ -718,7 +718,7 @@ flowchart BT
 
 Transitive edges that exist in code but are omitted above for clarity: `records → schema, compute, links, recordstore, billing`; `schema → links, recordstore, formula, billing`; `access → organization, billing`; `query → schema`; `contacts → schema, links`; `interfaces → views, query, schema`; `share → records, views, query`; `import-export → schema, views, links`; `automation → query, schema`; `realtime → recordstore` (rich-doc persistence); `base → billing`. The authoritative list is `tools/codegen/module-graph.yaml`; CI fails on any cycle (`depcruise --validate` with `no-circular`) or any edge not listed.
 
-**AuthZ placement:** domain modules do not call `access` per check. Route handlers (and job/consumer entrypoints) obtain an `AuthContext` containing the principal and the compiled `PermissionSnapshot` (D20) from `access` once per request; domain code evaluates it with the pure `@tabula/permissions` evaluator. This is why most data-plane modules have no edge to `access`.
+**AuthZ placement:** domain modules do not call `access` per check. Route handlers (and job/consumer entrypoints) obtain an `AuthContext` containing the principal and the compiled `PermissionSnapshot` (D20) from `access` once per request; domain code evaluates it with the pure `@tableos/permissions` evaluator. This is why most data-plane modules have no edge to `access`.
 
 ### 48.3 Service catalogue
 
@@ -817,7 +817,7 @@ Notation: **Owns** = tables (spine §5) this module alone writes and reads; **Ca
 
 #### ViewService — `views` (L7)
 
-* **Responsibilities:** view CRUD (grid, kanban, calendar, gallery, timeline, list, form), view config validation (filter AST via `@tabula/filter`, sort/group specs, field visibility/order), view sections, personal views, locked views, per-user state, form view config (form submission handled by `share`/`records`).
+* **Responsibilities:** view CRUD (grid, kanban, calendar, gallery, timeline, list, form), view config validation (filter AST via `@tableos/filter`, sort/group specs, field visibility/order), view sections, personal views, locked views, per-user state, form view config (form submission handled by `share`/`records`).
 * **Owns:** `views`, `view_sections`, `view_user_state`.
 * **Calls:** `schema` (snapshot for config validation).
 * **API:** `createView`, `updateView (If-Match)`, `deleteView/restoreView`, `duplicateView`, `getView`, `listViews(tableId, principal)`, `setUserState`, `getFormDefinition(viewId)`, `getLockedViewRestrictions` (RestrictionProvider).
@@ -826,7 +826,7 @@ Notation: **Owns** = tables (spine §5) this module alone writes and reads; **Ca
 
 #### QueryService — `query` (L8)
 
-* **Responsibilities:** execute view and API queries: compile filter/sort/group/search via `@tabula/query` + `@tabula/filter` into SQL over `records` + sidecars + `record_links` (link-aware filters), keyset pagination with opaque cursors, group headers/summary aggregates, row-policy predicates from the permission snapshot, field projection with redaction, record count estimates.
+* **Responsibilities:** execute view and API queries: compile filter/sort/group/search via `@tableos/query` + `@tableos/filter` into SQL over `records` + sidecars + `record_links` (link-aware filters), keyset pagination with opaque cursors, group headers/summary aggregates, row-policy predicates from the permission snapshot, field projection with redaction, record count estimates.
 * **Owns:** none. **Read exemption (B10):** `records`, `record_index_num`, `record_index_text`, `record_index_time`, `record_links` (read-only; uses a read-only Kysely scope).
 * **Calls:** `views` (view config), `schema` (snapshot).
 * **API:** `query(baseId, tableId, QuerySpec, auth) → Page`, `queryView(viewId, overrides, auth)`, `aggregate(spec)`, `groupHeaders(spec)`, `countEstimate(spec)`, `explain(spec)` (admin).
@@ -834,7 +834,7 @@ Notation: **Owns** = tables (spine §5) this module alone writes and reads; **Ca
 
 #### FormulaService — `formula` (L1)
 
-* **Responsibilities:** server-side façade over `@tabula/formula`: parse, type-check against a `SchemaSnapshot` passed in, compile and cache compiled closures by `(fieldId, schemaVersion)`, function catalogue for UI, formula-to-dependencies extraction.
+* **Responsibilities:** server-side façade over `@tableos/formula`: parse, type-check against a `SchemaSnapshot` passed in, compile and cache compiled closures by `(fieldId, schemaVersion)`, function catalogue for UI, formula-to-dependencies extraction.
 * **Owns:** none.
 * **Calls:** none (pure package + in-memory LRU).
 * **API:** `compile(schema, expr, ctx) → CompiledFormula | Diagnostics`, `dependencies(compiled) → FieldRef[]`, `evaluate(compiled, recordView)`, `catalog()`.
@@ -919,7 +919,7 @@ Notation: **Owns** = tables (spine §5) this module alone writes and reads; **Ca
 * **Calls:** none.
 * **API:** `query(orgId, filter, cursor)`, `createExport/updateExport`, `archivePartition(month)`.
 * **Emits:** none.
-* **Consumes:** `tabula.audit.v1` (all events flagged auditable at emit time: identity, tenancy, schema, sharing, permission, export, integration, automation publish, AI policy) (dedupe: unique `event_id`).
+* **Consumes:** `tableos.audit.v1` (all events flagged auditable at emit time: identity, tenancy, schema, sharing, permission, export, integration, automation publish, AI policy) (dedupe: unique `event_id`).
 
 #### HistoryService — `history` (L3)
 
@@ -964,7 +964,7 @@ Notation: **Owns** = tables (spine §5) this module alone writes and reads; **Ca
 * **Calls:** `schema`, `access` (creator still authorized; token validity), kernel change-log reader.
 * **API:** `createSubscription`, `refresh`, `delete`, `listPayloads(subscriptionId, cursor)`, `deliver(subscriptionId)` (job).
 * **Emits:** none (delivery records only; auto-disable emits audit).
-* **Consumes:** `tabula.base-changes.v1` (match subscriptions per base, coalesce notifications per subscription; dedupe: subscription cursor monotonic `last_notified_seq`).
+* **Consumes:** `tableos.base-changes.v1` (match subscriptions per base, coalesce notifications per subscription; dedupe: subscription cursor monotonic `last_notified_seq`).
 
 #### BillingService / UsageService — `billing` (L2)
 
@@ -973,16 +973,16 @@ Notation: **Owns** = tables (spine §5) this module alone writes and reads; **Ca
 * **Calls:** `organization`.
 * **API:** `getLimits(orgId)`, `checkLimit(orgId, metric, delta) → ok | LimitExceeded`, `recordUsageInTx` (control plane only), `handleStripeWebhook`, `changePlan`, `getUsage(orgId, period)`.
 * **Emits:** `subscription.changed`, `usage.threshold_reached`, `limit.exceeded`.
-* **Consumes:** `tabula.usage.v1` (record writes, automation runs, AI tokens, storage bytes, API calls) (dedupe: unique `usage_events.event_id`); `member.added`/`member.removed` (seat count; dedupe: membership version).
+* **Consumes:** `tableos.usage.v1` (record writes, automation runs, AI tokens, storage bytes, API calls) (dedupe: unique `usage_events.event_id`); `member.added`/`member.removed` (seat count; dedupe: membership version).
 
 #### RealtimeService — `realtime` (L9)
 
 * **Responsibilities:** WebSocket sessions (auth via session cookie or token), base subscriptions with permission snapshot, catch-up from `base_changes` by seq, fan-out of change ops with field-level redaction, presence (Redis `presence:{baseId}`), cursors/selection broadcast, Yjs rich-text sync, schema-change notifications, heartbeat (`WS_HEARTBEAT`), backpressure. Detail in [16](16-realtime.md).
 * **Owns:** no Postgres tables (Redis namespaces `presence:*`, `ws:route:*`).
 * **Calls:** `access` (snapshots, epoch checks), `schema` (snapshot for redaction), kernel change-log reader, `recordstore` (rich-doc persistence `saveRichDocInTx`).
-* **API (internal):** `subscribe(conn, baseId, sinceSeq)`, `unsubscribe`, `broadcastPresence`, `applyRichTextUpdate`. Wire protocol in `@tabula/realtime-protocol`.
+* **API (internal):** `subscribe(conn, baseId, sinceSeq)`, `unsubscribe`, `broadcastPresence`, `applyRichTextUpdate`. Wire protocol in `@tableos/realtime-protocol`.
 * **Emits:** none.
-* **Consumes:** `tabula.base-changes.v1` (every base with local subscribers; dedupe: client-side by `seq`, server keeps per-base last delivered seq), `grant.changed`/`member.removed` (re-evaluate or drop subscriptions).
+* **Consumes:** `tableos.base-changes.v1` (every base with local subscribers; dedupe: client-side by `seq`, server keeps per-base last delivered seq), `grant.changed`/`member.removed` (re-evaluate or drop subscriptions).
 
 ### 48.4 Event flow summary (who emits → who consumes)
 

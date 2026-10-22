@@ -162,7 +162,8 @@ const OTHER_PREFIX = "OTHER-";
 let state = { meta: {}, results: {}, others: [] };
 
 /* ---- storage: IndexedDB (screenshots are too big for localStorage) ---- */
-const DB = "tableos-test-workbook", STORE = "kv";
+// One store per plan version: a new plan starts with empty results instead of last round's.
+const DB = "tableos-test-workbook-v" + PLAN.planVersion, STORE = "kv";
 function idb() { return new Promise((res, rej) => { const r = indexedDB.open(DB, 1); r.onupgradeneeded = () => r.result.createObjectStore(STORE); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
 async function load() { const db = await idb(); return new Promise((res) => { const t = db.transaction(STORE).objectStore(STORE).get("state"); t.onsuccess = () => res(t.result || null); t.onerror = () => res(null); }); }
 let saveTimer = null;

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-export const SESSION_COOKIE_NAME = "tabula_session" as const;
+export const SESSION_COOKIE_NAME = "tableos_session" as const;
 
 const TOKEN_BYTES = 32;
 

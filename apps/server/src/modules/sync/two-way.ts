@@ -1,4 +1,4 @@
-import type { Database } from "@tabula/db";
+import type { Database } from "@tableos/db";
 import { sql, type Transaction } from "kysely";
 import { pushHubSpotEdits, type PushDeps, type PushableSync } from "../integrations/hubspot-push.js";
 

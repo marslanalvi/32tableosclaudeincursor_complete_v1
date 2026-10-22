@@ -11,7 +11,7 @@ import { resolveBaseContext } from "../access/helpers.js";
 import { assertCan } from "../access/assert.js";
 import { compileForUser, compileForWorkspace } from "../access/compile.js";
 import { duplicateBase } from "./duplicate-base.js";
-import { NO_ACCESS_ROLE, combineBaseRole } from "@tabula/permissions";
+import { NO_ACCESS_ROLE, combineBaseRole } from "@tableos/permissions";
 
 const duplicateBody = z
   .object({

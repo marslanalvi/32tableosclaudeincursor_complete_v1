@@ -1,4 +1,4 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { runComputeInTx } from "./engine.js";
 
@@ -19,7 +19,7 @@ const BATCH = 2000;
  * `computed_stale` and picked up by the next loop iteration, so nothing is
  * lost even without a Redis handle here.
  */
-export async function handleComputeJob(db: TabulaDb, payload: ComputeJobPayload): Promise<void> {
+export async function handleComputeJob(db: TableOSDb, payload: ComputeJobPayload): Promise<void> {
   for (let iter = 0; iter < 10_000; iter++) {
     const processed = await db.transaction().execute(async (trx) => {
       const stale = await sql<{ table_id: string; record_id: string; field_id: string }>`

@@ -4,16 +4,16 @@
  * records (including legacy / malformed values), links and attachments directly
  * via SQL, so the read path can be exercised independently of the write path.
  *
- * Requires a running API (TABULA_API_URL, default http://localhost:3200) and
- * DATABASE_URL (default the dev `tabula_cc` database).
+ * Requires a running API (TABLEOS_API_URL, default http://localhost:3200) and
+ * DATABASE_URL (default the dev `tableos_cc` database).
  */
 // @ts-ignore -- no @types/pg in this workspace; test-only helper
 import pg from "pg";
-import { generateUuidV7 } from "@tabula/types";
-import { decodePublicId, encodePublicId } from "@tabula/types";
+import { generateUuidV7 } from "@tableos/types";
+import { decodePublicId, encodePublicId } from "@tableos/types";
 
-export const API = process.env["TABULA_API_URL"] ?? "http://localhost:3200";
-export const DB_URL = process.env["DATABASE_URL"] ?? "postgres://tabula:tabula@localhost:5432/tabula_cc";
+export const API = process.env["TABLEOS_API_URL"] ?? "http://localhost:3200";
+export const DB_URL = process.env["DATABASE_URL"] ?? "postgres://tableos:tableos@localhost:5432/tableos_cc";
 
 export type Api = <T = any>(method: string, path: string, body?: unknown) => Promise<{ status: number; body: T }>;
 
@@ -158,7 +158,7 @@ export function rng(seed: number): () => number {
 export async function createFixture(nRecords = 60, seed = 42): Promise<Fixture> {
   const api = apiClient();
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  const su = await api("POST", "/v1/auth/signup", { email: `ws-a-${stamp}@tabula.test`, password: "Passw0rd!Passw0rd!", name: "Ada Tester" });
+  const su = await api("POST", "/v1/auth/signup", { email: `ws-a-${stamp}@tableos.test`, password: "Passw0rd!Passw0rd!", name: "Ada Tester" });
   if (su.status >= 400) throw new Error(`signup ${su.status} ${JSON.stringify(su.body)}`);
   const userId: string = su.body.user.id;
   const wsId: string = su.body.workspace.id;
@@ -182,7 +182,7 @@ export async function createFixture(nRecords = 60, seed = 42): Promise<Fixture> 
   const otherUserUuid = generateUuidV7();
   await pool.query(
     `INSERT INTO core.users (id, email, email_normalized, display_name) VALUES ($1, $2, $2, 'Bob Other')`,
-    [otherUserUuid, `ws-a-other-${stamp}@tabula.test`],
+    [otherUserUuid, `ws-a-other-${stamp}@tableos.test`],
   );
 
   // Primary fields of both tables.

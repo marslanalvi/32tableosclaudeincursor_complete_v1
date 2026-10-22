@@ -1,9 +1,9 @@
 import { sql } from "kysely";
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import type { SidecarFieldRow, SidecarTableMeta } from "./sidecars.js";
 
 export async function loadSidecarFields(
-  db: TabulaDb,
+  db: TableOSDb,
   tableId: string,
 ): Promise<SidecarFieldRow[]> {
   const result = await sql<SidecarFieldRow>`
@@ -15,7 +15,7 @@ export async function loadSidecarFields(
 }
 
 export async function loadSidecarTableMeta(
-  db: TabulaDb,
+  db: TableOSDb,
   tableId: string,
   workspaceId: string,
   baseId: string,

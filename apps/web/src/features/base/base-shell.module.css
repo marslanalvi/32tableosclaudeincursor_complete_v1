@@ -35,8 +35,8 @@
 }
 
 .tableTab[data-active="true"] {
-  background: var(--tabula-color-bg);
-  border-color: var(--tabula-color-border);
+  background: var(--tableos-color-bg);
+  border-color: var(--tableos-color-border);
 }
 
 /* hairline divider between two inactive neighbours (Airtable look) */
@@ -47,15 +47,15 @@
   top: 10px;
   bottom: 10px;
   width: 1px;
-  background: var(--tabula-color-border);
+  background: var(--tableos-color-border);
 }
 
 .tableTab[data-drop="before"] {
-  box-shadow: inset 2px 0 0 var(--tabula-color-accent);
+  box-shadow: inset 2px 0 0 var(--tableos-color-accent);
 }
 
 .tableTab[data-drop="after"] {
-  box-shadow: inset -2px 0 0 var(--tabula-color-accent);
+  box-shadow: inset -2px 0 0 var(--tableos-color-accent);
 }
 
 .tableTabLabel {
@@ -70,9 +70,9 @@
   padding: 0 4px 0 10px;
   height: 100%;
   font: inherit;
-  font-size: var(--tabula-font-size-md);
+  font-size: var(--tableos-font-size-md);
   font-weight: 400;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -91,12 +91,12 @@
 }
 
 .tableTab[data-active="true"] .tableTabLabel {
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
   font-weight: 500;
 }
 
 .tableTabLabel:hover {
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .tabCaret {
@@ -108,8 +108,8 @@
   width: 22px;
   height: 22px;
   padding: 0;
-  border-radius: var(--tabula-radius-xs);
-  color: var(--tabula-color-text-muted);
+  border-radius: var(--tableos-radius-xs);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
   /* slot is always reserved; the caret shows on the active / hovered tab */
   opacity: 0;
@@ -124,19 +124,19 @@
 
 .tabCaret:hover,
 .tabCaret[data-open="true"] {
-  background: var(--tabula-color-bg-strong);
-  color: var(--tabula-color-text);
+  background: var(--tableos-color-bg-strong);
+  color: var(--tableos-color-text);
 }
 
 .tabRename {
   height: 26px;
   margin: 0 4px;
   padding: 0 6px;
-  border: 1px solid var(--tabula-color-info-border);
-  border-radius: var(--tabula-radius-sm);
-  font-size: var(--tabula-font-size-md);
+  border: 1px solid var(--tableos-color-info-border);
+  border-radius: var(--tableos-radius-sm);
+  font-size: var(--tableos-font-size-md);
   outline: none;
-  box-shadow: 0 0 0 2px var(--tabula-color-focus-ring);
+  box-shadow: 0 0 0 2px var(--tableos-color-focus-ring);
 }
 
 /* off-screen copy of every tab, used to measure natural widths */
@@ -162,22 +162,22 @@
   margin-left: 4px;
   padding: 0;
   border: none;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   background: transparent;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
 }
 
 .tabSwitcher:hover,
 .tabSwitcher[data-open="true"] {
-  background: var(--tabula-color-bg-strong);
-  color: var(--tabula-color-text);
+  background: var(--tableos-color-bg-strong);
+  color: var(--tableos-color-text);
 }
 
 .tabSwitcher:focus-visible,
 .tabCaret:focus-visible,
 .tableTabLabel:focus-visible {
-  outline: 2px solid var(--tabula-color-info-border);
+  outline: 2px solid var(--tableos-color-info-border);
   outline-offset: -2px;
 }
 
@@ -188,16 +188,16 @@
   background: transparent;
   padding: 6px 10px;
   margin-left: 4px;
-  border-radius: var(--tabula-radius-sm);
-  font-size: var(--tabula-font-size-md);
-  color: var(--tabula-color-text-muted);
+  border-radius: var(--tableos-radius-sm);
+  font-size: var(--tableos-font-size-md);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .addTable:hover:not(:disabled) {
-  background: var(--tabula-color-bg-strong);
-  color: var(--tabula-color-text);
+  background: var(--tableos-color-bg-strong);
+  color: var(--tableos-color-text);
 }
 
 .addTable:disabled {
@@ -209,10 +209,10 @@
 .floatMenu {
   min-width: 220px;
   overflow-y: auto;
-  background: var(--tabula-color-bg);
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
-  box-shadow: var(--tabula-shadow-md);
+  background: var(--tableos-color-bg);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
+  box-shadow: var(--tableos-shadow-md);
   padding: 6px;
 }
 
@@ -221,10 +221,10 @@
   max-width: calc(100vw - 16px);
   display: flex;
   flex-direction: column;
-  background: var(--tabula-color-bg);
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
-  box-shadow: var(--tabula-shadow-md);
+  background: var(--tableos-color-bg);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
+  box-shadow: var(--tableos-shadow-md);
   overflow: hidden;
 }
 
@@ -241,7 +241,7 @@
   margin-top: 2px;
   transform: translateY(-50%);
   display: inline-flex;
-  color: var(--tabula-color-text-subtle);
+  color: var(--tableos-color-text-subtle);
   pointer-events: none;
 }
 
@@ -250,18 +250,18 @@
   box-sizing: border-box;
   height: 34px;
   padding: 0 10px 0 34px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-sm);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-sm);
   font: inherit;
-  font-size: var(--tabula-font-size-md);
-  color: var(--tabula-color-text);
-  background: var(--tabula-color-bg);
+  font-size: var(--tableos-font-size-md);
+  color: var(--tableos-color-text);
+  background: var(--tableos-color-bg);
   outline: none;
 }
 
 .tablesMenuInput:focus {
-  border-color: var(--tabula-color-info-border);
-  box-shadow: 0 0 0 1px var(--tabula-color-info-border);
+  border-color: var(--tableos-color-info-border);
+  box-shadow: 0 0 0 1px var(--tableos-color-info-border);
 }
 
 .tablesMenuList {
@@ -279,29 +279,29 @@
   gap: 6px;
   height: 34px;
   padding: 0 4px 0 6px;
-  border-radius: var(--tabula-radius-sm);
-  color: var(--tabula-color-text);
-  font-size: var(--tabula-font-size-md);
+  border-radius: var(--tableos-radius-sm);
+  color: var(--tableos-color-text);
+  font-size: var(--tableos-font-size-md);
   font-weight: 500;
   cursor: pointer;
   user-select: none;
 }
 
 .tablesMenuRow[data-highlight="true"] {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .tablesMenuRow[data-hidden="true"] {
-  color: var(--tabula-color-text-subtle);
+  color: var(--tableos-color-text-subtle);
   font-weight: 400;
 }
 
 .tablesMenuRow[data-drop="before"] {
-  box-shadow: inset 0 2px 0 var(--tabula-color-accent);
+  box-shadow: inset 0 2px 0 var(--tableos-color-accent);
 }
 
 .tablesMenuRow[data-drop="after"] {
-  box-shadow: inset 0 -2px 0 var(--tabula-color-accent);
+  box-shadow: inset 0 -2px 0 var(--tableos-color-accent);
 }
 
 .tablesMenuOption {
@@ -318,7 +318,7 @@
   width: 18px;
   display: inline-grid;
   place-items: center;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .tablesMenuName {
@@ -337,9 +337,9 @@
   height: 26px;
   padding: 0;
   border: none;
-  border-radius: var(--tabula-radius-xs);
+  border-radius: var(--tableos-radius-xs);
   background: transparent;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
   visibility: hidden;
 }
@@ -351,8 +351,8 @@
 }
 
 .tablesMenuIconBtn:hover:not(:disabled) {
-  background: var(--tabula-color-bg-strong);
-  color: var(--tabula-color-text);
+  background: var(--tableos-color-bg-strong);
+  color: var(--tableos-color-text);
 }
 
 .tablesMenuIconBtn:disabled {
@@ -366,7 +366,7 @@
   place-items: center;
   width: 18px;
   height: 26px;
-  color: var(--tabula-color-text-subtle);
+  color: var(--tableos-color-text-subtle);
   cursor: grab;
   visibility: hidden;
 }
@@ -378,13 +378,13 @@
 
 .tablesMenuEmpty {
   padding: 10px 8px;
-  color: var(--tabula-color-text-muted);
-  font-size: var(--tabula-font-size-sm);
+  color: var(--tableos-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
 }
 
 .tablesMenuFooter {
   flex: none;
-  border-top: 1px solid var(--tabula-color-border);
+  border-top: 1px solid var(--tableos-color-border);
   padding: 6px;
 }
 
@@ -396,19 +396,19 @@
   height: 34px;
   padding: 0 8px;
   border: none;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   background: transparent;
   font: inherit;
-  font-size: var(--tabula-font-size-md);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-md);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
   text-align: left;
 }
 
 .tablesMenuAdd[data-highlight="true"],
 .tablesMenuAdd[aria-expanded="true"] {
-  background: var(--tabula-color-bg-subtle);
-  color: var(--tabula-color-text);
+  background: var(--tableos-color-bg-subtle);
+  color: var(--tableos-color-text);
 }
 
 .tablesMenuAddChevron {
@@ -421,15 +421,15 @@
   border: none;
   background: transparent;
   padding: 6px 10px;
-  border-radius: var(--tabula-radius-sm);
-  font-size: var(--tabula-font-size-md);
-  color: var(--tabula-color-text);
+  border-radius: var(--tableos-radius-sm);
+  font-size: var(--tableos-font-size-md);
+  color: var(--tableos-color-text);
   cursor: pointer;
   white-space: nowrap;
 }
 
 .toolsTrigger:hover:not(:disabled) {
-  background: var(--tabula-color-bg-strong);
+  background: var(--tableos-color-bg-strong);
 }
 
 .toolsTrigger:disabled {
@@ -443,8 +443,8 @@
 }
 
 .toolDetail {
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-text-subtle);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-text-subtle);
 }
 
 .startOptions {
@@ -467,8 +467,8 @@
 }
 
 .connItem {
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
   padding: 10px 12px;
 }
 
@@ -501,7 +501,7 @@
 .connAccount {
   margin: 8px 0 0 34px;
   padding-top: 8px;
-  border-top: 1px solid var(--tabula-color-border);
+  border-top: 1px solid var(--tableos-color-border);
 }
 
 .connAccount .connTables,
@@ -537,14 +537,14 @@
 }
 
 .connTable:hover {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .connNone,
 .connEmpty {
   margin: 8px 0 0 38px;
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-subtle);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-subtle);
 }
 
 .connEmpty {
@@ -554,16 +554,16 @@
 .hsConnect {
   margin-top: 12px;
   padding: 12px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
-  background: var(--tabula-color-bg-subtle, var(--tabula-color-bg));
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
+  background: var(--tableos-color-bg-subtle, var(--tableos-color-bg));
 }
 
 .hsSteps {
   margin: 8px 0 12px;
   padding-left: 18px;
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-muted);
   line-height: 1.5;
 }
 
@@ -596,8 +596,8 @@
   overflow-y: auto;
   margin: 8px 0;
   padding: 8px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
 }
 
 .hsProp {
@@ -606,7 +606,7 @@
   gap: 6px;
   min-width: 0;
   padding: 3px 0;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   cursor: pointer;
 }
 
@@ -622,11 +622,11 @@
   gap: 4px;
   text-align: left;
   padding: 12px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
-  background: var(--tabula-color-bg);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
+  background: var(--tableos-color-bg);
   cursor: pointer;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .startOption strong {
@@ -634,22 +634,22 @@
 }
 
 .startOption span {
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-muted);
 }
 
 .startOption[data-active="true"] {
-  border-color: var(--tabula-color-accent);
-  box-shadow: 0 0 0 1px var(--tabula-color-accent);
+  border-color: var(--tableos-color-accent);
+  box-shadow: 0 0 0 1px var(--tableos-color-accent);
 }
 
 .segmented {
   display: inline-flex;
   padding: 3px;
   gap: 2px;
-  background: var(--tabula-color-bg-subtle);
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
+  background: var(--tableos-color-bg-subtle);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
   margin-bottom: 12px;
 }
 
@@ -657,16 +657,16 @@
   border: none;
   background: transparent;
   padding: 6px 12px;
-  border-radius: var(--tabula-radius-sm);
-  font-size: var(--tabula-font-size-md);
-  color: var(--tabula-color-text-muted);
+  border-radius: var(--tableos-radius-sm);
+  font-size: var(--tableos-font-size-md);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
 }
 
 .segment[data-active="true"] {
-  background: var(--tabula-color-bg);
-  color: var(--tabula-color-text);
-  box-shadow: var(--tabula-shadow-sm);
+  background: var(--tableos-color-bg);
+  color: var(--tableos-color-text);
+  box-shadow: var(--tableos-shadow-sm);
 }
 
 .trashList {
@@ -680,7 +680,7 @@
   align-items: center;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
 }
 
 .trashText {
@@ -690,7 +690,7 @@
 
 .trashTitle {
   font-weight: 500;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -699,7 +699,7 @@
 .trashEmpty {
   padding: 32px 0;
   text-align: center;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 /* IDs & API dialog */
@@ -712,7 +712,7 @@
 }
 .idLabel {
   font-size: 13px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -722,14 +722,14 @@
   font-size: 12px;
   padding: 3px 6px;
   border-radius: 4px;
-  background: var(--tabula-color-bg-strong, #f2f2f2);
+  background: var(--tableos-color-bg-strong, #f2f2f2);
   user-select: all;
   overflow-wrap: anywhere;
 }
 .idList {
   max-height: 220px;
   overflow: auto;
-  border: 1px solid var(--tabula-color-border);
+  border: 1px solid var(--tableos-color-border);
   border-radius: 6px;
   padding: 4px 8px;
 }
@@ -745,13 +745,13 @@
   white-space: pre;
 }
 .idLink {
-  color: var(--tabula-color-info, #1b61c9);
+  color: var(--tableos-color-info, #1b61c9);
   font-size: 13px;
 }
 .syncBadge {
   margin-left: 4px;
   font-size: 11px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 .syncBar {
@@ -760,9 +760,9 @@
   gap: 8px;
   padding: 6px 12px;
   font-size: 12px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   background: #eef4ff;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
 }
 .syncBar[data-state="error"] {
   background: #fff1f0;
@@ -772,17 +772,17 @@
 }
 .syncBar strong {
   font-weight: 500;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 .syncErr {
-  color: var(--tabula-color-danger);
+  color: var(--tableos-color-danger);
 }
 .syncBtn {
   margin-left: auto;
   font: inherit;
   font-weight: 500;
-  border: 1px solid var(--tabula-color-border-strong);
-  background: var(--tabula-color-bg);
+  border: 1px solid var(--tableos-color-border-strong);
+  background: var(--tableos-color-bg);
   border-radius: 6px;
   padding: 2px 10px;
   cursor: pointer;
@@ -828,7 +828,7 @@
 .issuesIntro {
   margin: 0 0 10px;
   font-size: 13px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 .issuesList {
   display: flex;
@@ -838,7 +838,7 @@
   overflow: auto;
 }
 .issueGroup {
-  border: 1px solid var(--tabula-color-border);
+  border: 1px solid var(--tableos-color-border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -862,12 +862,12 @@
 .issueTable td {
   text-align: left;
   padding: 5px 10px;
-  border-top: 1px solid var(--tabula-color-border);
+  border-top: 1px solid var(--tableos-color-border);
   vertical-align: top;
 }
 .issueTable th {
   font-weight: 500;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 .issueTable code {
   font-size: 12px;

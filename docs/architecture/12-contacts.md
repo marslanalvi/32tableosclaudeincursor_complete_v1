@@ -101,7 +101,7 @@ EXISTS (SELECT 1 FROM data.contact_identifiers ci
           AND ci.kind = 'email' AND ci.value_normalized = $1 AND ci.status = 'active')
 ```
 
-In-memory evaluation reads the json cell and applies the same normalizer (shared `@tabula/contacts-normalize` package). These operators are listed under Proposed additions for 11's catalogue.
+In-memory evaluation reads the json cell and applies the same normalizer (shared `@tableos/contacts-normalize` package). These operators are listed under Proposed additions for 11's catalogue.
 
 ---
 
@@ -139,7 +139,7 @@ CREATE INDEX contact_identifiers_lookup_any   ON data.contact_identifiers (works
 
 Identifiers are **derived data**: the source of truth is the record's `emails`/`phones`/`social_profiles`/`domains` cells. They are rewritten in the **same transaction** as any write to those cells (record write hook in the contacts module), from a diff of old vs new normalized sets.
 
-### 4.2 Normalization rules (`@tabula/contacts-normalize`, isomorphic)
+### 4.2 Normalization rules (`@tableos/contacts-normalize`, isomorphic)
 
 | Kind | `value_normalized` | `value_canonical` (optional, workspace setting) |
 |---|---|---|
@@ -457,7 +457,7 @@ Partitioning decision: partitioned by month from day one (cheap to set up; email
 
 **Decision: materialize derived activities (projector writes rows) vs. compute at read time (union over sources).** Read-time union would need `base_changes` (30-day retention, D10) or `record_revisions` scans across all bases — slow and incomplete for old history. Materialization gives O(page) reads and stable history; the cost is write amplification only for events touching contacts. **Chosen: materialize**, with idempotency via `dedupe_key = 'evt:<event id>'` (projector is at-least-once).
 
-The projector is a consumer of `tabula.domain-events.v1` (spine §7 lists "contact timeline" as a consumer). It also maintains `last_activity_at` on the contact (computed slot; coalesced, at most one write per contact per minute).
+The projector is a consumer of `tableos.domain-events.v1` (spine §7 lists "contact timeline" as a consumer). It also maintains `last_activity_at` on the contact (computed slot; coalesced, at most one write per contact per minute).
 
 ### 10.3 Reading the timeline (permission-filtered)
 
@@ -509,7 +509,7 @@ Rules:
 * **Exclusions**: messages where all participants are internal (org verified domains, `organization_domains`) are skipped; newsletter/automated senders (List-Unsubscribe, `noreply@`, bulk precedence) skipped by default; user-defined blocklist (domains/addresses); labels/folders filter.
 * **Matching**: participants (From/To/Cc; calendar attendees) → `resolveContact(create: policy)`. Policy `contacts.autoCreateFromEmail`: `never` (default) | `when_replied` (two-way communication) | `always`.
 * **Dedup across mailboxes**: the same email seen by several connected users produces one activity per contact (`dedupe_key = 'msg:' + sha256(Message-ID)`); `body.seenBy` accumulates the mailbox owners — visibility is the most permissive of the owners' settings.
-* **Storage**: metadata (subject, snippet ≤ 200 chars, participants, thread id, direction, timestamps) in `body`; full bodies (if `full`) encrypted in S3 `tabula-attachments/{ws}/contacts/{activityId}` with attachments as references (not imported by default).
+* **Storage**: metadata (subject, snippet ≤ 200 chars, participants, thread id, direction, timestamps) in `body`; full bodies (if `full`) encrypted in S3 `tableos-attachments/{ws}/contacts/{activityId}` with attachments as references (not imported by default).
 * **Visibility** per connection: `private` (only owner sees), `metadata_only` (others see that communication happened), `workspace` (shared). Default `metadata_only`.
 * **Volume limits**: backfill ≤ 12 months, ≤ 50k messages per mailbox initial sync; steady-state rate-limited per provider quota; sync runs recorded in `sync_runs`.
 * **Disconnect**: user can delete everything synced from their mailbox (`DELETE … WHERE source_ref->>'syncSourceId' = …` + S3 objects), executed as a `long_operation`.
@@ -652,5 +652,5 @@ Erasure of a contact referenced by an in-flight automation run: the run continue
 | Filter operators (11) | `has_identifier`, identifier `contains`, `contact_has_identifier` | §3.4, §8.3 |
 | Field config (07/09) | `contact` field `config.contactKind = 'person'|'company'` | Contact fields targeting Companies |
 | Error codes | `SYSTEM_FIELD_PROTECTED`, `SYSTEM_TABLE_PROTECTED`, `CONTACT_IDENTIFIER_CONFLICT`, `CROSS_BASE_LINK_NOT_ALLOWED`, `CONTACT_MERGE_INVALID`, `CONTACT_UNMERGE_NOT_ALLOWED` | |
-| Package | `@tabula/contacts-normalize` (isomorphic normalizers; pinned Public Suffix List & libphonenumber metadata) | §4.2 |
+| Package | `@tableos/contacts-normalize` (isomorphic normalizers; pinned Public Suffix List & libphonenumber metadata) | §4.2 |
 | Event (internal) | `linked_display_changed` realtime message (09/16) | Chip updates across bases |

@@ -13,8 +13,8 @@
  *   field, including deleted ones (last known name).
  */
 import { sql, type Kysely } from "kysely";
-import type { Database } from "@tabula/db";
-import type { TabulaStorage } from "@tabula/storage";
+import type { Database } from "@tableos/db";
+import type { TableOSStorage } from "@tableos/storage";
 import { pid } from "../../lib/public-ids.js";
 import {
   displayText,
@@ -287,7 +287,7 @@ export interface LoadHistoryParams {
   beforeSeq?: number | null;
   limit: number;
   retentionDays: number | null;
-  storage?: TabulaStorage | null;
+  storage?: TableOSStorage | null;
 }
 
 /** Primary display names of records in a table, deleted ones included. */

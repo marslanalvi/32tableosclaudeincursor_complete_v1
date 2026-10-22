@@ -1,4 +1,4 @@
-import { generateUuidV7 } from "@tabula/types";
+import { generateUuidV7 } from "@tableos/types";
 import { createHash, randomBytes } from "node:crypto";
 import { sql } from "kysely";
 import type { FastifyInstance } from "fastify";
@@ -7,7 +7,7 @@ import {
   mapWorkspaceRoleToBase,
   type BaseRole,
   type WorkspaceRole,
-} from "@tabula/permissions";
+} from "@tableos/permissions";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import {

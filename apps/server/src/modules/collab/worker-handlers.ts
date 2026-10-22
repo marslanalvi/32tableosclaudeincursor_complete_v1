@@ -1,13 +1,13 @@
-import type { TabulaDb } from "@tabula/db";
-import type { DomainEvent } from "@tabula/events";
-import { CommentEvents, FieldEvents, HistoryEvents, TableEvents } from "@tabula/events";
-import type { SearchBackend } from "@tabula/search";
-import { generateUuidV7 } from "@tabula/types";
+import type { TableOSDb } from "@tableos/db";
+import type { DomainEvent } from "@tableos/events";
+import { CommentEvents, FieldEvents, HistoryEvents, TableEvents } from "@tableos/events";
+import type { SearchBackend } from "@tableos/search";
+import { generateUuidV7 } from "@tableos/types";
 import { sql } from "kysely";
 import { indexRecordDocuments, reindexTableRecords } from "./record-index.js";
 
 export async function handleCommentCreatedNotification(
-  db: TabulaDb,
+  db: TableOSDb,
   event: DomainEvent,
 ): Promise<void> {
   if (event.type !== CommentEvents.CREATED) return;
@@ -68,7 +68,7 @@ export async function handleCommentCreatedNotification(
 }
 
 export async function handleSearchIndexEvent(
-  db: TabulaDb,
+  db: TableOSDb,
   search: SearchBackend,
   event: DomainEvent,
 ): Promise<void> {
@@ -141,7 +141,7 @@ function strings(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
 }
 
-async function smallComputedPrimaryTables(db: TabulaDb, tableIds: readonly string[]): Promise<string[]> {
+async function smallComputedPrimaryTables(db: TableOSDb, tableIds: readonly string[]): Promise<string[]> {
   const rows = await sql<{ id: string }>`
     SELECT t.id
     FROM data.tables t JOIN data.fields f ON f.id = t.primary_field_id
@@ -152,7 +152,7 @@ async function smallComputedPrimaryTables(db: TabulaDb, tableIds: readonly strin
 }
 
 export async function handleFileScanJob(
-  db: TabulaDb,
+  db: TableOSDb,
   payload: { attachmentId: string },
 ): Promise<void> {
   await sql`

@@ -3,7 +3,7 @@ import {
   decodePublicId,
   encodePublicId,
   type PublicIdPrefix,
-} from "@tabula/types";
+} from "@tableos/types";
 
 export function pid(prefix: PublicIdPrefix, uuid: string): string {
   return encodePublicId({ prefix, uuid });

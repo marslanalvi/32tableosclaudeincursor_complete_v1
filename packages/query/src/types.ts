@@ -1,4 +1,4 @@
-import type { CompileFilterOptions, SqlFieldInfo, SqlKeyType } from "@tabula/filter";
+import type { CompileFilterOptions, SqlFieldInfo, SqlKeyType } from "@tableos/filter";
 
 export type SortDirection = "asc" | "desc";
 

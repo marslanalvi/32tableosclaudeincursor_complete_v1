@@ -1,4 +1,4 @@
-# Tabula UI audit (read-only, no files changed)
+# TableOS UI audit (read-only, no files changed)
 
 **Scope:** I read every `.tsx`/`.ts` file in `apps/web/src` and `apps/public/src`, plus `packages/grid`, `packages/field-ui` and `packages/ui`. Wherever a UI handler calls `apps/web/src/lib/api.ts`, I followed the call into the matching `apps/server/src/modules/*/routes.ts` to see if the request and response actually line up.
 
@@ -91,7 +91,7 @@ All toolbar state is local `useState` (`table-grid.tsx:41-54`). It is **never sa
 
 - "Create link" (`ShareDialog.tsx:26-37`) → `api.createShare` posts to `/v1/bases/:b/tables/:t/shares` with `{viewId, kind}` (`api.ts:367-380`). The server route is `/v1/bases/:baseId/shares` and expects `{targetType, targetId}`, returning `{share:{token}}` (`share/routes.ts:22-34,105`). The result is a **404 with no error shown**; the button just resets. Form shares would also get a `/s/` link instead of `/f/`.
 - Public app `SharePage.tsx`: `/v1/public/shares/:token` returns only `{share:{id,baseId,targetType,targetId}}` (`share/routes.ts:202-209`), but the page reads `share.fields`, `.title`, `.kind`, `.records`. **It crashes with a TypeError** (`SharePage.tsx:14,57`).
-- Public form submit: `POST /v1/public/shares/:token/submit` doesn't exist. The fallback uses an `X-Tabula-Share-Token` header that the server never checks (`public-api.ts:46-83`), so **public forms can't submit**.
+- Public form submit: `POST /v1/public/shares/:token/submit` doesn't exist. The fallback uses an `X-TableOS-Share-Token` header that the server never checks (`public-api.ts:46-83`), so **public forms can't submit**.
 
 ## 8. Import / Export
 
@@ -123,7 +123,7 @@ All toolbar state is local `useState` (`table-grid.tsx:41-54`). It is **never sa
 | Contacts page (`routes/contacts.tsx:28`) | **BROKEN rendering.** The server returns `{id, fields}` (`contacts/routes.ts:56-61`), so `c.name` and `c.email` are undefined and every row is blank. |
 | Session expiry | A 401 mid-session isn't redirected to login (only route `beforeLoad` checks). |
 
-**CSS:** I scripted a check of every `styles.X` reference against its CSS module and found no missing classes, empty selectors, or unbalanced braces. All `--tabula-*` variables are defined. The only CSS gap is that the `data-row-height` / `data-group` / `data-color` attributes have no rules.
+**CSS:** I scripted a check of every `styles.X` reference against its CSS module and found no missing classes, empty selectors, or unbalanced braces. All `--tableos-*` variables are defined. The only CSS gap is that the `data-row-height` / `data-group` / `data-color` attributes have no rules.
 
 ---
 

@@ -18,7 +18,7 @@ import {
   toNumber,
   userLabel,
 } from "./format.js";
-import { isValidEmail, isValidPhone } from "@tabula/fields";
+import { isValidEmail, isValidPhone } from "@tableos/fields";
 import { openAttachmentViewer } from "./AttachmentViewer.js";
 import { LinkRecordPicker } from "./LinkRecordPicker.js";
 import { isReadOnlyFieldType } from "./metadata.js";

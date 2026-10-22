@@ -3,7 +3,7 @@ import {
   evaluateFormula,
   parseFormula,
   type FormulaAst,
-} from "@tabula/formula";
+} from "@tableos/formula";
 import { cellValueToText, timeZoneAbbr } from "./format.js";
 import { OPTION_COLORS, fieldTypeIcon, nextOptionColor, optionColor } from "./metadata.js";
 import { ensureFieldUiStyles } from "./styles.js";

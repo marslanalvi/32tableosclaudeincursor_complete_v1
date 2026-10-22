@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.16.7**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.8**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -18,16 +18,24 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | Database | `DATABASE_URL` in the root `.env` (not committed). Since v0.9.0, local and live share the Render database `tableos_3yok`; locally use the External URL with `?sslmode=verify-full` |
 | Migrate | `npx pnpm@9.15.0 db:migrate` (reads `.env`); the API also migrates on start |
 | Typecheck | `npx tsc -p apps/server/tsconfig.json --noEmit` and `npx tsc -p apps/web/tsconfig.app.json --noEmit` |
-| Unit tests | `npx pnpm@9.15.0 --filter "@tabula/filter" --filter "@tabula/formula" test` (and other packages' `test`) |
+| Unit tests | `npx pnpm@9.15.0 --filter "@tableos/filter" --filter "@tableos/formula" test` (and other packages' `test`) |
 | API checks | `node .data/verify-interfaces.mjs`, `node .data/verify-round.mjs`, `node .data/verify-access.mjs`, `node .data/verify-sync.mjs`, `node .data/verify-r7.mjs`, `node .data/verify-r9.mjs` |
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
 
+## v0.16.8: TableOS everywhere, retest list, test plan 2.0
+
+* **Name:** `.data/r29-rename.mjs` replaced the old internal name in every tracked text file and the local test scripts (case-sensitive, never touching "tabular"): 3,932 occurrences in 368 files — package scope `@tableos/*`, `TableOSDb`/`TableOSError`…, CSS `--tableos-*`, Redis prefixes `tableos:`, event topic `tableos.domain-events.v1`, realtime subprotocol, `X-TableOS-Client-Op-Id`, `TableOS-Automations/1.0`, session cookie `tableos_session`, env `TABLEOS_*`, docs. `pnpm install --offline` relinked the workspace; every package rebuilt. Migration `0085_tableos_event_topic.sql` moves unpublished outbox events to the new topic and changes the default. Local Docker database renamed to `tableos_cc` with role `tableos` (rule file updated). Error `type` = `<APP_URL>/help/api#error-<code>` (`setProblemTypeBase`).
+* **After deploy:** everyone signs in once (new cookie name); old Redis keys/queues under the old prefix are orphaned — flush Redis from the Render dashboard (as in v0.16.2) or let them expire.
+* **API results reported:** 409 `VERSION_CONFLICT`, 404 record not found, 401 bad token and 422 unknown field are the designed responses for those requests; messages now say what to do (409 names the sent and current version; 404 names the record).
+* **Retest list (Fix-Phases README):** `.data/verify-r29.mjs` (20 checks: M02-07 30-day idle and sliding, M04-02 account type changes + Activity, M04-09 billing, M05-12 Admin limits, M09-07 move limits, M11-01 long text, M11-10 links and allow-multiple, M16-07 cross-base link + lookup, M17-08 formula) and `.data/r2-shell/r29-ui.mjs` (M12-03 copy out/paste in, M17-08 live in a second window, M11-10 picking). M02-09 needs Google OAuth keys (not configured). The link picker now shows record details (`LinkRef.detail`).
+* **Test plan 2.0:** `docs/testing/test-cases.mjs` (`V2_CASES`, 25 new cases appended to their modules: 304 total); workbook IndexedDB per plan version (`tableos-test-workbook-v2.0`).
+
 ## v0.16.7: fix phases 3 and 4
 
 * **M14-03 undo of a field type change:** `field.updated` wasn't in the history applier's `SUPPORTED` set, so `findUndoCandidate` marked it `undo_skipped` and undid the previous record edit instead (reproduced: two Ctrl+Z after two type changes reverted record edits, types stayed). Schema PATCH now stores, in the inverse op, the before name/type/description, `configToWire(...)` config and — on a type change or a config change — `{ slot, values: { recordId: cell } }` (`fieldValuesForUndo`, up to 20,000 filled cells); the forward op carries the after state for redo. `apply-ops` `field.updated`: `updateFieldInTx` with the old type/config, then the old config again (converting back can add options made from current values, e.g. "checked"), then `restoreFieldValues` (one UPDATE: old value or slot removed; per-record follow-up below 5,000 rows). `convertCellValue`: to checkbox, any non-empty value (except false/no/0/unchecked) becomes `true`.
-* **M11-08:** `isValidEmail` / `isValidPhone` in `@tabula/fields` (phone: 7–15 digits before an optional extension); used by the field definitions (server 422 with the value in the message) and `FieldValueEditor.draftToValue` (grid toast via `onInvalid`, nothing saved).
+* **M11-08:** `isValidEmail` / `isValidPhone` in `@tableos/fields` (phone: 7–15 digits before an optional extension); used by the field definitions (server 422 with the value in the message) and `FieldValueEditor.draftToValue` (grid toast via `onInvalid`, nothing saved).
 * **M11-12:** Hassaan's screenshots were on a synced table ("Synced from New Base · Table 7"), which can't hold links. `LinkedFieldPickers` explains that (synced: lookups go in the linking table) or offers "Add a link field instead" (`onAddLinkField` → `chooseType("link")`); `TableLike.synced`.
 * **M11-06:** not a bug — the screenshot was the Share dialog's role list; the User field's picker lists the base's people (checked in the UI test).
 * **M15-13:** search already filtered rows (Arif's term matched every Record ID). GridView computes `cellMatches` over the loaded rows with `cellValueToText`, highlights them (`searchHit`, current `searchHitCurrent`), shows "N of M matching cells" with ↑/↓; Enter / Shift+Enter in the toolbar search box bump `searchStep` (table-grid → GridView).
@@ -68,7 +76,7 @@ Source: the Phase 1 prompt from the team's 279-case test round (`Fix-Phases/Phas
 
 * **M12-01 Esc saved long text:** `LongTextEditor` deliberately kept the draft on Esc. It now calls `finish(true)` like `TextEditor`; Ctrl/Cmd+Enter and Tab still save. Help already documented Esc as "Cancel editing".
 * **M11-11 JSON paste spread over rows:** `pasteText` parsed every clipboard as TSV, so each line of pretty-printed JSON went to the next row (and created rows past the end). A single target cell of type `json` or `long_text` now takes the whole text when it has no tab and the clipboard has no HTML `<table>`. JSON cells skip unparseable text (it used to go to the server with `typecast` and be stored as a JSON string) and toast "That isn't valid JSON". `FieldValueEditor` gained `onInvalid`; the grid shows it as a toast when typed text can't be converted.
-* **M00-01 version 0.0.0:** `lib/version.ts` read `../../package.json` relative to the module; in the tsup bundle (`dist/api.js`) that is `apps/package.json`. It now tries `../../` and `../` and accepts only `@tabula/server`. Checked by running the built `dist/api.js`.
+* **M00-01 version 0.0.0:** `lib/version.ts` read `../../package.json` relative to the module; in the tsup bundle (`dist/api.js`) that is `apps/package.json`. It now tries `../../` and `../` and accepts only `@tableos/server`. Checked by running the built `dist/api.js`.
 * **M28 API:** live `core.api_tokens` (read-only look) showed Arslan's and Awais's tokens were never accepted (`last_used_at` empty) while the gate returned "API tokens can only call the record API" (Arslan's screenshot): the gate's regexes didn't match `//v1/…` (base URL ending in `/`) and the router 404'd trailing slashes. Fastify `routerOptions: { ignoreTrailingSlash, ignoreDuplicateSlashes }`; `normalizeApiPath` for the token gate and the `/v1/tables/:tableId` forwarder; `bearerToken` accepts `bearer`, a bare `tos_…` and quotes. New `GET /v1/bases/:baseId/tables/:tableId` (the table entry of the base schema, so permissions and shape match), `GET …/records` (query-string paging) and 405 for GET on `query`/`group`/`batch`/`batch-delete`. 401/403 details say how to send a token, that it's invalid/revoked/expired, or which routes tokens can call. Titles for `UNKNOWN_FIELD` and `METHOD_NOT_ALLOWED`.
 * **"Via API" in history:** record routes write `via = 'script'` (already allowed by `data.is_via`, no migration) when `request.apiTokenId` is set; `sourceOf` maps it to `api` and Record activity tags it "Via API". `script` is in `PERMISSION_CHECKED_VIA`, so field permissions still apply to token writes.
 * **M25-02 not a code bug:** Zainab's screenshot view is in base "Testing" in workspace "Zainab Testing", which she owns (workspace `owner` grant, source `creator`); an Owner also gave her an Editor grant on that base. The highest role wins, so she was a Creator there. A pure Editor sees the note and disabled controls and gets 403 on create/change/regenerate/disable (checked).
@@ -77,7 +85,7 @@ Source: the Phase 1 prompt from the team's 279-case test round (`Fix-Phases/Phas
 
 ## v0.16.2: Redis out of memory
 
-* Production logs (API, worker, relay): `ReplyError: OOM command not allowed when used memory > 'maxmemory'` on BullMQ scripts and on the ws-ticket `SET`. `BullMQEventBus.publish` adds every outbox event to one queue per registered consumer group (`tabula:evt-groups:<topic>`), with `removeOnComplete: 1000, removeOnFail: 5000`; batch events carry up to 100 record ids, so the retained history alone outgrows a small Key Value plan (policy `noeviction`, as BullMQ requires).
+* Production logs (API, worker, relay): `ReplyError: OOM command not allowed when used memory > 'maxmemory'` on BullMQ scripts and on the ws-ticket `SET`. `BullMQEventBus.publish` adds every outbox event to one queue per registered consumer group (`tableos:evt-groups:<topic>`), with `removeOnComplete: 1000, removeOnFail: 5000`; batch events carry up to 100 record ids, so the retained history alone outgrows a small Key Value plan (policy `noeviction`, as BullMQ requires).
 * `EVENT_JOB_RETENTION` (`packages/events/src/bullmq-bus.ts`): done jobs `{ age: 3600, count: 50 }`, failed `{ age: 86400, count: 100 }`; the compute job uses the same. `storeWsTicket`/`consumeWsTicket` fall back to the in-memory map when Redis errors (the gateway runs in the API process).
 * Existing backlog: `.data/r20-redis-cleanup.mjs` (`PROD_REDIS_URL`; dry run lists memory and per-queue counts; `--apply` runs `Queue.clean` on completed and failed jobs only, keeping waiting/active jobs and group registrations). Locally: 13.5 MB → 6 MB.
 
@@ -101,7 +109,7 @@ Implements phase 3 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.
 * **G15:** `canEditFieldValues` / `fieldPermissionAllows`: Owner and Creator always true. **G16:** engine runs as `coalesce(run_as, updated_by, created_by)`; create/duplicate set `run_as`; PATCH `runAsUserId` must be a base Creator (422 otherwise), audited `automation.run_as_changed`; DTO `runAs {id,name}`; `RunAsPicker` in the automation header. **G17:** `/v1/notifications` drops rows (and unread counts) for bases the user can't compile a role for. **G19:** workspace members and base collaborators blank `email` (and hide pending invitations) unless the viewer is Owner/Admin or Workspace Owner; own email always shown.
 * **G18:** `POST /v1/bases/:baseId/move {workspaceId}`: Creator of the base, may create bases in the target, same org, and Owner/Admin or Workspace Owner of both. One transaction updates `workspace_id` in every table with `base_id` (`MOVE_TABLES`, checked against the schema by the test), `data.bases`, `core.public_link_directory`; bumps `perm_epoch`. Fixed `PostgresFtsBackend.upsert` to take the base's current workspace (late index events carried the old one). Web: "Move to workspace…" on base cards (`MoveBaseDialog`).
 * **G20:** `GET /v1/orgs/:orgId/activity?category&before` (Owners/Admins): audit events of the org or its workspaces with actor and a target label, 100 per page. Web: Members & access → Activity with filter and "Show older".
-* **Tests:** `.data/verify-r18-phase3.mjs` (42 checks; toggles `require_mfa` and waits out the 5 s cache), `.data/r18-seed.mjs` + `.data/r2-shell/r18-ui.mjs` (10 checks, screenshots `r18-*.png`). `verify-r7` (30-day cookie/idle) and `verify-r9` (Owner edits "Nobody" fields) updated to the new rules. Local `tabula_cc` keeps `require_mfa = false` for the older suites.
+* **Tests:** `.data/verify-r18-phase3.mjs` (42 checks; toggles `require_mfa` and waits out the 5 s cache), `.data/r18-seed.mjs` + `.data/r2-shell/r18-ui.mjs` (10 checks, screenshots `r18-*.png`). `verify-r7` (30-day cookie/idle) and `verify-r9` (Owner edits "Nobody" fields) updated to the new rules. Local `tableos_cc` keeps `require_mfa = false` for the older suites.
 * **Live (read-only, `.data/r18-live-impact.mjs`):** none of the 10 people has two-factor yet, so everyone (Arslan included) is asked to set it up on their next request after deploy; 13 share links (all copy-off) keep working; 50 automations keep their current "Runs as"; no fields set to "Nobody".
 
 ## v0.15.0: roles phase 2 (Owner, Admin, Member)
@@ -122,7 +130,7 @@ Implements phase 2 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.
 Implements phase 1 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.md` (G1–G4, G9; B1, B4, B6, B7). Roles history: `docs/roles-and-permissions/ROLES-CHANGELOG.md`.
 
 * **Sign-up** (`auth/signup-policy.ts`, `auth/routes.ts`): `decideSignup` returns `create_org` (signup mode `open`, or no active organization yet), `invited` (a pending, unexpired invitation for the email), `domain` (an active org whose `settings.signup.allowedDomains` holds the email's domain) or `denied` (403, "by invitation only"). Only `create_org` creates an organization (now kind `standard`), Home workspace and subscription. `domain` inserts an `organization_members` row (`member`, source `domain_auto_join`) and notifies the org's Owners/Admins. The response carries `joinedVia`; `organization`/`workspace` are null when none was created.
-* **Platform setting** (migration `0081_platform_settings.sql`): `core.platform_settings(key, value jsonb)`, `signup_mode = "restricted"`. The local `tabula_cc` test database is set to `"open"` so the older suites can still sign up owners; `verify-r16-phase1.mjs` switches it while it runs.
+* **Platform setting** (migration `0081_platform_settings.sql`): `core.platform_settings(key, value jsonb)`, `signup_mode = "restricted"`. The local `tableos_cc` test database is set to `"open"` so the older suites can still sign up owners; `verify-r16-phase1.mjs` switches it while it runs.
 * **Allowed domains:** `PATCH /v1/orgs/:orgId/settings` takes `requireDeviceApproval` and/or `allowedSignupDomains` (lower-cased, leading `@` dropped, validated, max 50) and returns both; `GET …/access` returns `org.allowedSignupDomains`. Security tab (`AdminPage.tsx` `SettingsSection`) shows chips with remove and an Add domain field.
 * **Owner/Admin-only** (`isOrgManager` / `isOrgManagerRole` in `access/workspace-access.ts`): `POST /v1/workspaces` (422 with `meta.organizations` when the person runs several orgs and sends no `organizationId`), `POST /v1/workspaces/:w/bases`, `POST /v1/bases/:b/duplicate` (target workspace must be in the same org), `GET …/tables/:t/export` and legacy `POST …/export/csv`.
 * **Contacts** (`contacts/routes.ts`): `directoryScope` uses `getWorkspaceAccess(...).workspaceRole`; base-only people get 404.
@@ -133,7 +141,7 @@ Implements phase 1 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.
 
 ## v0.13.0: show password, CORS max-age
 
-* `packages/ui/src/PasswordInput.tsx`: an input with an eye button (`aria-label` "Show password"/"Hide password", `type="button"` so Enter still submits). Used in `routes/login.tsx`, `routes/signup.tsx` and `AccountPage` (keeps its own `className`). `@tabula/ui` must be built (`--filter @tabula/ui build`) for the web typecheck; Vite reads its source.
+* `packages/ui/src/PasswordInput.tsx`: an input with an eye button (`aria-label` "Show password"/"Hide password", `type="button"` so Enter still submits). Used in `routes/login.tsx`, `routes/signup.tsx` and `AccountPage` (keeps its own `className`). `@tableos/ui` must be built (`--filter @tableos/ui build`) for the web typecheck; Vite reads its source.
 * `apps/server/src/http/app.ts`: `@fastify/cors` gets `maxAge: 7200`, so preflights return `Access-Control-Max-Age: 7200`.
 * Test: `.data/r2-shell/r14-ui.mjs`.
 
@@ -150,7 +158,7 @@ Implements phase 1 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.
 * **Record ID primary:** creating a synced copy of a table whose primary is "Record ID" added a second "Record ID" field (409). The local one is now "Local record ID".
 * **Import:** row errors carry `field` (also stored in `data.import_errors.field_id`). The wizard keeps the failed rows (`FailedRow`) with an editable value: "Import with my corrections", "…left empty", "Skip", CSV. Stop aborts the in-flight request (`AbortController`) and shows the summary at once; chunks are 100 rows.
 * **Devices log:** `GET /v1/orgs/:orgId/device-log` returns, per member, devices with `decidedBy`, the last 30 sessions (active = not revoked or expired; automation sessions excluded), and history from `org_devices.first_seen_at` plus `audit.audit_events` `device.*` (device.deleted now records `userId`).
-* **History grouping:** `RecordActivity` `groupHistory()` groups by person or by field (one entry per field change; created/deleted get their own group), stored in `localStorage["tabula.recordActivityGroup"]`.
+* **History grouping:** `RecordActivity` `groupHistory()` groups by person or by field (one entry per field change; created/deleted get their own group), stored in `localStorage["tableos.recordActivityGroup"]`.
 * **Process slip:** the live preview was still running from 0.11.0 while server code was edited, so its restart applied 0080 (additive) to the shared database before approval. No sync ran against live with the new code (checked).
 * **Tests:** `.data/verify-r13.mjs`, `.data/r2-shell/r13-ui.mjs`.
 
@@ -167,7 +175,7 @@ Implements phase 1 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.
 
 ## v0.10.0: attachments, time zones, device alerts, last-modified backfill, filter values
 
-* **Workflow rule:** `.cursor/rules/release-workflow.mdc` (always applied) lists the steps: understand, edit, test the change and the whole suite on `tabula_cc`, preview, version, push `release/vX.Y.Z`, merge only after approval.
+* **Workflow rule:** `.cursor/rules/release-workflow.mdc` (always applied) lists the steps: understand, edit, test the change and the whole suite on `tableos_cc`, preview, version, push `release/vX.Y.Z`, merge only after approval.
 * **Last modified time (watched fields):** stored in the cell, previously stamped only by edits after the field existed. `data.backfill_watched_modified_time(field_id)` (migration 0078) takes the newest `record.updated` op in `data.base_changes` where a watched slot changed (before = `prevCells` or the inverse op) or a watched link changed, else `created_at` when a watched value exists. `createFieldInTx` and `updateFieldInTx` (watch list or type change) call it; the migration ran it for existing fields.
 * **Device approval bell:** `access/devices.ts` `notifyDeviceRequest` runs once, when a pending `core.org_devices` row is inserted (`RETURNING id`). It notifies the active org owners (category `system`, link `/admin?tab=devices`).
 * **Time zones:** `FieldConfigEditor` `DateTimeConfig` (datetime, created_time, modified_time): toggle for one zone, grouped `<optgroup>` list plus `Intl.supportedValuesOf("timeZone")`, `showTimeZone`. `format.ts` `formatDateTime` uses the zone for every date format and appends `timeZoneAbbr` (en-US names, en-GB for Europe so CET/BST appear).
@@ -184,7 +192,7 @@ Implements phase 1 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.
 * **Scripts:** `script.ts` PRELUDE has an Airtable-compatible `base` (`getTable`, `selectRecordsAsync`, `*RecordAsync(s)`, `record.name`, `getCellValue(AsString)`); `config.inputs` (name + token value) feed `input.config()`, which always has `recordId`. `TableMeta.primaryFieldId` added for `record.name`.
 * **UI state:** `features/automations/remembered-state.ts` (`sessionStorage`, key `tableos:aut:…`) holds the selected automation, Edit/Run history tab, step and expanded run. `base.tsx` clears the one-shot `automationTarget` (Gmail return) when you leave Automations.
 * **Conditions:** `views.module.css` makes `.filterGroup`/`.filterGroupNested` inline-size containers; at ≤560px a condition is field+operator over value, at ≤340px field, operator and value each take a line.
-* **Tests:** `.data/verify-r10.mjs` (local `tabula_cc` only): every trigger except forms, update/create/condition/script actions, loop guard, turning off. UI: `.data/r2-shell/r10-ui.mjs`.
+* **Tests:** `.data/verify-r10.mjs` (local `tableos_cc` only): every trigger except forms, update/create/condition/script actions, loop guard, turning off. UI: `.data/r2-shell/r10-ui.mjs`.
 
 ## v0.9.0: field permissions, search by column name, no logout while searching
 
@@ -224,7 +232,7 @@ Implements phase 1 of `docs/roles-and-permissions/Roles-Decisions-Questionnaire.
 **Process from now on:** release work goes to a `release/vX.Y.Z` branch. The owner previews and approves it before anything is merged into `master`.
 
 **Verification:**
-* `.data/r8-prep-db.mjs` builds `tabula_r8`, a database without 0076, like production.
+* `.data/r8-prep-db.mjs` builds `tableos_r8`, a database without 0076, like production.
 * The production bundle (`node dist/api.js`) with `MIGRATE_ON_START=false` reproduces the exact error: signup and login return 500.
 * With the default setting it applies 0076, and signup 201, login 200, `/me` 200. A second start reports "database is up to date".
 * `.data/r8-concurrent.mjs`: three concurrent runs apply the migration exactly once.
@@ -538,7 +546,7 @@ Security properties:
   * the virtual `__record_id__` filter in the evaluator and SQL compiler;
   * shown in the filter builder.
 * **Import:** CSV/XLSX import no longer fails with "Failed to fetch". Import requests now bypass idempotency storage, and the client retries transient failures (`http/app.ts`, `idempotency.ts`, `ImportWizard.tsx`, `lib/api.ts`).
-* **Rebrand from Tabula to TableOS** across the web app, public app, emails, OpenAPI title and README.
+* **Rebrand from TableOS to TableOS** across the web app, public app, emails, OpenAPI title and README.
 
 ## Round 2: audit and fix pass (commits `0f31f5e` → `eb98bf1`)
 
@@ -585,5 +593,5 @@ The initial monorepo snapshot. The reconciled architecture document set (`docs/a
 ## Known gaps / next steps
 
 * Interfaces: interface-only users and share links, per-interface permissions, page-record context, drag/resize layout, aggregate caching and realtime refresh (architecture 13 §18).
-* Error-code union in `@tabula/types` only lists generic codes; module codes (`PAGE_REVISION_CONFLICT`, `RECORD_ID_REQUIRED`, …) are compared as strings in the web client.
-* Test interfaces and records created by the verification scripts live in the dev database (`tabula_cc`) only.
+* Error-code union in `@tableos/types` only lists generic codes; module codes (`PAGE_REVISION_CONFLICT`, `RECORD_ID_REQUIRED`, …) are compared as strings in the web client.
+* Test interfaces and records created by the verification scripts live in the dev database (`tableos_cc`) only.

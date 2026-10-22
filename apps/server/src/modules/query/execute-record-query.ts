@@ -1,6 +1,6 @@
 import { sql } from "kysely";
-import type { TabulaDb } from "@tabula/db";
-import { FilterError, SqlParams, type SqlFieldInfo } from "@tabula/filter";
+import type { TableOSDb } from "@tableos/db";
+import { FilterError, SqlParams, type SqlFieldInfo } from "@tableos/filter";
 import {
   buildRecordCountSql,
   buildRecordPageSql,
@@ -8,8 +8,8 @@ import {
   planRecordQuery,
   type RecordQueryInput,
   type SortSpec,
-} from "@tabula/query";
-import type { TabulaStorage } from "@tabula/storage";
+} from "@tableos/query";
+import type { TableOSStorage } from "@tableos/storage";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import {
   buildPlanContext,
@@ -56,7 +56,7 @@ export interface LoadedView {
 
 /** Load a view of `tableId` (`viw_` or uuid). Throws QueryNotFoundError. */
 export async function loadViewForQuery(
-  db: TabulaDb,
+  db: TableOSDb,
   tableId: string,
   viewId: string,
   /** When given, other users' personal views are not found. */
@@ -102,10 +102,10 @@ export function resolveProjection(fieldRows: QueryFieldRow[], ids: string[] | un
 }
 
 export async function executeRecordQuery(
-  db: TabulaDb,
+  db: TableOSDb,
   tableId: string,
   req: RecordQueryRequest,
-  opts: { user?: UserQueryContext | null; storage?: TabulaStorage | null } = {},
+  opts: { user?: UserQueryContext | null; storage?: TableOSStorage | null } = {},
 ): Promise<RecordQueryResult> {
   const fieldRows = await loadQueryFields(db, tableId);
   const infos = await loadSqlFieldInfos(db, fieldRows);

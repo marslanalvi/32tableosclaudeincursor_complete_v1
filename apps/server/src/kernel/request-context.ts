@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 /**
  * Per-request context that the mutation kernel can read without every route
  * threading it through explicitly. Today it carries the client mutation id
- * (`X-Tabula-Client-Op-Id`, falling back to `Idempotency-Key`) so realtime
+ * (`X-TableOS-Client-Op-Id`, falling back to `Idempotency-Key`) so realtime
  * change frames can be matched to the tab that issued the edit.
  */
 export interface KernelRequestContext {
@@ -64,7 +64,7 @@ function headerValue(raw: string | string[] | undefined): string | undefined {
 export function registerKernelRequestContext(app: FastifyInstance): void {
   app.addHook("onRequest", (request, _reply, done) => {
     const clientMutationId =
-      headerValue(request.headers["x-tabula-client-op-id"]) ??
+      headerValue(request.headers["x-tableos-client-op-id"]) ??
       headerValue(request.headers["idempotency-key"]);
     const ctx: KernelRequestContext = {};
     if (clientMutationId) ctx.clientMutationId = clientMutationId;

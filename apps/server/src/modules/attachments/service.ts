@@ -1,12 +1,12 @@
-import { decodePublicId, generateUuidV7 } from "@tabula/types";
+import { decodePublicId, generateUuidV7 } from "@tableos/types";
 import {
   isImageMime,
   readImageSize,
   sniffMime,
   type PresignedUpload,
-  type TabulaStorage,
-} from "@tabula/storage";
-import type { TabulaDb } from "@tabula/db";
+  type TableOSStorage,
+} from "@tableos/storage";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import type { AppContext } from "../../lib/app-context.js";
 import { pid } from "../../lib/public-ids.js";
@@ -130,7 +130,7 @@ const ATT_COLUMNS = sql`
 `;
 
 export async function loadAttachment(
-  db: TabulaDb,
+  db: TableOSDb,
   attachmentId: string,
   baseId: string,
 ): Promise<AttachmentRow | null> {
@@ -143,7 +143,7 @@ export async function loadAttachment(
 }
 
 export async function loadAttachmentById(
-  db: TabulaDb,
+  db: TableOSDb,
   attachmentId: string,
 ): Promise<AttachmentRow | null> {
   const res = await sql<AttachmentRow>`
@@ -191,7 +191,7 @@ function decodeAtt(value: string): string {
  * dropped from the map.
  */
 export async function hydrateAttachments(
-  db: TabulaDb,
+  db: TableOSDb,
   ids: string[],
 ): Promise<Map<string, AttachmentWire>> {
   const out = new Map<string, AttachmentWire>();
@@ -209,7 +209,7 @@ export async function hydrateAttachments(
 
 /** Convenience: turn a raw attachment cell into wire objects (order preserved). */
 export async function hydrateAttachmentCell(
-  db: TabulaDb,
+  db: TableOSDb,
   value: unknown,
 ): Promise<AttachmentWire[]> {
   const ids = attachmentIdsFromCell(value);
@@ -238,7 +238,7 @@ export interface PendingUploadInput {
 export async function createPendingUpload(
   ctx: AppContext,
   input: PendingUploadInput,
-): Promise<{ attachmentId: string; upload: PresignedUpload; storage: TabulaStorage }> {
+): Promise<{ attachmentId: string; upload: PresignedUpload; storage: TableOSStorage }> {
   const storage = resolveAttachmentStorage(ctx);
   if (!storage) throw new StorageUnavailableError();
   if (input.size > input.maxBytes) {
@@ -356,7 +356,7 @@ export async function finalizeUpload(
   return toAttachmentWire(ctx, fresh);
 }
 
-async function reject(ctx: AppContext, row: AttachmentRow, storage: TabulaStorage): Promise<void> {
+async function reject(ctx: AppContext, row: AttachmentRow, storage: TableOSStorage): Promise<void> {
   await sql`
     UPDATE data.attachments SET scan_status = 'rejected' WHERE id = ${row.id}
   `.execute(ctx.db);

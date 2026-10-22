@@ -6,19 +6,19 @@ import { defineConfig } from "vite";
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 
 // Dev-server ports/targets are overridable so several checkouts can run side by side.
-const apiTarget = process.env["TABULA_API_PROXY"] ?? "http://localhost:3000";
-const devPort = Number(process.env["TABULA_PUBLIC_PORT"] ?? 5174);
+const apiTarget = process.env["TABLEOS_API_PROXY"] ?? "http://localhost:3000";
+const devPort = Number(process.env["TABLEOS_PUBLIC_PORT"] ?? 5174);
 
 export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: [
       {
-        find: "@tabula/ui/tokens.css",
+        find: "@tableos/ui/tokens.css",
         replacement: path.resolve(appDir, "../../packages/ui/src/tokens.css"),
       },
       {
-        find: "@tabula/ui",
+        find: "@tableos/ui",
         replacement: path.resolve(appDir, "../../packages/ui/src/index.ts"),
       },
     ],

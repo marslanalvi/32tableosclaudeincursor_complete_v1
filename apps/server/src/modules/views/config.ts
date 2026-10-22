@@ -45,7 +45,7 @@ const filterNode: z.ZodType<FilterAstJson> = z.lazy(() =>
   ]),
 ) as z.ZodType<FilterAstJson>;
 
-/** Same cap the query engine enforces (`@tabula/filter` MAX_CONDITIONS). */
+/** Same cap the query engine enforces (`@tableos/filter` MAX_CONDITIONS). */
 const MAX_FILTER_CONDITIONS = 200;
 
 function conditionCount(node: FilterAstJson): number {

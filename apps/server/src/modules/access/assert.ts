@@ -1,4 +1,4 @@
-import { authorize, type Action, type PermissionSnapshot } from "@tabula/permissions";
+import { authorize, type Action, type PermissionSnapshot } from "@tableos/permissions";
 
 export class ForbiddenActionError extends Error {
   readonly action: Action;

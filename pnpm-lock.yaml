@@ -17,13 +17,13 @@ importers:
 
   apps/public:
     dependencies:
-      '@tabula/field-ui':
+      '@tableos/field-ui':
         specifier: workspace:*
         version: link:../../packages/field-ui
-      '@tabula/types':
+      '@tableos/types':
         specifier: workspace:*
         version: link:../../packages/types
-      '@tabula/ui':
+      '@tableos/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -39,7 +39,7 @@ importers:
         specifier: ^19.0.0
         version: 19.3.0(react@19.3.0)
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
       '@types/react':
@@ -66,55 +66,55 @@ importers:
       '@fastify/cors':
         specifier: ^10.0.2
         version: 10.1.0
-      '@tabula/auth':
+      '@tableos/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@tabula/compute':
+      '@tableos/compute':
         specifier: workspace:*
         version: link:../../packages/compute
-      '@tabula/config':
+      '@tableos/config':
         specifier: workspace:*
         version: link:../../packages/config
-      '@tabula/db':
+      '@tableos/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@tabula/events':
+      '@tableos/events':
         specifier: workspace:*
         version: link:../../packages/events
-      '@tabula/fields':
+      '@tableos/fields':
         specifier: workspace:*
         version: link:../../packages/fields
-      '@tabula/filter':
+      '@tableos/filter':
         specifier: workspace:*
         version: link:../../packages/filter
-      '@tabula/formula':
+      '@tableos/formula':
         specifier: workspace:*
         version: link:../../packages/formula
-      '@tabula/jobs':
+      '@tableos/jobs':
         specifier: workspace:*
         version: link:../../packages/jobs
-      '@tabula/links':
+      '@tableos/links':
         specifier: workspace:*
         version: link:../../packages/links
-      '@tabula/observability':
+      '@tableos/observability':
         specifier: workspace:*
         version: link:../../packages/observability
-      '@tabula/permissions':
+      '@tableos/permissions':
         specifier: workspace:*
         version: link:../../packages/permissions
-      '@tabula/query':
+      '@tableos/query':
         specifier: workspace:*
         version: link:../../packages/query
-      '@tabula/realtime-protocol':
+      '@tableos/realtime-protocol':
         specifier: workspace:*
         version: link:../../packages/realtime-protocol
-      '@tabula/search':
+      '@tableos/search':
         specifier: workspace:*
         version: link:../../packages/search
-      '@tabula/storage':
+      '@tableos/storage':
         specifier: workspace:*
         version: link:../../packages/storage
-      '@tabula/types':
+      '@tableos/types':
         specifier: workspace:*
         version: link:../../packages/types
       bullmq:
@@ -148,7 +148,7 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
       '@types/node':
@@ -169,28 +169,28 @@ importers:
 
   apps/web:
     dependencies:
-      '@tabula/field-ui':
+      '@tableos/field-ui':
         specifier: workspace:*
         version: link:../../packages/field-ui
-      '@tabula/fields':
+      '@tableos/fields':
         specifier: workspace:*
         version: link:../../packages/fields
-      '@tabula/filter':
+      '@tableos/filter':
         specifier: workspace:*
         version: link:../../packages/filter
-      '@tabula/grid':
+      '@tableos/grid':
         specifier: workspace:*
         version: link:../../packages/grid
-      '@tabula/realtime-client':
+      '@tableos/realtime-client':
         specifier: workspace:*
         version: link:../../packages/realtime-client
-      '@tabula/record-store':
+      '@tableos/record-store':
         specifier: workspace:*
         version: link:../../packages/record-store
-      '@tabula/types':
+      '@tableos/types':
         specifier: workspace:*
         version: link:../../packages/types
-      '@tabula/ui':
+      '@tableos/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -212,7 +212,7 @@ importers:
       '@playwright/test':
         specifier: ^1.49.1
         version: 1.63.0
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../../packages/tsconfig
       '@types/react':
@@ -240,7 +240,7 @@ importers:
         specifier: ^9.3.6
         version: 9.5.2
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -252,7 +252,7 @@ importers:
 
   packages/compute:
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       tsx:
@@ -268,7 +268,7 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -280,7 +280,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@tabula/types':
+      '@tableos/types':
         specifier: workspace:*
         version: link:../types
       kysely:
@@ -290,7 +290,7 @@ importers:
         specifier: ^8.13.1
         version: 8.23.1
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -315,7 +315,7 @@ importers:
         specifier: ^5.4.2
         version: 5.11.1
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -330,14 +330,14 @@ importers:
 
   packages/field-ui:
     dependencies:
-      '@tabula/fields':
+      '@tableos/fields':
         specifier: workspace:*
         version: link:../fields
-      '@tabula/formula':
+      '@tableos/formula':
         specifier: workspace:*
         version: link:../formula
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/react':
@@ -352,11 +352,11 @@ importers:
 
   packages/fields:
     dependencies:
-      '@tabula/types':
+      '@tableos/types':
         specifier: workspace:*
         version: link:../types
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       tsx:
@@ -368,11 +368,11 @@ importers:
 
   packages/filter:
     dependencies:
-      '@tabula/fields':
+      '@tableos/fields':
         specifier: workspace:*
         version: link:../fields
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       tsx:
@@ -384,11 +384,11 @@ importers:
 
   packages/formula:
     dependencies:
-      '@tabula/fields':
+      '@tableos/fields':
         specifier: workspace:*
         version: link:../fields
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       tsx:
@@ -400,7 +400,7 @@ importers:
 
   packages/grid:
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/react':
@@ -428,7 +428,7 @@ importers:
         specifier: ^5.4.2
         version: 5.11.1
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -440,7 +440,7 @@ importers:
 
   packages/links:
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       typescript:
@@ -453,7 +453,7 @@ importers:
         specifier: ^9.6.0
         version: 9.14.0
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -465,11 +465,11 @@ importers:
 
   packages/permissions:
     dependencies:
-      '@tabula/types':
+      '@tableos/types':
         specifier: workspace:*
         version: link:../types
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       typescript:
@@ -478,11 +478,11 @@ importers:
 
   packages/query:
     dependencies:
-      '@tabula/filter':
+      '@tableos/filter':
         specifier: workspace:*
         version: link:../filter
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       tsx:
@@ -494,7 +494,7 @@ importers:
 
   packages/realtime-client:
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       typescript:
@@ -507,7 +507,7 @@ importers:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -519,11 +519,11 @@ importers:
 
   packages/record-store:
     dependencies:
-      '@tabula/fields':
+      '@tableos/fields':
         specifier: workspace:*
         version: link:../fields
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       tsx:
@@ -535,14 +535,14 @@ importers:
 
   packages/search:
     dependencies:
-      '@tabula/db':
+      '@tableos/db':
         specifier: workspace:*
         version: link:../db
       kysely:
         specifier: ^0.27.5
         version: 0.27.6
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -558,7 +558,7 @@ importers:
         specifier: ^7.15.0
         version: 7.22.0
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/node':
@@ -572,7 +572,7 @@ importers:
 
   packages/types:
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       tsx:
@@ -584,7 +584,7 @@ importers:
 
   packages/ui:
     devDependencies:
-      '@tabula/tsconfig':
+      '@tableos/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
       '@types/react':

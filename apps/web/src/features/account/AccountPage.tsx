@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { accountApi, type SessionInfo } from "../../lib/api-areas/account.ts";
-import { PasswordInput } from "@tabula/ui";
+import { PasswordInput } from "@tableos/ui";
 import { ApiProblemError } from "../../lib/api.ts";
 import { authQueryKey } from "../auth/use-auth.ts";
 import { qrSvg } from "./qr.ts";

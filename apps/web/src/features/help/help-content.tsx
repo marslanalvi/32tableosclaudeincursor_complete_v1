@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import { FIELD_TYPES } from "@tabula/field-ui";
+import { FIELD_TYPES } from "@tableos/field-ui";
 import { APP_COMMIT, APP_VERSION } from "../../lib/version.ts";
 import { RELEASES } from "./releases.ts";
 import { API_ERROR_SAMPLES, API_SAMPLES, type ApiSample } from "./api-samples.ts";

@@ -1,10 +1,10 @@
-import * as filterPkg from "@tabula/filter";
+import * as filterPkg from "@tableos/filter";
 import type { QueryClient } from "@tanstack/react-query";
 import type { BaseDetail, FieldDto, FilterAst, TableDto, ViewDto } from "../../lib/api.ts";
 import type { ViewConfig, ViewWire } from "../../lib/api-areas/views.ts";
 
 /* ------------------------------------------------------------------ */
-/* Filter operators (CONTRACTS §6). Prefer A's exports from @tabula/filter;
+/* Filter operators (CONTRACTS §6). Prefer A's exports from @tableos/filter;
  * fall back to a local table with the same semantics until it ships. */
 
 export type FilterOp =

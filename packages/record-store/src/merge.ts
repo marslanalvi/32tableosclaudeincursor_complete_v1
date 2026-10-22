@@ -1,5 +1,5 @@
-import type { CellValue } from "@tabula/fields";
-import type { FieldId, RecordId, TabulaRecord } from "./types.js";
+import type { CellValue } from "@tableos/fields";
+import type { FieldId, RecordId, TableOSRecord } from "./types.js";
 
 export function mergeFieldValues(
   cells: Record<FieldId, CellValue | null>,
@@ -15,19 +15,19 @@ export function mergeFieldValues(
 }
 
 export function upsertRecordFromDto(
-  map: Map<RecordId, TabulaRecord>,
+  map: Map<RecordId, TableOSRecord>,
   dto: {
     id: RecordId;
     version: number;
     fields: Record<string, CellValue | null | undefined>;
   },
-): TabulaRecord {
+): TableOSRecord {
   const fields: Record<FieldId, CellValue | null> = {};
   for (const [fieldId, value] of Object.entries(dto.fields)) {
     fields[fieldId] = value === undefined ? null : value;
   }
   const existing = map.get(dto.id);
-  const next: TabulaRecord = {
+  const next: TableOSRecord = {
     id: dto.id,
     version: dto.version,
     fields: existing ? { ...existing.fields, ...fields } : fields,
@@ -37,7 +37,7 @@ export function upsertRecordFromDto(
 }
 
 export function getMergedFieldValue(
-  record: TabulaRecord,
+  record: TableOSRecord,
   fieldId: FieldId,
 ): CellValue | null {
   const v = record.fields[fieldId];

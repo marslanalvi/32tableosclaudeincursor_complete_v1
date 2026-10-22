@@ -1,5 +1,5 @@
 {
-  "name": "@tabula/tsconfig",
+  "name": "@tableos/tsconfig",
   "version": "0.0.0",
   "private": true,
   "files": ["base.json", "node.json", "isomorphic.json", "react.json"],

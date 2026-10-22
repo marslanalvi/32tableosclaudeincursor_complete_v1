@@ -8,6 +8,21 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.8] - 2026-10-22
+
+### Changed
+- **TableOS everywhere.** The codebase's original internal name is gone: package names (`@tableos/*`),
+  styles, Redis keys, event and queue names, headers (`X-TableOS-Client-Op-Id`), the automation
+  User-Agent (`TableOS-Automations/1.0`), the session cookie (`tableos_session`; everyone signs in once
+  more) and the docs. Migration 0085 moves unpublished events to the `tableos.domain-events.v1` topic.
+- **API error `type` links** point at this TableOS's Help → API reference (`<app>/help/api#error-<code>`).
+- **Clearer API messages:** a version conflict says which version you sent and which the record is at
+  (and that leaving `version` out overwrites); "not found" names the record and says it may have been deleted.
+- **Link picker** shows a few values of each record ("Company: Acme") so records whose primary field is
+  the Record ID can be told apart.
+- **Test plan 2.0** for this version: 304 cases (25 new for the fix phases); the workbook keeps each plan
+  version's results separately.
+
 ## [0.16.7] - 2026-10-22
 
 Fix phases 3 and 4 of the team's test round (fields, linking, undo, search; interfaces, navigation, UI polish).
@@ -208,7 +223,7 @@ Roles and permissions, phase 1 of the decisions questionnaire
 
 ### Added
 - **Show password.** Sign in, sign up and the account's change-password fields have an eye button
-  that shows or hides what you typed (`PasswordInput` in `@tabula/ui`).
+  that shows or hides what you typed (`PasswordInput` in `@tableos/ui`).
 
 ### Changed
 - **CORS preflight cache:** the API answers preflight requests with `Access-Control-Max-Age: 7200`,

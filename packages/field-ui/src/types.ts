@@ -47,6 +47,8 @@ export interface AttachmentValue {
 export interface LinkRef {
   id: string;
   name?: string | null | undefined;
+  /** Link picker only: a few other values of the record ("Company: Acme"), to tell records apart. */
+  detail?: string | undefined;
 }
 
 export type FieldTypeGroup = "basic" | "advanced" | "computed" | "meta";

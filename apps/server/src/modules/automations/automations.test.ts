@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { encodePublicId } from "@tabula/types";
+import { encodePublicId } from "@tableos/types";
 import { evaluateWireFilter, resolveLookupTargets } from "./filter-eval.js";
 import { nextScheduledRun } from "./schedule.js";
 import { compareCondition, interpolate, interpolateValue, recordContext, type TableMeta } from "./tokens.js";

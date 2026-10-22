@@ -1,32 +1,32 @@
-import type { TabulaError } from "@tabula/types";
-import type { FieldConfig } from "@tabula/fields";
+import type { TableOSError } from "@tableos/types";
+import type { FieldConfig } from "@tableos/fields";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
 
 export class ApiProblemError extends Error {
-  readonly problem: TabulaError;
+  readonly problem: TableOSError;
 
-  constructor(problem: TabulaError) {
+  constructor(problem: TableOSError) {
     super(problem.detail ?? problem.title);
     this.name = "ApiProblemError";
     this.problem = problem;
   }
 }
 
-async function parseProblem(response: Response): Promise<TabulaError> {
+async function parseProblem(response: Response): Promise<TableOSError> {
   const contentType = response.headers.get("content-type") ?? "";
   if (
     contentType.includes("application/problem+json") ||
     contentType.includes("application/json")
   ) {
     try {
-      return (await response.json()) as TabulaError;
+      return (await response.json()) as TableOSError;
     } catch {
       /* fall through */
     }
   }
   const detail = await response.text().catch(() => "");
-  const problem: TabulaError = {
+  const problem: TableOSError = {
     code: "VALIDATION_FAILED",
     title: response.statusText || "Request failed",
     status: response.status,
@@ -109,8 +109,8 @@ export async function request<T>(
   // Import chunks skip Idempotency-Key: bodies are large and a timed-out
   // first attempt must not replay as an empty/partial cached write.
   if (MUTATING_METHODS.has(method) && !path.startsWith("/v1/auth/")) {
-    const opId = init?.clientOpId ?? headers.get("X-Tabula-Client-Op-Id") ?? newClientOpId();
-    headers.set("X-Tabula-Client-Op-Id", opId);
+    const opId = init?.clientOpId ?? headers.get("X-TableOS-Client-Op-Id") ?? newClientOpId();
+    headers.set("X-TableOS-Client-Op-Id", opId);
     if (
       !isImportPath(path) &&
       !headers.has("Idempotency-Key") &&

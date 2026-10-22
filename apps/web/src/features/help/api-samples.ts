@@ -14,6 +14,8 @@ export interface ApiSample {
   response?: unknown;
 }
 
+/** Error type links point at this TableOS: <origin>/help/api#error-<code>. */
+const ORIGIN = typeof window !== "undefined" ? window.location.origin : "https://your-tableos-host";
 const BAS = "bas_034kETaeEKWvBxqheODxZi";
 const WSP = "wsp_034kETaailG83jXk6sz2h6";
 const TBL = "tbl_034kETaeWVcUfFuuDkZCYK";
@@ -270,7 +272,7 @@ export const API_SAMPLES: ApiSample[] = [
     path: "/v1/version",
     tokenType: "none",
     status: 200,
-    response: { name: "TableOS", version: "0.16.7", commit: "7f47bce", startedAt: "2026-10-22T08:16:19.474Z" },
+    response: { name: "TableOS", version: "0.16.8", commit: "7f47bce", startedAt: "2026-10-22T08:16:19.474Z" },
   },
 ];
 
@@ -290,7 +292,7 @@ export const API_ERROR_SAMPLES: ApiSample[] = [
       status: 422,
       detail: "Invalid request body",
       errors: [{ field: "records", message: "At most 500 records per request" }],
-      type: "https://tabula.dev/errors/validation-failed",
+      type: `${ORIGIN}/help/api#error-validation-failed`,
       requestId: "0f6c0b4e-6a2f-4d2e-9a51-2b1c9d6f4e10",
     },
   },
@@ -308,7 +310,7 @@ export const API_ERROR_SAMPLES: ApiSample[] = [
       status: 422,
       detail: 'Unknown field "Nope"',
       meta: { field: "Nope" },
-      type: "https://tabula.dev/errors/unknown-field",
+      type: `${ORIGIN}/help/api#error-unknown-field`,
       requestId: "ac725f4f-f5e6-4109-a60e-dcfbd7248a9b",
     },
   },
@@ -324,9 +326,9 @@ export const API_ERROR_SAMPLES: ApiSample[] = [
       code: "VERSION_CONFLICT",
       title: "Version conflict",
       status: 409,
-      detail: "The record was changed by someone else",
-      meta: { recordId: R1, currentVersion: 2 },
-      type: "https://tabula.dev/errors/version-conflict",
+      detail: 'The record changed since you read it: you sent version 1, it is now at version 2. Read it again and send version 2, or leave "version" out to overwrite.',
+      meta: { recordId: R1, sentVersion: 1, currentVersion: 2 },
+      type: `${ORIGIN}/help/api#error-version-conflict`,
       requestId: "5b1f3c2e-0d4a-4c5e-8f1a-7e2d9b6c3a01",
     },
   },
@@ -344,7 +346,7 @@ export const API_ERROR_SAMPLES: ApiSample[] = [
       title: "Forbidden",
       status: 403,
       detail: 'This token doesn\'t have the "write" permission',
-      type: "https://tabula.dev/errors/forbidden",
+      type: `${ORIGIN}/help/api#error-forbidden`,
       requestId: "06d3c750-8d65-4ef4-a265-64b6513622b0",
     },
   },
@@ -362,7 +364,7 @@ export const API_ERROR_SAMPLES: ApiSample[] = [
       status: 429,
       detail: "This token can make 5 requests per second on your plan. Wait a moment and retry.",
       meta: { limitPerSecond: 5, retryAfterSec: 1 },
-      type: "https://tabula.dev/errors/rate-limited",
+      type: `${ORIGIN}/help/api#error-rate-limited`,
       requestId: "3c1d8e72-9b40-4f6a-8d25-61e0a7c4b913",
     },
   },
@@ -378,7 +380,7 @@ export const API_ERROR_SAMPLES: ApiSample[] = [
       title: "Authentication required",
       status: 401,
       detail: "This API token is invalid, revoked or expired, or the person who made it is no longer an Owner or Admin",
-      type: "https://tabula.dev/errors/unauthenticated",
+      type: `${ORIGIN}/help/api#error-unauthenticated`,
       requestId: "9f79fce1-ba45-42a2-a282-30d7ce322a28",
     },
   },

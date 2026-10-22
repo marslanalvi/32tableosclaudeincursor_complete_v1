@@ -1,8 +1,8 @@
 import { CompiledQuery } from "kysely";
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 
 export async function executeRawQuery<T>(
-  db: TabulaDb,
+  db: TableOSDb,
   sqlText: string,
   parameters: unknown[],
 ): Promise<T[]> {

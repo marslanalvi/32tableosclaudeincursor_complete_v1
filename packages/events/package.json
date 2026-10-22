@@ -1,9 +1,9 @@
 {
-  "name": "@tabula/events",
+  "name": "@tableos/events",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "tabula": {
+  "tableos": {
     "tier": "T2a",
     "env": "node"
   },
@@ -24,7 +24,7 @@
     "ioredis": "^5.4.2"
   },
   "devDependencies": {
-    "@tabula/tsconfig": "workspace:*",
+    "@tableos/tsconfig": "workspace:*",
     "@types/node": "^22.10.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"

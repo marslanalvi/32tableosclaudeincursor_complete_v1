@@ -1,10 +1,10 @@
-import { evaluateFilter, isFilterError, type EvalField, type FilterAst } from "@tabula/filter";
-import { decodePublicId } from "@tabula/types";
+import { evaluateFilter, isFilterError, type EvalField, type FilterAst } from "@tableos/filter";
+import { decodePublicId } from "@tableos/types";
 import type { FieldMeta, TableMeta, WireRecord } from "./tokens.js";
 
 /**
  * Evaluate a filter AST (CONTRACTS §6) against a record in WIRE format, using
- * the shared `@tabula/filter` evaluator (same semantics as the SQL compiler).
+ * the shared `@tableos/filter` evaluator (same semantics as the SQL compiler).
  * Used for "record matches conditions" / "enters view" triggers and
  * conditional actions.
  */

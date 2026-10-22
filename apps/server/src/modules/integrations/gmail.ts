@@ -1,5 +1,5 @@
-import type { Env } from "@tabula/config";
-import type { TabulaDb } from "@tabula/db";
+import type { Env } from "@tableos/config";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { SyncError, type MappedField, type SourceField, type SyncSource } from "../sync/source.js";
 import { openCredentials, sealCredentials, type ConnectionRow } from "./connections.js";
@@ -113,7 +113,7 @@ export async function googleAccountEmail(accessToken: string): Promise<{ sub: st
 }
 
 /** A working access token for a Gmail connection, refreshed (and saved) when it has expired. */
-export function gmailTokenProvider(db: TabulaDb, env: Pick<Env, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">, conn: ConnectionRow, key: Buffer) {
+export function gmailTokenProvider(db: TableOSDb, env: Pick<Env, "GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET">, conn: ConnectionRow, key: Buffer) {
   let creds = openCredentials(conn, key);
   return async (force = false): Promise<string> => {
     if (!force && creds.accessToken && (creds.expiresAt ?? 0) > Date.now() + 60_000) return creds.accessToken;

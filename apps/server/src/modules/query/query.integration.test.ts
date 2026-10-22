@@ -9,7 +9,7 @@
  */
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { evaluateFilter, operatorsForFieldType, type EvalField, type FilterAst, type FilterOp } from "@tabula/filter";
+import { evaluateFilter, operatorsForFieldType, type EvalField, type FilterAst, type FilterOp } from "@tableos/filter";
 import { createFixture, OPTS, pidOf, rng, TAGS, type Fixture } from "./query-fixture.js";
 import { idVariants } from "./context.js";
 

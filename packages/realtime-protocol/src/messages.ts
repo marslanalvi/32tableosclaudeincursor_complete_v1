@@ -76,7 +76,7 @@ export type ClientMessage = z.infer<typeof clientMessageSchema>;
 export const serverHelloMessage = z.object({
   type: z.literal("hello"),
   connId: z.string().min(1),
-  protocol: z.literal("tabula.v1"),
+  protocol: z.literal("tableos.v1"),
   protocolVersion: z.literal(PROTOCOL_VERSION),
   heartbeatSec: z.number().int().positive(),
   serverTime: z.string().min(1),

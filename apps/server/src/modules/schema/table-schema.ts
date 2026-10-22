@@ -2,10 +2,10 @@
  * Field/table schema loading shared by B's modules (records writes, fields,
  * compute, links). Config is stored with raw uuids.
  */
-import type { Database, TabulaDb } from "@tabula/db";
+import type { Database, TableOSDb } from "@tableos/db";
 import { sql, type Kysely, type Transaction } from "kysely";
 
-export type Db = Kysely<Database> | Transaction<Database> | TabulaDb;
+export type Db = Kysely<Database> | Transaction<Database> | TableOSDb;
 
 export interface FieldRowFull {
   id: string;

@@ -1,6 +1,6 @@
 import { isIP } from "node:net";
 import cookie from "@fastify/cookie";
-import { SESSION_COOKIE_NAME } from "@tabula/auth";
+import { SESSION_COOKIE_NAME } from "@tableos/auth";
 import cors from "@fastify/cors";
 import Fastify, { type FastifyBaseLogger } from "fastify";
 import type { AppContext } from "../lib/app-context.js";
@@ -16,7 +16,7 @@ import { registerWorkspaceRoutes } from "../modules/workspace/routes.js";
 import { authHook } from "./auth-hook.js";
 import { registerKernelRequestContext } from "../kernel/request-context.js";
 import { registerIdempotency } from "./idempotency.js";
-import { PROBLEM_CONTENT_TYPE, sendProblem } from "./errors.js";
+import { PROBLEM_CONTENT_TYPE, sendProblem, setProblemTypeBase } from "./errors.js";
 import { registerInvitationRoutes } from "../modules/invitations/routes.js";
 import { registerWave4Routes } from "../modules/wave4/routes.js";
 import { registerBillingRoutes } from "../modules/billing/routes.js";
@@ -29,10 +29,10 @@ import { registerReadableFieldNames } from "../modules/public-api/readable-field
 import { registerSyncRoutes } from "../modules/sync/routes.js";
 import { registerIntegrationRoutes } from "../modules/integrations/routes.js";
 import { buildOpenApiDocument } from "./openapi.js";
-import { TabulaErrorCodes, createTabulaError } from "@tabula/types";
+import { TableOSErrorCodes, createTableOSError } from "@tableos/types";
 import { internalErrorProblem, problemFromError } from "./errors.js";
 import { setAuditLogger } from "../modules/audit/write.js";
-import type { Env } from "@tabula/config";
+import type { Env } from "@tableos/config";
 import { APP_COMMIT, APP_VERSION, STARTED_AT } from "../lib/version.js";
 
 /**
@@ -90,6 +90,7 @@ export async function buildFastify(ctx: AppContext) {
   });
 
   setAuditLogger(ctx.log);
+  setProblemTypeBase(ctx.env.APP_URL);
 
   const allowedOrigins = corsOrigins(ctx.env);
   await app.register(cors, {
@@ -133,7 +134,7 @@ export async function buildFastify(ctx: AppContext) {
       sendProblem(
         reply,
         request,
-        createTabulaError(TabulaErrorCodes.FORBIDDEN, { detail: "Cross-site request blocked" }),
+        createTableOSError(TableOSErrorCodes.FORBIDDEN, { detail: "Cross-site request blocked" }),
       );
       return reply;
     }
@@ -198,7 +199,7 @@ export async function buildFastify(ctx: AppContext) {
     sendProblem(
       reply,
       request,
-      createTabulaError(TabulaErrorCodes.NOT_FOUND, {
+      createTableOSError(TableOSErrorCodes.NOT_FOUND, {
         detail: `Route ${request.method} ${request.url} not found`,
       }),
     );

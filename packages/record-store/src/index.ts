@@ -7,7 +7,7 @@ export {
 export type {
   PendingMutation,
   QueryHash,
-  TabulaRecord,
+  TableOSRecord,
   RecordId,
   RecordStoreSnapshot,
   ServerChangePayload,

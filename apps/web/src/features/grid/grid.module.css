@@ -1,4 +1,4 @@
 .status {
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-muted);
 }

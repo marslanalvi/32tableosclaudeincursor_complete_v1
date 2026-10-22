@@ -4,19 +4,19 @@
  * Storage: config holds raw uuids; formula expressions reference fields as
  * `{<field uuid>}`. Wire: `tbl_`/`fld_` public ids; formulas show `{Field Name}`.
  */
-import { getFieldType, isFieldTypeKey, type FieldConfig } from "@tabula/fields";
+import { getFieldType, isFieldTypeKey, type FieldConfig } from "@tableos/fields";
 import {
   FormulaParseError,
   formulaFieldRefs,
   parseFormula,
   rewriteFormulaRefs,
   validateFormulaAst,
-} from "@tabula/formula";
+} from "@tableos/formula";
 import { sql, type Kysely } from "kysely";
-import type { Database } from "@tabula/db";
+import type { Database } from "@tableos/db";
 import { ApiError } from "../../http/errors.js";
 import { pid } from "../../lib/public-ids.js";
-import { decodePublicId, type PublicIdPrefix } from "@tabula/types";
+import { decodePublicId, type PublicIdPrefix } from "@tableos/types";
 import type { Db, FieldRowFull } from "./table-schema.js";
 import { editPermissionToWire, parseEditPermission } from "./field-permissions.js";
 

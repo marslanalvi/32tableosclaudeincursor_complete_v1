@@ -1,5 +1,5 @@
-import type { TabulaDb } from "@tabula/db";
-import { decodePublicId } from "@tabula/types";
+import type { TableOSDb } from "@tableos/db";
+import { decodePublicId } from "@tableos/types";
 import { sql } from "kysely";
 import { pid } from "../../lib/public-ids.js";
 import { createServiceSession } from "../auth/session.js";
@@ -177,7 +177,7 @@ export class AutomationConsumer {
 
   constructor(private readonly deps: EngineDeps) {}
 
-  private get db(): TabulaDb {
+  private get db(): TableOSDb {
     return this.deps.db;
   }
 
@@ -198,8 +198,8 @@ export class AutomationConsumer {
       const lock = await sql<{ ok: boolean }>`SELECT pg_try_advisory_lock(${LOCK_KEY}) AS ok`.execute(conn);
       if (!lock.rows[0]?.ok) return;
       try {
-        processed = await this.processEvents(conn as unknown as TabulaDb);
-        await this.processSchedules(conn as unknown as TabulaDb);
+        processed = await this.processEvents(conn as unknown as TableOSDb);
+        await this.processSchedules(conn as unknown as TableOSDb);
       } finally {
         await sql`SELECT pg_advisory_unlock(${LOCK_KEY})`.execute(conn);
       }
@@ -208,7 +208,7 @@ export class AutomationConsumer {
     return processed;
   }
 
-  private async processEvents(db: TabulaDb): Promise<number> {
+  private async processEvents(db: TableOSDb): Promise<number> {
     const state = await sql<{ value: { cursor?: string } }>`
       SELECT value FROM data.automation_engine_state WHERE key = 'outbox_cursor'
     `.execute(db);
@@ -273,7 +273,7 @@ export class AutomationConsumer {
   }
 
   /** Returns "defer" when the event should be re-read on a later tick. */
-  private async handleEvent(db: TabulaDb, ev: OutboxRow, autos: AutomationRow[]): Promise<void | "defer"> {
+  private async handleEvent(db: TableOSDb, ev: OutboxRow, autos: AutomationRow[]): Promise<void | "defer"> {
     const payload = ev.payload ?? {};
     let change: ChangeRow | null = null;
     if (ev.base_seq !== null) {
@@ -469,7 +469,7 @@ export class AutomationConsumer {
     }
   }
 
-  private async processSchedules(db: TabulaDb): Promise<void> {
+  private async processSchedules(db: TableOSDb): Promise<void> {
     const due = await sql<{ id: string; base_id: string; workspace_id: string; trigger: TriggerDef; next_run_at: Date | null }>`
       SELECT id, base_id, workspace_id, trigger, next_run_at
       FROM data.automations
@@ -531,7 +531,7 @@ function decodeRec(p: string): string {
 }
 
 const slotCache = new Map<string, { at: number; map: Map<string, string> }>();
-async function slotToFieldMap(db: TabulaDb, tableId: string | null): Promise<Map<string, string>> {
+async function slotToFieldMap(db: TableOSDb, tableId: string | null): Promise<Map<string, string>> {
   const map = new Map<string, string>();
   if (!tableId) return map;
   const tableUuid = UUID_RE.test(tableId) ? tableId : (() => {
@@ -553,7 +553,7 @@ async function slotToFieldMap(db: TabulaDb, tableId: string | null): Promise<Map
 }
 
 export async function insertRun(
-  db: TabulaDb,
+  db: TableOSDb,
   run: {
     automationId: string;
     baseId: string;

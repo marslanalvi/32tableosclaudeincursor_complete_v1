@@ -49,7 +49,7 @@
 | Foreign keys | **Physical FKs only inside one plane and one shard**, and only where they don't hurt hot paths (we do not FK `records.table_id` → `tables` on the hot partitioned table; integrity is enforced by the write path and nightly reconciliation — see [`04` §6.27](./04-database-architecture.md#627-cross-shard-and-cross-plane-concerns)). References across planes (e.g., `records.created_by` → `core.users`) are **logical FKs** (UUID, no constraint). Below, `→` marks a physical FK, `⇢` a logical one. |
 | Soft delete | `deleted_at timestamptz` + `deletion_batch_id uuid` (→ `deletion_batches`) for user-restorable objects; purge after `TRASH_RETENTION`. |
 | Versioning | Three flavors: (a) **row version** (`version`/`config_version`/`draft_revision` int, used for `If-Match`); (b) **immutable published versions** (`automation_versions`, `interface_versions`); (c) **history tables** (`record_revisions`, `base_changes`, audit). |
-| Audit | "Audit: security" = written to `audit.audit_events` (via `tabula.audit.v1`); "Audit: change log" = covered by `base_changes` (+ `record_revisions` for cells). |
+| Audit | "Audit: security" = written to `audit.audit_events` (via `tableos.audit.v1`); "Audit: change log" = covered by `base_changes` (+ `record_revisions` for cells). |
 | Timestamps | `created_at`, `updated_at` (`timestamptz`, UTC) everywhere; actors `created_by`/`updated_by` (user uuid, null for non-user actors; actor detail in change log). |
 | Order keys | Fractional index strings (`order_key text COLLATE "C"`). |
 | Lifecycle notation | `state_a → state_b` transitions; terminal states in **bold**. |
@@ -531,7 +531,7 @@ Contacts are **records** in the workspace's contact directory base (`bases.kind=
 * **Permissions:** restore: same permission as delete; purge: base creator/workspace owner. **Audit:** security for permanent deletes (`trash.purged`).
 
 **`data.base_snapshots`** — *Base snapshot* · **PK** `id` (`snp_`) · **FKs** `base_id → bases`
-* **Attributes:** `kind` (`manual|scheduled|pre_restore|template`), `object_key` (`tabula-snapshots`), `schema_version`, `change_seq` at snapshot, `size_bytes`, `record_count`, `status` (`creating|ready|failed|expired`), `created_by`, `expires_at`.
+* **Attributes:** `kind` (`manual|scheduled|pre_restore|template`), `object_key` (`tableos-snapshots`), `schema_version`, `change_seq` at snapshot, `size_bytes`, `record_count`, `status` (`creating|ready|failed|expired`), `created_by`, `expires_at`.
 * **Lifecycle:** `creating → ready → **expired**`; restore creates a **new base** from the snapshot (never overwrites in place). **Audit:** security (`snapshot.created/restored`).
 
 **`data.long_operations`** — *Long operation* · **PK** `id` (`lop_`) · **FKs** `base_id → bases`
@@ -549,7 +549,7 @@ Contacts are **records** in the workspace's contact directory base (`bases.kind=
 **`data.export_jobs`** — *Export job* · **PK** `id` (`exp_`) · **FKs** `base_id`, `long_operation_id` · attributes `scope` (`view|table|base`), `target_id`, `format`, `options`, `status`, `object_key`, `expires_at` (7 d), `row_count`, `requested_by`. Lifecycle `queued → running → **ready** → **expired**`. Security-audited (`export.data`).
 
 **`data.sync_sources`** — *Sync source* · **PK** `id` · **FKs** `base_id`, `target_table_id → tables`, `connection_id ⇢ integration_connections`
-* **Attributes:** `source_kind` (`tabula_view|google_sheets|salesforce|jira|csv_url|…`), `source_spec jsonb`, `field_mapping jsonb`, `schedule` (`manual|5m|1h|1d`), `watermark jsonb`, `status` (`active|paused|error|needs_reauth`), `last_run_id`, `options` (delete behavior: `mark|delete|keep`).
+* **Attributes:** `source_kind` (`tableos_view|google_sheets|salesforce|jira|csv_url|…`), `source_spec jsonb`, `field_mapping jsonb`, `schedule` (`manual|5m|1h|1d`), `watermark jsonb`, `status` (`active|paused|error|needs_reauth`), `last_run_id`, `options` (delete behavior: `mark|delete|keep`).
 * **Lifecycle:** `active ⇄ paused`, `→ error`, `→ **deleted**`. **Audit:** security (create/delete, cross-base source access).
 
 **`data.sync_runs`** — *Sync run* · **PK** `id` · **FKs** `sync_source_id → sync_sources` · attributes `status`, `started_at/finished_at`, `stats jsonb` (created/updated/deleted/unchanged), `error`, `watermark_from/to`. Retention 90 days.
@@ -580,7 +580,7 @@ Contacts are **records** in the workspace's contact directory base (`bases.kind=
 
 **`audit.audit_events`** — *Audit event* · **PK** (`id`, `occurred_at`), partitioned monthly
 * **Attributes:** `org_id`, `workspace_id`, `base_id`, `actor jsonb` (type, id, ip, user agent, session id, staff flag), `action` (dotted verb, e.g., `grant.changed`, `export.data`, `session.created`), `target jsonb` (`{type, id}`), `outcome` (`success|denied|error`), `details jsonb` (before/after for config changes, redacted), `request_id`, `trace_id`.
-* **Lifecycle:** append-only, never updated; hot 90 days → Parquet in `tabula-audit-archive` (object lock for Enterprise) up to 7 years.
+* **Lifecycle:** append-only, never updated; hot 90 days → Parquet in `tableos-audit-archive` (object lock for Enterprise) up to 7 years.
 * **Permissions:** `audit.read` (org admins); staff access via support grants only. **Soft delete:** never (legal hold supported).
 
 **`audit.audit_exports`** — *SIEM export config* · **PK** `id` · **FKs** `org_id` (logical) · attributes `destination` (`s3|splunk_hec|datadog|webhook`), `config_ciphertext`, `filter`, `checkpoint` (last exported event id/time), `status`. Lifecycle `active ⇄ paused → **deleted**`. Security-audited.

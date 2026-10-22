@@ -1,9 +1,9 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import type { SearchBackend, SearchDocument, SearchHit } from "./backend.js";
 
 export class PostgresFtsBackend implements SearchBackend {
-  constructor(private readonly db: TabulaDb) {}
+  constructor(private readonly db: TableOSDb) {}
 
   async upsert(doc: SearchDocument): Promise<void> {
     await sql`

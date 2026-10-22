@@ -26,7 +26,7 @@ export const EVENT_JOB_RETENTION = {
 
 /** Redis set listing the consumer groups registered for a topic. */
 function groupsKey(topic: string): string {
-  return `tabula:evt-groups:${topic}`;
+  return `tableos:evt-groups:${topic}`;
 }
 
 /**

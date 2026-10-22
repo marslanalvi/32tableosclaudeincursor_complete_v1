@@ -57,7 +57,7 @@ Non-functional targets:
 | Stage | Decision | Why |
 |---|---|---|
 | **MVP** (≤ ~5M records total, ≤ 10k bases) | **Postgres FTS** in `data.search_documents` (per shard) with `tsvector` + `pg_trgm`. Indexed asynchronously by the `search-index` queue. | No new infra; same tenancy/RLS; consistent with D14. Ranking is acceptable when the dominant query is "find the record whose title contains X". |
-| **V1** (Kafka on, ≥ 50M records, or when p95 global search > 500 ms) | **Amazon OpenSearch Service**, fed from `tabula.domain-events.v1` + state reads, **one index set per data-plane shard** (§17.6), permission-filtered by accessible base IDs. `search_documents` kept for 1 release as fallback, then dropped (only metadata docs remain if we choose; see §17.4.4). | BM25, highlighting, typo tolerance, horizontal scale, managed. Apache-2.0 avoids licensing risk. |
+| **V1** (Kafka on, ≥ 50M records, or when p95 global search > 500 ms) | **Amazon OpenSearch Service**, fed from `tableos.domain-events.v1` + state reads, **one index set per data-plane shard** (§17.6), permission-filtered by accessible base IDs. `search_documents` kept for 1 release as fallback, then dropped (only metadata docs remain if we choose; see §17.4.4). | BM25, highlighting, typo tolerance, horizontal scale, managed. Apache-2.0 avoids licensing risk. |
 | **V2** (optional) | Hybrid lexical + vector search (OpenSearch k-NN) for "semantic" record search, fed by the AI gateway embedding pipeline. | Same cluster; only if AI features demand it. |
 
 Rejected: Elasticsearch (equivalent capability; licensing/managed-service ambiguity, no advantage on AWS), Meilisearch/Typesense (great DX, but HA and 1B-doc scale are not their sweet spot; RAM cost for Typesense). We **do** borrow their UX ideas: prefix + typo tolerance on titles, "search as you type" with 100 ms debounce.
@@ -111,7 +111,7 @@ A single concatenated `all_text` gives recall, but ranking and **field-level per
 ### 17.3.4 Canonical document (TypeScript)
 
 ```ts
-// @tabula/search/src/document.ts
+// @tableos/search/src/document.ts
 export type SearchDocType =
   | 'record' | 'contact' | 'base' | 'table' | 'field'
   | 'view' | 'interface' | 'page' | 'automation';
@@ -684,7 +684,7 @@ POST /v1/bases/{baseId}/attachments:fromUrl                     // server-side f
 
 * `initiateUpload` checks: caller has `record.update` on the field (or `record.create` + form/interface element permission), field type is `attachment`, field not edit-restricted for caller, declared size ≤ plan max, base storage quota (`used + reserved + size ≤ quota`), open sessions ≤ limit, filename sanitization, MIME not in org blocklist (`organization_policies.attachments.blockedTypes`).
 * Single-part (`size ≤ 16 MB`): one presigned `PUT`. Multipart: part size `max(16 MB, ceil(size / 9000))` (S3 allows 10,000 parts), part URLs valid 1 h, refreshable via `:status`.
-* Presigned URL constraints: `Content-Length` bound in signature for single PUT; key `q/{workspaceId}/{attachmentId}` in `tabula-uploads-quarantine`; bucket policy denies `GetObject` to all principals except the scan/promote role; CORS restricted to app origins.
+* Presigned URL constraints: `Content-Length` bound in signature for single PUT; key `q/{workspaceId}/{attachmentId}` in `tableos-uploads-quarantine`; bucket policy denies `GetObject` to all principals except the scan/promote role; CORS restricted to app origins.
 * **Client checksums are used only for integrity** (`x-amz-checksum-sha256` per part, verified by S3) — never for dedupe (§18.6).
 
 ### 18.3.2 End-to-end sequence
@@ -765,7 +765,7 @@ Runs as the first stage of the `file-scan` queue on egress-proxy-only workers (s
 
 ### 18.5.1 Promotion
 
-Server-side `CopyObject` (`UploadPartCopy` above 5 GB) from quarantine to `tabula-attachments` at `{workspaceId}/{baseId}/{attachmentId}/original` — the **first** attachment id of the blob names the object (keys are immutable; later occurrences refer via `blob_id`). SSE-KMS with the org's key (dedicated shard / BYOK) or the regional key with S3 Bucket Keys. Object metadata `x-amz-meta-sha256`, `x-amz-meta-blob-id`.
+Server-side `CopyObject` (`UploadPartCopy` above 5 GB) from quarantine to `tableos-attachments` at `{workspaceId}/{baseId}/{attachmentId}/original` — the **first** attachment id of the blob names the object (keys are immutable; later occurrences refer via `blob_id`). SSE-KMS with the org's key (dedicated shard / BYOK) or the regional key with S3 Bucket Keys. Object metadata `x-amz-meta-sha256`, `x-amz-meta-blob-id`.
 
 ### 18.5.2 Variant catalogue
 
@@ -780,7 +780,7 @@ Server-side `CopyObject` (`UploadPartCopy` above 5 GB) from quarantine to `tabul
 | `heic_jpeg` | HEIC/HEIF | libvips + libheif | JPEG for browsers without HEIC |
 | `svg_raster` | SVG | `resvg` (no scripts, no external refs) | PNG 1600 px (SVG is never served inline) |
 
-Variants are keyed per blob: `tabula-attachment-variants/{workspaceId}/{baseId}/{firstAttachmentId}/{variant}`; dedupe hits reuse them.
+Variants are keyed per blob: `tableos-attachment-variants/{workspaceId}/{baseId}/{firstAttachmentId}/{variant}`; dedupe hits reuse them.
 
 ### 18.5.3 Sandboxing processors
 
@@ -818,8 +818,8 @@ Variants are keyed per blob: `tabula-attachment-variants/{workspaceId}/{baseId}/
 
 ### 18.7.1 Domains
 
-* App `app.tabula.example`, API `api.tabula.example`.
-* **User content `tabulausercontent.example`**: a separate registrable domain — no cookies, not same-site with the app, cannot read app cookies, never allowed in app CSP `script-src`.
+* App `app.tableos.example`, API `api.tableos.example`.
+* **User content `tableosusercontent.example`**: a separate registrable domain — no cookies, not same-site with the app, cannot read app cookies, never allowed in app CSP `script-src`.
 
 ### 18.7.2 Signed URLs
 
@@ -885,7 +885,7 @@ UPDATE data.attachment_blobs
 
 * Blob bytes are deleted **24 h after** `purge_pending_at` (absorbs races with an in-flight copy); the copy path re-increments and clears `purge_pending_at`.
 * Base snapshots pin blobs (`snapshot_pins`), see [22 §27.4.2](./22-audit-history-undo-trash.md); pinned blobs are never deleted.
-* S3 versioning on `tabula-attachments` is **off** (deletes must be real for GDPR); disaster recovery via AWS Backup to `tabula-backups` with 35-day retention (documented in the DPA).
+* S3 versioning on `tableos-attachments` is **off** (deletes must be real for GDPR); disaster recovery via AWS Backup to `tableos-backups` with 35-day retention (documented in the DPA).
 * Weekly **orphan sweeper**: S3 Inventory vs `attachment_blobs` → objects without rows older than 7 days deleted; rows without objects → alert.
 
 ## 18.9 Storage accounting
@@ -1195,5 +1195,5 @@ GET    /v1/bases/{b}/activity?cursor&tableId&actorId      (V1)
 | Redis namespace | `perm:{principalId}:_bases:{userPermEpoch}` | AccessibleBaseSet cache (§17.5.2) | uses `perm:` namespace with reserved `_bases`; needs a per-principal epoch, see 19 Proposed additions |
 | OpenSearch | indices `rec-{shardId}-v{gen}`, `meta-{shardId}-v{gen}`, `principal-bases` | §17.6 | |
 | Policy keys | `organization_policies`: `attachments.blockedTypes`, `attachments.stripImageMetadata`, `attachments.strictUrlTtl`, `attachments.allowUnscannable`, `comments.recoverableDeletes`, `notifications.discloseBaseNameToNonMembers` | §18, §19 | JSON keys, no schema change |
-| Domain | `tabulausercontent.example` + CloudFront distribution | §18.7 | infra (25) |
+| Domain | `tableosusercontent.example` + CloudFront distribution | §18.7 | infra (25) |
 | Event | `attachment.detached` (optional) | storage metering clarity | could be folded into `record.updated` |

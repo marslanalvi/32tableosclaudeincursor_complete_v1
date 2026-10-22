@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { sql } from "kysely";
-import { selectOptionsOf } from "@tabula/filter";
+import { selectOptionsOf } from "@tableos/filter";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import { normalizeApiPath } from "../access/api-tokens.js";

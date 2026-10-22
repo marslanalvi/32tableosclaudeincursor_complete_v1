@@ -242,7 +242,7 @@ export class RealtimeClient {
       const wsUrl = resolveWsUrl(url, globalThis.location);
       const sep = wsUrl.includes("?") ? "&" : "?";
       const fullUrl = `${wsUrl}${sep}ticket=${encodeURIComponent(ticket)}`;
-      socket = new WebSocket(fullUrl, "tabula.v1");
+      socket = new WebSocket(fullUrl, "tableos.v1");
     } catch {
       this.scheduleReconnect(generation);
       return;

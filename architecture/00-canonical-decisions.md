@@ -4,7 +4,7 @@
 >
 > This file is normative. Every other document in `docs/architecture/` conforms to the names, IDs, decisions and inventories defined here. If another document disagrees with this one, this one wins and the other is a bug.
 >
-> Working product name used throughout: **Tabula** (placeholder). Package scope: `@tabula/*`.
+> Working product name used throughout: **TableOS** (placeholder). Package scope: `@tableos/*`.
 
 ---
 
@@ -33,7 +33,7 @@ We do not reproduce any vendor's proprietary code, internal data model, internal
 | D5 | IDs | **UUIDv7** (`uuid` type) for every primary key. Public IDs are type-prefixed base62 encodings of the UUID (`rec_5Xk…`). Prefix table in §3. Encoding/decoding only at API/realtime boundary. |
 | D6 | Record storage | **Hybrid**: canonical user cell values in `records.cells JSONB` keyed by **field slot** (small int per table, never reused); computed values materialized in `records.computed JSONB`; links normalized in `record_links`; **typed index sidecars** (`record_index_num`, `record_index_text`, `record_index_time`) for fields that need index-backed filter/sort on large tables. No dynamic DDL per user table. |
 | D7 | Computed fields | Materialized, maintained by the **Compute Engine** using a field-level dependency graph + record-level propagation through links. Same-record formulas recalculated **synchronously** in the write transaction. Cross-record propagation synchronous when fan-out ≤ `COMPUTE_SYNC_FANOUT_LIMIT` (default 500 records), otherwise deferred to the `compute` queue with records marked stale. Volatile formulas (`NOW()`, `TODAY()`) recomputed by scheduled buckets. |
-| D8 | Formula engine | Own grammar; hand-written lexer + **Pratt parser** → typed AST → type checker → compiled JS closures. **Isomorphic** package (`@tabula/formula`) used by server (authoritative) and client (preview/validation). No `eval`, no user JS in formula engine. |
+| D8 | Formula engine | Own grammar; hand-written lexer + **Pratt parser** → typed AST → type checker → compiled JS closures. **Isomorphic** package (`@tableos/formula`) used by server (authoritative) and client (preview/validation). No `eval`, no user JS in formula engine. |
 | D9 | Realtime | **Server-authoritative operations**, no CRDT/OT for structured cells. Per-base total order via `base_runtime.change_seq`. **Cell-level last-writer-wins**; set-semantics ops for links/multi-select/collaborators (add/remove commute). Optional `If-Match` record version for strict API clients. Yjs CRDT only for rich long-text documents (V1+). WebSocket gateway, Redis for presence. |
 | D10 | Change log | `base_changes` table: per-base ordered, retained 30 days — feeds realtime catch-up, public webhook cursors, undo/redo, and sync. |
 | D11 | Event delivery | **Transactional outbox** (`outbox_events` + `base_changes`) read by the `relay` via **Postgres logical replication** (commit-ordered, gap-free) → **Kafka-API event log** (Amazon MSK or Redpanda). MVP profile: relay dispatches directly to BullMQ queues (same `EventBus` interface). |
@@ -47,7 +47,7 @@ We do not reproduce any vendor's proprietary code, internal data model, internal
 | D19 | Auth | In-house identity core: opaque session tokens (HttpOnly cookie) stored hashed in Postgres + cached in Redis; Argon2id passwords; TOTP + WebAuthn MFA; OAuth social login; **SAML/OIDC SSO via BoxyHQ SAML Jackson (self-hosted, OSS)** behind our `SsoProvider` interface (WorkOS as buy-alternative); SCIM 2.0 server in-house. Public API: PATs, service-account tokens, OAuth 2.1 (PKCE) for third-party apps. |
 | D20 | Permissions | Hierarchical **RBAC with additive grants** (org → workspace → base, max-role wins) + **deny-style restrictions** at table/field/view (and record-scoped visibility via interfaces and Enterprise row policies). Compiled into a **PermissionSnapshot** per (principal, base), cached in Redis, invalidated by `perm_epoch`. |
 | D21 | Automations | Own durable step runner on Postgres state + BullMQ execution. Trigger matcher consumes events; runs are idempotent (`automation_id + trigger_event_id`). Loop protection via causation chain depth and per-automation budgets. Scripts run in isolated **sandbox workers** (V8 isolates via `isolated-vm`, or Firecracker/Deno subprocess for heavier workloads) with no ambient credentials. |
-| D22 | AI | `@tabula/ai` provider abstraction + AI gateway module: prompt templates (versioned), model routing, token/cost metering, response caching, per-workspace data-access policy, execution logs. Default provider: Anthropic Claude (`claude-sonnet-5` default; `claude-haiku-4-5-20251001` for high-volume classification/extraction; `claude-opus-5-5` for agents/complex reasoning). Other providers pluggable. |
+| D22 | AI | `@tableos/ai` provider abstraction + AI gateway module: prompt templates (versioned), model routing, token/cost metering, response caching, per-workspace data-access policy, execution logs. Default provider: Anthropic Claude (`claude-sonnet-5` default; `claude-haiku-4-5-20251001` for high-volume classification/extraction; `claude-opus-5-5` for agents/complex reasoning). Other providers pluggable. |
 | D23 | Infra | AWS reference deployment: CloudFront → ALB → **EKS** (justified from V1: ≥5 process roles, per-queue autoscaling, isolated sandbox pools); MVP may run on ECS Fargate with identical containers. RDS PostgreSQL (Aurora acceptable), ElastiCache, MSK/Redpanda, S3, OpenSearch Service. Terraform + Argo CD/GitHub Actions. |
 | D24 | Observability | OpenTelemetry everywhere → Grafana stack (Tempo traces, Mimir/Prometheus metrics, Loki logs) or Datadog as buy-alternative; Sentry for errors; pganalyze/pg_stat_statements for DB. |
 | D25 | Undo/redo | **Server-side command log with inverse operations** (stored on `base_changes.inverse_ops`), client keeps a per-session stack of change IDs. Not event sourcing. |
@@ -311,10 +311,10 @@ Naming: `<aggregate>.<past_tense_verb>`; schema version in envelope. Envelope (C
 
 | Topic | Key | Content | Main consumers |
 |---|---|---|---|
-| `tabula.base-changes.v1` | `base_id` | `base_changes` rows (ordered per base) | realtime fan-out, webhook dispatcher, sync exporters |
-| `tabula.domain-events.v1` | `workspace_id` (or `base_id` for base-scoped) | outbox domain events | automation trigger matcher, notification router, search indexer, audit writer, usage meter, AI field runner, contact timeline |
-| `tabula.audit.v1` | `org_id` | audit events | audit writer, SIEM exporter |
-| `tabula.usage.v1` | `org_id` | metering events | usage aggregator, billing |
+| `tableos.base-changes.v1` | `base_id` | `base_changes` rows (ordered per base) | realtime fan-out, webhook dispatcher, sync exporters |
+| `tableos.domain-events.v1` | `workspace_id` (or `base_id` for base-scoped) | outbox domain events | automation trigger matcher, notification router, search indexer, audit writer, usage meter, AI field runner, contact timeline |
+| `tableos.audit.v1` | `org_id` | audit events | audit writer, SIEM exporter |
+| `tableos.usage.v1` | `org_id` | metering events | usage aggregator, billing |
 | `*.dlq` | same | poison messages | ops tooling, replay |
 
 BullMQ queues (each a separate worker pool with own concurrency/autoscaling): `compute`, `automation-trigger`, `automation-step`, `automation-schedule`, `webhook-out`, `email`, `notification`, `search-index`, `file-scan`, `file-process`, `import`, `export`, `ai`, `sync`, `snapshot`, `purge`, `maintenance`.
@@ -323,7 +323,7 @@ BullMQ queues (each a separate worker pool with own concurrency/autoscaling): `c
 
 ## 8. Public API conventions (detail in `17-api-architecture.md`, `31-api-specification.md`)
 
-* Base URL: `https://api.tabula.example/v1`
+* Base URL: `https://api.tableos.example/v1`
 * Hierarchical resources, public IDs only, e.g. `GET /v1/bases/{baseId}/tables/{tableId}/records`.
 * Mutations accept `Idempotency-Key`. Optimistic concurrency via `If-Match: "<version>"` (records, views, interfaces, automations).
 * Query: `POST /v1/bases/{baseId}/tables/{tableId}/records:query` with `{ filter, sort, fields, search, pageSize, cursor, viewId, cellFormat }`.
@@ -358,7 +358,7 @@ Restriction overlays (deny-style, stored with the resource): `tables.restriction
 
 ## 11. Object storage buckets
 
-`tabula-uploads-quarantine` (presigned upload target, private, 7-day lifecycle) · `tabula-attachments` (clean originals, SSE-KMS) · `tabula-attachment-variants` (thumbnails/previews) · `tabula-exports` (7-day lifecycle) · `tabula-snapshots` (base snapshots, versioned) · `tabula-audit-archive` (Parquet, object lock in Enterprise) · `tabula-backups` (cross-region replicated).
+`tableos-uploads-quarantine` (presigned upload target, private, 7-day lifecycle) · `tableos-attachments` (clean originals, SSE-KMS) · `tableos-attachment-variants` (thumbnails/previews) · `tableos-exports` (7-day lifecycle) · `tableos-snapshots` (base snapshots, versioned) · `tableos-audit-archive` (Parquet, object lock in Enterprise) · `tableos-backups` (cross-region replicated).
 
 Object key convention: `{workspaceId}/{baseId}/{attachmentId}/{variant}`.
 
@@ -411,15 +411,15 @@ The other 34 documents were drafted in parallel against this spine, and each one
 | A4 | **Formula errors** are stored as an absent value plus `cell_meta[slot].err`. Filters treat an errored cell as empty. | One empty-value semantics across filter, sort and API. | 06, 08, 11 |
 | A5 | **Sort tiebreaker** is `records.id` (UUIDv7), not `row_number`. With no sort, a view falls back to `records.manual_order`, overridden per view by `view_record_orders`. | Matches sidecar index and cursor layout. | 06, 10, 11 |
 | A6 | **Index sidecars** are keyed by `(table_id, field_slot, ord)` with `value_eq` and `sort_key` columns, not by `field_id`. One shared JS fold function is the only producer of `value_eq`. | Defined in 06; 05 and 11 follow. | 05, 06, 11 |
-| A7 | **Realtime ticket:** `POST /v1/auth/ws-ticket` returns a single-use EdDSA JWT (prefix `wst_`) with a 30 s TTL. Interactive edits travel as WS `op` frames; REST plus `X-Tabula-Client-Op-Id` is the fallback and the bulk path. | 16, 17, 24, 25 and 31 used different paths and TTLs. | 16, 17, 24, 25, 31 |
-| A8 | **User-content domain:** `tabulausercontent.example` (attachments, previews, sandboxed embeds under `*.ext.`). Public shares are served on `share.tabula.example`; inbound hooks on `hooks.tabula.example`. | Naming drift between 18 and 25. | 18, 20, 25 |
+| A7 | **Realtime ticket:** `POST /v1/auth/ws-ticket` returns a single-use EdDSA JWT (prefix `wst_`) with a 30 s TTL. Interactive edits travel as WS `op` frames; REST plus `X-TableOS-Client-Op-Id` is the fallback and the bulk path. | 16, 17, 24, 25 and 31 used different paths and TTLs. | 16, 17, 24, 25, 31 |
+| A8 | **User-content domain:** `tableosusercontent.example` (attachments, previews, sandboxed embeds under `*.ext.`). Public shares are served on `share.tableos.example`; inbound hooks on `hooks.tableos.example`. | Naming drift between 18 and 25. | 18, 20, 25 |
 | A9 | **Partition management:** `pg_partman` 5.x, driven by the `scheduler` role's `partition-maintenance` task. Per-plan retention inside partitions is done by batched deletes. | 04/05 used pg_partman and 27 an in-house manager; aligned on pg_partman. | 04, 05, 27 |
-| A10 | **Control-plane outbox:** `core.outbox_events` plus a control-plane relay (`tabula_core_relay_pub`). Control-plane modules emit events in their own transaction, exactly like data-plane modules. | 02, 19 and 27 depend on events from identity, tenancy and grant changes. | 15, 19, 27 |
+| A10 | **Control-plane outbox:** `core.outbox_events` plus a control-plane relay (`tableos_core_relay_pub`). Control-plane modules emit events in their own transaction, exactly like data-plane modules. | 02, 19 and 27 depend on events from identity, tenancy and grant changes. | 15, 19, 27 |
 | A11 | **Org admins have no implicit content access.** Reading workspace content requires a time-boxed, audited `admin_elevation` grant (`access_grants.source`). | Enterprise trust model. | 19, 22 |
 | A12 | **Shared views/interfaces/automations fail closed on dangling references:** a filter condition on a deleted field matches **no** records there. Ordinary collaborative views ignore that condition and flag the view instead. | Deleting a field must never widen what a share or interface exposes. | 10, 13, 14 |
 | A13 | **Imports do not trigger automations by default.** `automations.settings.runOnImports` is off by default; outbound webhooks always see import changes. | Prevents run storms on bulk loads. | 14, 20 |
 | A14 | **Error catalogue** is the single list in [17 §14.2–14.3](17-api-architecture.md) (118 codes). Synonyms were normalized: `FILTER_TOO_COMPLEX` → `QUERY_TOO_COMPLEX`, `RECORD_VERSION_MISMATCH` → `VERSION_CONFLICT`, `LIMIT_EXCEEDED` → `PLAN_LIMIT_EXCEEDED`, `EGRESS_BLOCKED` → `EGRESS_DESTINATION_BLOCKED`, and others. | Engine docs had coined parallel names. | all |
-| A15 | **API versioning:** `/v1` path major plus a dated `Tabula-Version` header; every token is pinned to a version. Simple GET list filters use `filter=fld:op:value,…` (AND only, ≤ 10 conditions), compiled to the same filter AST; everything else uses `POST …/records:query`. | Decided in 17. | 17, 31 |
+| A15 | **API versioning:** `/v1` path major plus a dated `TableOS-Version` header; every token is pinned to a version. Simple GET list filters use `filter=fld:op:value,…` (AND only, ≤ 10 conditions), compiled to the same filter AST; everything else uses `POST …/records:query`. | Decided in 17. | 17, 31 |
 
 ### 14.2 Ratified table additions (DDL in [05 §7.13 and §7.18](05-sql-schema.md))
 
@@ -470,7 +470,7 @@ Deferred: `push_devices` (V2), `record_large_values` (only if profiling demands)
 | `access_grants` | `source` gains `admin_elevation` and `support` (A11) |
 | `workspace_directory` | `status`, `routing_epoch` |
 
-All `data.*` tables carry `workspace_id`, and it is in the primary key or a replica-identity index, so that a row-filtered logical replication can move one workspace to another shard. Migrations run as the RLS-bypassing roles `tabula_migrator` / `tabula_maint` only.
+All `data.*` tables carry `workspace_id`, and it is in the primary key or a replica-identity index, so that a row-filtered logical replication can move one workspace to another shard. Migrations run as the RLS-bypassing roles `tableos_migrator` / `tableos_maint` only.
 
 ### 14.4 Ratified constants
 
@@ -500,9 +500,9 @@ All `data.*` tables carry `workspace_id`, and it is in the primary key or a repl
 ### 14.5 Ratified events and Redis namespaces
 
 * **Events added to §6:** `workspace.moved`, `long_operation.started`, `long_operation.failed`, `attachment.detached` (optional), `view.record_entered` / `view.record_left` (internal, not public). `automation.disabled_by_system.data.reason` ∈ `hourly_budget_exceeded | loop_detected | consecutive_failures | schema_broken | integration_auth_failed`.
-* **DLQ topics:** `tabula.base-changes.v1.dlq`, `tabula.domain-events.v1.dlq`, `tabula.audit.v1.dlq`, `tabula.usage.v1.dlq`.
+* **DLQ topics:** `tableos.base-changes.v1.dlq`, `tableos.domain-events.v1.dlq`, `tableos.audit.v1.dlq`, `tableos.usage.v1.dlq`.
 * **Redis namespaces added to §10:** `tok:` (token lookup), `basedir:` (routing cache), `sem:` (semaphores), `share:` (share unlock / rate), `mfa:` / `webauthn:chal:` / `pwreset:` / `emailverify:` / `hibp:` / `saml:replay:` (auth flows), `ws:ticket:` (ticket single-use), `loopguard:`, `evt:` / `dlqdone:` (consumer dedupe), `aidebounce:` / `ai:budget:` / `ai:health:`, `sidx:` (search indexing), `vorder:` / `vagg:` / `itfv:` / `iagg:` (view/interface caches), `perm:epoch:{baseId}`. Pub/sub channels: `rt:base:{baseId}` (MVP fan-out), `perm-epoch`, `routing`, `sess-revoke`, `feature-flags`, `admission`.
-* **Buckets added to §11:** `tabula-web-assets`.
+* **Buckets added to §11:** `tableos-web-assets`.
 
 ## 15. TableOS amendments (2026-10)
 

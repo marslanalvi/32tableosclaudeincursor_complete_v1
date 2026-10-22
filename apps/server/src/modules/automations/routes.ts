@@ -1,8 +1,8 @@
-import { generateUuidV7 } from "@tabula/types";
+import { generateUuidV7 } from "@tableos/types";
 import { randomBytes } from "node:crypto";
 import { sql } from "kysely";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { authorize, type Action } from "@tabula/permissions";
+import { authorize, type Action } from "@tableos/permissions";
 import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
@@ -121,7 +121,7 @@ export async function registerAutomationsRoutes(
   ctx: AppContext,
 ): Promise<void> {
   const deps: EngineDeps = { db: ctx.db, env: ctx.env, log: ctx.log };
-  const hookLimiter = new AuthRateLimiter(ctx.redis, "tabula:rl:hook:");
+  const hookLimiter = new AuthRateLimiter(ctx.redis, "tableos:rl:hook:");
 
   const webhookUrl = (token: string | null) =>
     token ? `${ctx.env.API_URL}/v1/hooks/${token}` : null;

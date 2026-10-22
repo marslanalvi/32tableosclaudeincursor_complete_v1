@@ -62,7 +62,7 @@ Non-goals: views do not define per-record permissions (that is Enterprise row po
 
 ## 3. Configuration model
 
-All types live in `@tabula/view-model` (isomorphic package, used by server, web client, and the API SDK). The canonical Filter/Sort/Group types are imported from `@tabula/query` (defined in [`11-filter-sort-group.md`](./11-filter-sort-group.md) §2).
+All types live in `@tableos/view-model` (isomorphic package, used by server, web client, and the API SDK). The canonical Filter/Sort/Group types are imported from `@tableos/query` (defined in [`11-filter-sort-group.md`](./11-filter-sort-group.md) §2).
 
 ### 3.1 Identifiers inside configs
 
@@ -71,8 +71,8 @@ Internally configs store **internal UUIDs** for fields/options/users/records (as
 ### 3.2 `ViewConfigBase`
 
 ```ts
-// @tabula/view-model/src/config.ts
-import type { FilterNode, SortSpec, GroupSpec } from '@tabula/query';
+// @tableos/view-model/src/config.ts
+import type { FilterNode, SortSpec, GroupSpec } from '@tableos/query';
 
 export type ViewType = 'grid' | 'kanban' | 'calendar' | 'gallery' | 'timeline' | 'form' | 'list';
 
@@ -238,7 +238,7 @@ export interface FormLayout {
     coverAttachmentId?: AttachmentId; // stored in attachments; served via variant URL
     logoAttachmentId?: AttachmentId;
     accentColor?: ColorToken;
-    hideTabulaBranding?: boolean;     // plan-gated
+    hideTableOSBranding?: boolean;     // plan-gated
   };
   elements: FormElement[];            // ordered; field questions + layout blocks
   submit: {
@@ -398,7 +398,7 @@ Note: when `sorts` is non-empty, `manualOrderWithinStack` must be `false` (valid
   "search": { "mode": "visible_fields" },
   "layout": {
     "title": "Request a demo",
-    "branding": { "coverAttachmentId": "att_3k…", "accentColor": "blue", "hideTabulaBranding": false },
+    "branding": { "coverAttachmentId": "att_3k…", "accentColor": "blue", "hideTableOSBranding": false },
     "elements": [
       { "kind": "field", "id": "fe_1", "fieldId": "fld_name",  "label": "Your name", "required": true },
       { "kind": "field", "id": "fe_2", "fieldId": "fld_email", "label": "Work email", "required": true,
@@ -427,7 +427,7 @@ Note: when `sorts` is non-empty, `manualOrderWithinStack` must be `false` (valid
 
 ### 3.7 Normalization rules (applied after every op and every migration)
 
-`normalizeViewConfig(config, tableSchema): { config, diagnostics }` is a **pure** function in `@tabula/view-model`:
+`normalizeViewConfig(config, tableSchema): { config, diagnostics }` is a **pure** function in `@tableos/view-model`:
 
 1. `fieldLayout`: append missing non-deleted fields (visibility: `false` for collaborative views created before the field — except the primary field which is always visible and first; the creating view of a new field gets `visible: true` — see `field.created` handling below); remove *purged* fields; keep *soft-deleted* fields (they may be restored; §13). Deduplicate.
 2. Primary field: position 0, `visible: true`, `frozen: true` in grid.
@@ -453,7 +453,7 @@ Two different version numbers — do not confuse them:
 ### 4.1 Migration registry
 
 ```ts
-// @tabula/view-model/src/migrations/index.ts
+// @tableos/view-model/src/migrations/index.ts
 export interface ViewConfigMigration {
   from: number; to: number;           // to = from + 1
   description: string;
@@ -749,7 +749,7 @@ Needed by: (1) realtime UI ("this card no longer matches your filter"), (2) auto
 **Recommendation [Ours]: A for UI/realtime, B for automations and webhooks ("watches").**
 
 * The web client uses A locally for each view it has open (it has before/after cell values from the op stream). Server does not compute membership for UI.
-* Automations that trigger on view membership register a **watch** (`view_match_state`, see Proposed additions). The **membership maintainer** (consumer on `tabula.base-changes.v1`, partitioned by base, so per-base ordered) does:
+* Automations that trigger on view membership register a **watch** (`view_match_state`, see Proposed additions). The **membership maintainer** (consumer on `tableos.base-changes.v1`, partitioned by base, so per-base ordered) does:
 
 ```text
 for each change batch (base_id, seq range):
@@ -812,7 +812,7 @@ WHERE r.table_id = $1 AND r.deleted_at IS NULL AND <view filter>;
 
 * Group header aggregates use the same expressions with `GROUP BY GROUPING SETS` over the group keys ([`11`](./11-filter-sort-group.md) §11.3).
 * Aggregates over computed fields read `r.computed`; over link fields: `count_filled` = EXISTS on `record_links`, `count_all_links` = count of link rows.
-* Aggregation semantics by type (median of dates, sum of durations, percent_checked…) live in `@tabula/aggregate` (isomorphic, shared with interface charts and rollups).
+* Aggregation semantics by type (median of dates, sum of durations, percent_checked…) live in `@tableos/aggregate` (isomorphic, shared with interface charts and rollups).
 * **Client-side fast path:** when the client holds *all* records of the view in memory (≤ 5,000 rows loaded), it computes aggregates locally on every op; otherwise it uses the server result and refreshes it debounced (2 s after the last change affecting an aggregated field, max once per 2 s per view per client).
 
 ### 11.3 Aggregation Query service (shared with interfaces)
@@ -965,7 +965,7 @@ Semantics:
 | Mode | Endpoint | Principal | Who can use |
 |---|---|---|---|
 | Internal | `POST /v1/bases/{b}/views/{v}:submitForm` | the signed-in user | users with `record.create` on the table (and table restrictions) |
-| Public | `POST /v1/forms/{shareToken}:submit` (served from `forms.tabula.example`) | `public_form` actor (`actor.type = 'public_form'`, `actor.id = shr_…`) | anyone with the link; `access: password` / `domain_restricted` supported |
+| Public | `POST /v1/forms/{shareToken}:submit` (served from `forms.tableos.example`) | `public_form` actor (`actor.type = 'public_form'`, `actor.id = shr_…`) | anyone with the link; `access: password` / `domain_restricted` supported |
 
 The form definition for rendering: `GET /v1/forms/{shareToken}` returns a **sanitized form schema** (no field ids beyond what the form uses, no table/base ids, no option ids for options excluded from the form, no `candidateViewId` internals) plus a short-lived **form session token** (JWT-like, HMAC, 2 h) binding `{shareId, formConfigVersion, issuedAt, clientIpHash}`, used for uploads, link searches and submission (also drives the min-time-to-submit heuristic).
 
@@ -1022,7 +1022,7 @@ sequenceDiagram
 
 ### 16.5 Prefill via URL parameters (and signing)
 
-`https://forms.tabula.example/{token}?prefill_fld_abc=Hello&prefill_fld_src=newsletter&hide_fld_src=1&psig=…&pexp=1767225600`
+`https://forms.tableos.example/{token}?prefill_fld_abc=Hello&prefill_fld_src=newsletter&hide_fld_src=1&psig=…&pexp=1767225600`
 
 * Keys use **public field ids** (`prefill_<fieldId>`); for convenience the builder's "prefilled link" generator also supports field *names* (`prefill_Name=`) resolved at render time, but generated links always use ids.
 * Values are parsed by the field type's `parseInput` (same as paste): select by label or option id, multi-select comma-separated, link by record id (`rec_…`) only for `choose_existing` and only if the record is in `candidateViewId`, dates ISO.
@@ -1032,7 +1032,7 @@ sequenceDiagram
 
 ### 16.6 File uploads from forms
 
-1. Client requests `POST /v1/forms/{token}/uploads` with `{questionId, fileName, size, mime}` + form session → server checks question type/limits, creates an `attachments` row with `status = 'pending_upload'`, `owner_scope = {shareId, formSessionId}`, returns presigned multipart URL into `tabula-uploads-quarantine` (D15).
+1. Client requests `POST /v1/forms/{token}/uploads` with `{questionId, fileName, size, mime}` + form session → server checks question type/limits, creates an `attachments` row with `status = 'pending_upload'`, `owner_scope = {shareId, formSessionId}`, returns presigned multipart URL into `tableos-uploads-quarantine` (D15).
 2. Browser uploads directly to S3; calls `…/uploads/{att}:complete`.
 3. Submission references attachment ids; the server verifies each is bound to **this** form session and question, not already used, size/mime as declared (from S3 HEAD), then binds them to the new record. Scan continues asynchronously; infected files are removed from the cell and the form owner is notified.
 4. Unbound uploads are deleted by the purge job after 24 h.

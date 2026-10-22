@@ -1,7 +1,7 @@
 import {
   SESSION_COOKIE_NAME,
   hashSessionToken,
-} from "@tabula/auth";
+} from "@tableos/auth";
 import { sql } from "kysely";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../lib/app-context.js";

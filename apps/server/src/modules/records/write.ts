@@ -12,9 +12,9 @@ import {
   newOptionId,
   FieldValidationError,
   type FieldConfig,
-} from "@tabula/fields";
-import type { Database } from "@tabula/db";
-import { generateUuidV7, keyBetween, keysBetween } from "@tabula/types";
+} from "@tableos/fields";
+import type { Database } from "@tableos/db";
+import { generateUuidV7, keyBetween, keysBetween } from "@tableos/types";
 import type { Redis } from "ioredis";
 import { sql, type Transaction } from "kysely";
 import { ApiError } from "../../http/errors.js";
@@ -556,13 +556,17 @@ export async function updateRecordsInTx(
   const byId = new Map(existing.rows.map((r) => [r.id, r]));
   for (let i = 0; i < ids.length; i++) {
     const row = byId.get(ids[i]!);
-    if (!row) throw new ApiError(404, "RECORD_NOT_FOUND", `Record ${pid("rec", ids[i]!)} not found`);
+    if (!row) {
+      throw new ApiError(404, "RECORD_NOT_FOUND", `Record ${pid("rec", ids[i]!)} not found in this table (it may have been deleted)`);
+    }
     const ev = items[i]!.expectedVersion;
     if (ev !== undefined && !Number.isNaN(ev) && ev !== Number(row.version)) {
-      throw new ApiError(409, "VERSION_CONFLICT", "The record was changed by someone else", {
-        recordId: pid("rec", row.id),
-        currentVersion: Number(row.version),
-      });
+      throw new ApiError(
+        409,
+        "VERSION_CONFLICT",
+        `The record changed since you read it: you sent version ${ev}, it is now at version ${Number(row.version)}. Read it again and send version ${Number(row.version)}, or leave "version" out to overwrite.`,
+        { recordId: pid("rec", row.id), sentVersion: ev, currentVersion: Number(row.version) },
+      );
     }
   }
   const configChangedFieldIds = await writer.persistConfigChanges(trx);

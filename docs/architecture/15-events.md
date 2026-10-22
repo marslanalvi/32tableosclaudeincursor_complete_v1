@@ -22,7 +22,7 @@ Related: [`14-automation-engine.md`](./14-automation-engine.md), [`16-realtime.m
 
 ## 2. The event envelope
 
-### 2.1 TypeScript (`@tabula/events`)
+### 2.1 TypeScript (`@tableos/events`)
 
 ```ts
 export type ActorType = 'user' | 'api_token' | 'service_account' | 'automation' | 'integration' | 'ai' | 'system' | 'public_form';
@@ -49,7 +49,7 @@ export interface EventEnvelope<T extends string = string, D = unknown> {
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.tabula.example/events/envelope.json",
+  "$id": "https://schemas.tableos.example/events/envelope.json",
   "type": "object",
   "required": ["id", "type", "schemaVersion", "occurredAt", "tenant", "actor", "correlationId", "causationDepth", "data"],
   "additionalProperties": false,
@@ -87,9 +87,9 @@ export interface EventEnvelope<T extends string = string, D = unknown> {
 ### 2.3 Wire format and Kafka headers
 
 * Value: UTF-8 JSON of the envelope (zstd-compressed at the producer batch level). Binary formats (Avro/Protobuf) were considered; JSON wins for a TypeScript monolith (no codegen step, human-debuggable, same schemas as public webhooks); at our volumes (≤ 50k events/s region) the CPU/bytes overhead is acceptable with zstd (~6–10× compression on these payloads).
-* Headers (for routing/filtering without parsing the value): `ce_id`, `ce_type`, `ce_specversion=1.0`, `ce_source=/tabula/{shardId}`, `tabula_schema_version`, `tabula_org`, `tabula_workspace`, `tabula_base`, `tabula_causation_depth`, `traceparent`. Envelope fields map 1:1 to CloudEvents attributes (`id`, `type`, `time` = `occurredAt`, `source`, `subject` = baseId/recordId), so external export (V2 event streaming to customers) is a projection, not a redesign.
+* Headers (for routing/filtering without parsing the value): `ce_id`, `ce_type`, `ce_specversion=1.0`, `ce_source=/tableos/{shardId}`, `tableos_schema_version`, `tableos_org`, `tableos_workspace`, `tableos_base`, `tableos_causation_depth`, `traceparent`. Envelope fields map 1:1 to CloudEvents attributes (`id`, `type`, `time` = `occurredAt`, `source`, `subject` = baseId/recordId), so external export (V2 event streaming to customers) is a projection, not a redesign.
 * **Size limits:** envelope ≤ 256 KB (hard), target p99 < 8 KB. Producers that would exceed it (huge `records.bulk_changed`) **split** into multiple envelopes (each ≤ 1,000 records and ≤ 256 KB) sharing a `correlationId` and carrying `data.part = {index, total}`. Large values (long text > 2 KB) are truncated in event data with `truncated: true`; consumers needing the full value read current state.
-* **IDs in events:** envelope and entity references in `data` use the public prefixed encoding (spine §3); `@tabula/events` exposes typed decoders (`decodeId('rec', s) → Uuid`). Field references use field IDs; cell maps are keyed by slot (as stored).
+* **IDs in events:** envelope and entity references in `data` use the public prefixed encoding (spine §3); `@tableos/events` exposes typed decoders (`decodeId('rec', s) → Uuid`). Field references use field IDs; cell maps are keyed by slot (as stored).
 
 ---
 
@@ -108,7 +108,7 @@ export interface EventEnvelope<T extends string = string, D = unknown> {
 
 | Option | Pros | Cons |
 |---|---|---|
-| **In-repo registry: `@tabula/events` package** (Zod schemas → generated JSON Schema + TS types; CI compatibility checks) | Single source of truth in the monolith; types at compile time for producers & consumers; no extra service; schemas also feed public webhook docs | External (non-TS) consumers need the generated JSON Schemas published as artifacts |
+| **In-repo registry: `@tableos/events` package** (Zod schemas → generated JSON Schema + TS types; CI compatibility checks) | Single source of truth in the monolith; types at compile time for producers & consumers; no extra service; schemas also feed public webhook docs | External (non-TS) consumers need the generated JSON Schemas published as artifacts |
 | Confluent Schema Registry / Apicurio | Runtime enforcement; polyglot; compatibility modes built in | Extra critical service; JSON Schema support is weaker than Avro; adds a network hop or cache to every producer |
 
 **Decision [Ours]:** in-repo registry now; generated JSON Schemas published to an internal artifact bucket and the docs site. Re-evaluate Apicurio when the first non-TypeScript consumer service exists.
@@ -138,7 +138,7 @@ packages/events/
 | Remove field, rename field, change type/meaning, make required → optional | **breaking** | **new `schemaVersion`**; **dual-publish** both versions for ≥ 1 full Kafka retention + all consumers migrated (min 14 days); then stop publishing old |
 | Change partition key semantics | **breaking at topic level** | new topic `….v2` (spine §7 topic names carry `.v1`) with migration plan |
 
-**Dual-publish mechanics:** the producer helper writes **one outbox row per version** (`schema_version` column distinguishes; same `id` suffix? No — each gets its own event id; both carry header `tabula_dual_of=<v1 id>`). Consumers subscribe to the version they understand via `on('record.updated', [2], …)`; a consumer declaring both versions receives only the highest it supports (the consume helper drops the lower version when a `tabula_dual_of` sibling it understands exists; the producer emits the higher version first in the same transaction, so ordering is deterministic).
+**Dual-publish mechanics:** the producer helper writes **one outbox row per version** (`schema_version` column distinguishes; same `id` suffix? No — each gets its own event id; both carry header `tableos_dual_of=<v1 id>`). Consumers subscribe to the version they understand via `on('record.updated', [2], …)`; a consumer declaring both versions receives only the highest it supports (the consume helper drops the lower version when a `tableos_dual_of` sibling it understands exists; the producer emits the higher version first in the same transaction, so ordering is deterministic).
 
 **CI gates:**
 1. `events:compat` diffs generated JSON Schemas against `main` with a JSON-Schema compatibility checker (backward + forward for same version). Breaking change without version bump ⇒ fail.
@@ -155,7 +155,7 @@ packages/events/
 | Order | Total order per base: `(base_id, seq)` from `base_runtime.change_seq`, gap-free | Commit order per Kafka key |
 | Retention | 30 days in Postgres (daily partitions) + Kafka 7 days | Kafka 7 days; outbox rows 3 days (§7.9) |
 | Consumers | realtime fan-out, catch-up API, undo/redo, public webhook dispatcher, sync exporters | automations, notifications, search, audit, usage, AI field runner, contact timeline |
-| Topic | `tabula.base-changes.v1` (key `base_id`) | `tabula.domain-events.v1` (key `base_id` if base-scoped else `workspace_id`), `tabula.audit.v1`, `tabula.usage.v1` (key `org_id`) |
+| Topic | `tableos.base-changes.v1` (key `base_id`) | `tableos.domain-events.v1` (key `base_id` if base-scoped else `workspace_id`), `tableos.audit.v1`, `tableos.usage.v1` (key `org_id`) |
 
 `base_changes` row (canonical shape, DDL in [`05-sql-schema.md`](./05-sql-schema.md)):
 
@@ -227,7 +227,7 @@ CREATE TABLE data.outbox_events (
   workspace_id   uuid        NOT NULL,
   base_id        uuid,
   partition_key  uuid        NOT NULL,          -- base_id or workspace_id (or org_id on control plane)
-  topic          text        NOT NULL DEFAULT 'tabula.domain-events.v1',  -- audit/usage events route to their topics
+  topic          text        NOT NULL DEFAULT 'tableos.domain-events.v1',  -- audit/usage events route to their topics
   type           text        NOT NULL,
   schema_version smallint    NOT NULL,
   payload        jsonb       NOT NULL,          -- full envelope
@@ -255,10 +255,10 @@ The outbox is **insert-only**. We never mark rows "sent" (no UPDATE churn, no va
 
 ```sql
 -- once per shard (migration)
-CREATE PUBLICATION tabula_relay FOR TABLE data.outbox_events, data.base_changes
+CREATE PUBLICATION tableos_relay FOR TABLE data.outbox_events, data.base_changes
   WITH (publish = 'insert', publish_via_partition_root = true);
 -- slot created by the relay on first start (or by migration)
-SELECT pg_create_logical_replication_slot('tabula_relay_' || current_setting('tabula.shard_id'), 'pgoutput');
+SELECT pg_create_logical_replication_slot('tableos_relay_' || current_setting('tableos.shard_id'), 'pgoutput');
 ```
 
 * `publish = 'insert'` — we only care about inserts; partition drops (DDL) are not replicated and don't need to be.
@@ -271,14 +271,14 @@ SELECT pg_create_logical_replication_slot('tabula_relay_' || current_setting('ta
 ```mermaid
 flowchart LR
   subgraph Shard["Shard Postgres (primary)"]
-    WAL[(WAL)] --> SLOT["slot tabula_relay_shardN (pgoutput)"]
+    WAL[(WAL)] --> SLOT["slot tableos_relay_shardN (pgoutput)"]
   end
   SLOT -->|"BEGIN / INSERT ... / COMMIT (commit LSN order)"| RD["relay: decoder + tx assembler"]
   RD --> MAP["mapper: base_changes row to base-changes msg, outbox row to topic by row.topic"]
   MAP --> PRD["Kafka producer (idempotent, acks=all)"]
-  PRD --> K1["tabula.base-changes.v1"]
-  PRD --> K2["tabula.domain-events.v1"]
-  PRD --> K3["tabula.audit.v1 / tabula.usage.v1"]
+  PRD --> K1["tableos.base-changes.v1"]
+  PRD --> K2["tableos.domain-events.v1"]
+  PRD --> K3["tableos.audit.v1 / tableos.usage.v1"]
   PRD -->|"all messages of tx acked"| CK["checkpointer: send StandbyStatusUpdate(flush = commit_lsn)"]
   CK --> SLOT
   RD -.->|"MVP profile"| BQ["EventBus BullMQ adapter + Redis pub/sub (realtime)"]
@@ -319,7 +319,7 @@ Producer settings: `enable.idempotence=true`, `acks=all`, `max.in.flight.request
 
 | Source row | Topic | Key | Value |
 |---|---|---|---|
-| `base_changes` | `tabula.base-changes.v1` | `base_id` | `{ baseId, seq, id, tableId, kind, ops, actor, via, clientMutationId, correlationId, causationDepth, schemaVersion, committedAt }` (inverse ops omitted from Kafka — only undo needs them and it reads Postgres) |
+| `base_changes` | `tableos.base-changes.v1` | `base_id` | `{ baseId, seq, id, tableId, kind, ops, actor, via, clientMutationId, correlationId, causationDepth, schemaVersion, committedAt }` (inverse ops omitted from Kafka — only undo needs them and it reads Postgres) |
 | `outbox_events` | `row.topic` (default domain-events) | `partition_key` | `row.payload` (the envelope) |
 
 Headers per §2.3. Value size guard: > 1 MB ⇒ the relay logs an error and emits a *stub* with `data.oversize = true` and the row's primary key so consumers can fetch it from Postgres (should never happen given producer-side splitting; alarmed).
@@ -328,10 +328,10 @@ Headers per §2.3. Value size guard: > 1 MB ⇒ the relay logs an error and emit
 
 | Topic | Partitions | RF / min ISR | Retention | Cleanup | Notes |
 |---|---|---|---|---|---|
-| `tabula.base-changes.v1` | 64 | 3 / 2 | 7 days | delete | zstd; `max.message.bytes` 1 MB |
-| `tabula.domain-events.v1` | 64 | 3 / 2 | 7 days | delete | |
-| `tabula.audit.v1` | 16 | 3 / 2 | 7 days | delete | audit store is the durable copy |
-| `tabula.usage.v1` | 16 | 3 / 2 | 7 days | delete | |
+| `tableos.base-changes.v1` | 64 | 3 / 2 | 7 days | delete | zstd; `max.message.bytes` 1 MB |
+| `tableos.domain-events.v1` | 64 | 3 / 2 | 7 days | delete | |
+| `tableos.audit.v1` | 16 | 3 / 2 | 7 days | delete | audit store is the durable copy |
+| `tableos.usage.v1` | 16 | 3 / 2 | 7 days | delete | |
 | `<topic>.dlq` | 8 | 3 / 2 | 30 days | delete | §9 |
 
 Partition count is fixed per topic version (changing it reshuffles keys and breaks per-key order); 64 partitions × modest throughput (≤ 2 MB/s each) leaves 10× headroom. Hot bases (one base producing a disproportionate share) are visible via per-key metrics; a partition can only be scaled by its consumers' speed, which is why consumers hand heavy work to BullMQ.
@@ -342,7 +342,7 @@ Partition count is fixed per topic version (changing it reshuffles keys and brea
 SELECT slot_name, active, wal_status,
        pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn) AS lag_bytes,
        safe_wal_size
-  FROM pg_replication_slots WHERE slot_name LIKE 'tabula_relay_%';
+  FROM pg_replication_slots WHERE slot_name LIKE 'tableos_relay_%';
 ```
 
 | Alarm | Threshold | Action |
@@ -370,7 +370,7 @@ SELECT slot_name, active, wal_status,
 2. **Backfill gap:** read the relay's last checkpoint (persisted every 10 s to `relay_checkpoints` (§16): last confirmed LSN, wall-clock time `T_ck`, and per-base max emitted `seq`).
    * `base_changes`: for each base with changes since `T_ck − 5 min`, `SELECT … WHERE base_id = $b AND seq > $lastEmittedSeq AND committed_at <= <slot creation time + 1 min> ORDER BY seq` — gap-free by construction.
    * `outbox_events`: `SELECT … WHERE created_at >= T_ck − 5 min ORDER BY created_at` — overlap window guarantees coverage of transactions that were in flight; duplicates are expected.
-3. Emit backfilled messages (headers `tabula_backfill=true`), then start streaming from the new slot. Consumers dedupe by event id (§8); realtime/webhook consumers dedupe by `(base_id, seq)`.
+3. Emit backfilled messages (headers `tableos_backfill=true`), then start streaming from the new slot. Consumers dedupe by event id (§8); realtime/webhook consumers dedupe by `(base_id, seq)`.
 4. Ordering during backfill: per-base `base_changes` order is preserved (seq order); domain events in the overlap may be re-emitted after newer ones — consumers are idempotent and version-checked (§10 stance column). This window is minutes, rare, and alarmed.
 
 ### 7.9 Outbox retention
@@ -434,18 +434,18 @@ Poison detection: schema validation failure, or the same message failing with a 
 
 ### 9.2 DLQ topics
 
-* Name: `<source-topic>.dlq` (spine §7 `*.dlq`), e.g. `tabula.domain-events.v1.dlq`. One DLQ per source topic, shared by groups; each message carries headers: `x-consumer-group`, `x-original-topic`, `x-original-partition`, `x-original-offset`, `x-error-class`, `x-error-message` (redacted, ≤ 1 KB), `x-attempts`, `x-first-failed-at`. Key = original key; value = original bytes (unmodified).
+* Name: `<source-topic>.dlq` (spine §7 `*.dlq`), e.g. `tableos.domain-events.v1.dlq`. One DLQ per source topic, shared by groups; each message carries headers: `x-consumer-group`, `x-original-topic`, `x-original-partition`, `x-original-offset`, `x-error-class`, `x-error-message` (redacted, ≤ 1 KB), `x-attempts`, `x-first-failed-at`. Key = original key; value = original bytes (unmodified).
 * Retention 30 days. Alarm: any DLQ write ⇒ ticket; > 100/5 min for one group ⇒ page.
 
-### 9.3 Replay tooling (`tabula events …` admin CLI, also in the ops console)
+### 9.3 Replay tooling (`tableos events …` admin CLI, also in the ops console)
 
 ```
-tabula events dlq list     --topic tabula.domain-events.v1.dlq --group automation-trigger-matcher --since 2026-10-01
-tabula events dlq inspect  --id evt_…                       # pretty-print, schema-validate, show error history
-tabula events dlq replay   --group automation-trigger-matcher --filter 'type=record.updated,base=bas_…' --rate 200/s [--dry-run]
-tabula events dlq purge    --group … --before …              # requires 2-person approval in prod
-tabula events replay kafka --group search-indexer --from 2026-10-02T10:00Z --to 2026-10-02T11:00Z --filter 'workspace=wsp_…'
-tabula events replay base-changes --base bas_… --from-seq 18000 --to-seq 18233 --target webhook-dispatcher
+tableos events dlq list     --topic tableos.domain-events.v1.dlq --group automation-trigger-matcher --since 2026-10-01
+tableos events dlq inspect  --id evt_…                       # pretty-print, schema-validate, show error history
+tableos events dlq replay   --group automation-trigger-matcher --filter 'type=record.updated,base=bas_…' --rate 200/s [--dry-run]
+tableos events dlq purge    --group … --before …              # requires 2-person approval in prod
+tableos events replay kafka --group search-indexer --from 2026-10-02T10:00Z --to 2026-10-02T11:00Z --filter 'workspace=wsp_…'
+tableos events replay base-changes --base bas_… --from-seq 18000 --to-seq 18233 --target webhook-dispatcher
 ```
 
 **DLQ replay design:** the tool does *not* re-produce to the original topic (that would re-deliver to every group). It runs the **named group's handler in-process** (same code, same idempotency), reading from the DLQ with the filter, rate-limited, and writes a replay report. Successfully replayed messages are recorded in Redis `dlqdone:{group}:{eventId}` (30 d) so repeat replays skip them.
@@ -457,7 +457,7 @@ tabula events replay base-changes --base bas_… --from-seq 18000 --to-seq 18233
 ### 10.1 From Kafka (≤ 7 days)
 
 * **Whole consumer group rewind** (e.g. after a consumer bug): stop the group, `kafka-consumer-groups --reset-offsets --to-datetime <T> --group <g> --topic <t> --execute`, restart. Idempotency makes reprocessing safe; side-effect consumers (notifications, automations) dedupe by unique keys, so **users don't get duplicate emails or runs**.
-* **Targeted replay** (one tenant/base): `tabula events replay kafka` runs a temporary consumer group `replay-<uuid>` from timestamp T, filters by headers (`tabula_base`, `tabula_workspace`, `ce_type`) *without* parsing values, and invokes the target handler in-process.
+* **Targeted replay** (one tenant/base): `tableos events replay kafka` runs a temporary consumer group `replay-<uuid>` from timestamp T, filters by headers (`tableos_base`, `tableos_workspace`, `ce_type`) *without* parsing values, and invokes the target handler in-process.
 * Option for longer windows: Kafka **tiered storage** (MSK tiered / Redpanda shadow indexing) at low cost to raise retention to 30 days if replay needs grow — not in V1.
 
 ### 10.2 From `base_changes` (≤ 30 days)
@@ -466,7 +466,7 @@ tabula events replay base-changes --base bas_… --from-seq 18000 --to-seq 18233
 
 * **Realtime catch-up** (`GET /v1/bases/{id}/changes?sinceSeq=`, [`16-realtime.md`](./16-realtime.md) §6).
 * **Webhook redelivery** for a subscription cursor (public webhooks read `base_changes` by cursor, so "replay" is just moving the cursor back).
-* **Re-derivation of record domain events**: a `replay base-changes` job reads a seq range and synthesizes `record.created|updated|deleted` envelopes (`data` reconstructed from ops; `before` values from `inverse_ops`), with header `tabula_replayed=true` and **deterministic event IDs** (`uuidv5(namespace, baseId:seq:index)` with the UUIDv7 time bits of `committed_at`) so repeated replays dedupe. Automations ignore replayed events by default (would re-trigger runs); search/AI consumers accept them.
+* **Re-derivation of record domain events**: a `replay base-changes` job reads a seq range and synthesizes `record.created|updated|deleted` envelopes (`data` reconstructed from ops; `before` values from `inverse_ops`), with header `tableos_replayed=true` and **deterministic event IDs** (`uuidv5(namespace, baseId:seq:index)` with the UUIDv7 time bits of `committed_at`) so repeated replays dedupe. Automations ignore replayed events by default (would re-trigger runs); search/AI consumers accept them.
 
 ### 10.3 Beyond retention
 
@@ -612,5 +612,5 @@ Dashboards: per-shard relay panel (lag, throughput, latency), per-group consumer
 | `search_documents.source_seq` | column | version-checked upserts |
 | Redis namespaces `evt:{group}:{eventId}` (dedupe), `dlqdone:{group}:{eventId}`, pub/sub `rt:base:{baseId}` (MVP realtime) | Redis (spine §10) | §8, §9, §11 |
 | Event types `workspace.moved` (shard migration marker) | event catalogue (spine §6) | §6 |
-| Kafka topic `<topic>.dlq` concrete names `tabula.base-changes.v1.dlq`, `tabula.domain-events.v1.dlq`, `tabula.audit.v1.dlq`, `tabula.usage.v1.dlq` | topics | §9.2 |
-| Kafka headers `tabula_*` / `ce_*` | convention | §2.3 |
+| Kafka topic `<topic>.dlq` concrete names `tableos.base-changes.v1.dlq`, `tableos.domain-events.v1.dlq`, `tableos.audit.v1.dlq`, `tableos.usage.v1.dlq` | topics | §9.2 |
+| Kafka headers `tableos_*` / `ce_*` | convention | §2.3 |

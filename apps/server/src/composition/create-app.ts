@@ -1,9 +1,9 @@
-import { loadEnv } from "@tabula/config";
-import { createDb, seedDefaultShard } from "@tabula/db";
-import { createEventBus } from "@tabula/events";
-import { createLogger } from "@tabula/observability";
-import { PostgresFtsBackend } from "@tabula/search";
-import { createStorage, storageEnvFromProcess } from "@tabula/storage";
+import { loadEnv } from "@tableos/config";
+import { createDb, seedDefaultShard } from "@tableos/db";
+import { createEventBus } from "@tableos/events";
+import { createLogger } from "@tableos/observability";
+import { PostgresFtsBackend } from "@tableos/search";
+import { createStorage, storageEnvFromProcess } from "@tableos/storage";
 import type { AppContext } from "../lib/app-context.js";
 import { connectRedis } from "../lib/redis.js";
 import { buildFastify } from "../http/app.js";
@@ -13,7 +13,7 @@ export async function createApp(): Promise<{
   ctx: AppContext;
 }> {
   const env = loadEnv();
-  const log = createLogger({ name: "tabula-api", role: env.ROLE });
+  const log = createLogger({ name: "tableos-api", role: env.ROLE });
   const db = createDb(env.DATABASE_URL);
 
   const defaultShardId = await seedDefaultShard({

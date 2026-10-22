@@ -84,4 +84,7 @@ Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was intr
 `v0.16.4`: sample request/response JSON for every endpoint and for errors in Help → API reference;
 `v0.16.5`: API-token responses keyed by field name with option names (`returnFieldsByFieldId=true` for IDs);
 `v0.16.6`: fix phase 2 — real visitor IP behind Cloudflare/Render (share and sign-in lockouts, alerts), attachment viewer on shared views, per-token rate limit, name/comment limits, re-invite after removal, two-factor page Sign out;
-`v0.16.7`: fix phases 3 and 4 — undo/redo of field type and options changes with values, email/phone validation, lookup guidance, cell search highlights with next/previous, palette Esc, interface form Submit, + creates a view, return to the page after sign-in, invite row wraps, plain-language permission refusals, Members & access summaries).
+`v0.16.7`: fix phases 3 and 4 — undo/redo of field type and options changes with values, email/phone validation, lookup guidance, cell search highlights with next/previous, palette Esc, interface form Submit, + creates a view, return to the page after sign-in, invite row wraps, plain-language permission refusals, Members & access summaries;
+`v0.16.8`: TableOS everywhere (packages `@tableos/*`, styles, keys, topics, headers, session cookie), error type links to Help → API reference, clearer version-conflict and not-found messages, link picker details, test plan 2.0).
+
+Render: build and start commands that filter by package must use `@tableos/…` (for example `pnpm --filter @tableos/server build`).

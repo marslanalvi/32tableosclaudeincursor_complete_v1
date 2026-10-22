@@ -4,9 +4,9 @@
  * `via_link_field_id` (a link field in the dependent's table) says the change
  * happens on *linked* records.
  */
-import { findCycle } from "@tabula/compute";
-import { parseFormula, formulaFieldRefs } from "@tabula/formula";
-import type { Database } from "@tabula/db";
+import { findCycle } from "@tableos/compute";
+import { parseFormula, formulaFieldRefs } from "@tableos/formula";
+import type { Database } from "@tableos/db";
 import { sql, type Kysely } from "kysely";
 import { ApiError } from "../../http/errors.js";
 import type { Db } from "../schema/table-schema.js";

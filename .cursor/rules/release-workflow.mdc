@@ -15,11 +15,11 @@ Follow these steps, in order, for every fix or feature.
    start of every round run `scripts/dev-isolated-stop.ps1` first unless the local test stack
    is what is running.
 3. **Test the change itself**, with dummy data in the local database only
-   (`postgres://tabula:tabula@localhost:5432/tabula_cc`, test stack `.data/r10-stack.ps1`).
+   (`postgres://tableos:tableos@localhost:5432/tableos_cc`, test stack `.data/r10-stack.ps1`).
    Never create test data in the shared live database from `.env`.
 4. **Test the whole architecture so nothing else changed:**
    - `npx tsc -p apps/server/tsconfig.json --noEmit` and `npx tsc -p apps/web/tsconfig.app.json --noEmit`
-   - `npx pnpm@9.15.0 --filter @tabula/server build`
+   - `npx pnpm@9.15.0 --filter @tableos/server build`
    - regression scripts: `.data/verify-{access,sync,round,interfaces,r7,r9,r10}.mjs`,
      `.data/r2-shell/r6-lockout.mjs` (sync needs the worker and relay running), plus a
      Playwright check (`.data/r2-shell/pw.mjs`) with screenshots of every UI change.

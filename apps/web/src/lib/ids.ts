@@ -1,4 +1,4 @@
-import { decodePublicId, type PublicIdPrefix } from "@tabula/types";
+import { decodePublicId, type PublicIdPrefix } from "@tableos/types";
 
 export function assertPublicId(value: string, prefix?: PublicIdPrefix): void {
   decodePublicId(value, prefix);

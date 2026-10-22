@@ -1,6 +1,6 @@
 import { sql } from "kysely";
-import type { TabulaDb } from "@tabula/db";
-import { authorize, type PermissionSnapshot } from "@tabula/permissions";
+import type { TableOSDb } from "@tableos/db";
+import { authorize, type PermissionSnapshot } from "@tableos/permissions";
 import { pid } from "../../lib/public-ids.js";
 import { normalizeViewConfig, type ConfigFieldInfo, type ViewConfig } from "./config.js";
 
@@ -41,7 +41,7 @@ export interface ViewWire {
 
 /** Load field info (public ids) for computing view config defaults. */
 export async function loadTableConfigInfo(
-  db: TabulaDb,
+  db: TableOSDb,
   tableIds: string[],
 ): Promise<Map<string, TableConfigInfo>> {
   const out = new Map<string, TableConfigInfo>();

@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { sql } from "kysely";
 import { z } from "zod";
-import { generateUuidV7 } from "@tabula/types";
+import { generateUuidV7 } from "@tableos/types";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import { ApiError, handleRouteError } from "../../http/errors.js";

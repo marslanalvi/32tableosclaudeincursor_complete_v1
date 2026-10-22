@@ -4,7 +4,7 @@ import { selectOptionsOf } from "./prepare.js";
 /**
  * Typed SQL value expressions over `data.records` rows (alias `r` by default).
  * Every expression is total: malformed stored values yield NULL, never a cast
- * error. Shared by the filter compiler, the sort planner (`@tabula/query`) and
+ * error. Shared by the filter compiler, the sort planner (`@tableos/query`) and
  * the server's group queries.
  */
 

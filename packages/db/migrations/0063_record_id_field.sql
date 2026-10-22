@@ -8,7 +8,7 @@ LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
                'created_by','modified_by','button','ai_generated','json','record_id')
 $$;
 
--- Encode a uuid as `<prefix>_<22 base62 chars>` (same alphabet as @tabula/types).
+-- Encode a uuid as `<prefix>_<22 base62 chars>` (same alphabet as @tableos/types).
 CREATE OR REPLACE FUNCTION data.encode_public_id(prefix text, id uuid)
 RETURNS text
 LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE AS $$

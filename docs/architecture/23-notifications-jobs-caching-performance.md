@@ -85,7 +85,7 @@ Categories are the `core.notifications.category` vocabulary from [05](./05-sql-s
 
 * MJML templates compiled at build time to HTML + plain-text alternative; i18n via ICU message files (user locale); per-category template with a shared layout.
 * Content safety: user-generated strings HTML-escaped; links only to our app domain (`link_path`), no remote images except our CDN; org policy `notifications.emailContent = full | minimal` (minimal = "You have a new comment in base X" without record content — common for regulated Enterprise).
-* Sender: `notifications@mail.tabula.example` (DKIM, SPF, DMARC `p=reject`), Reply-To = no-reply (V2: reply-by-email to comment via inbound parse with signed per-thread addresses).
+* Sender: `notifications@mail.tableos.example` (DKIM, SPF, DMARC `p=reject`), Reply-To = no-reply (V2: reply-by-email to comment via inbound parse with signed per-thread addresses).
 
 ### 30.4.3 Providers
 
@@ -101,7 +101,7 @@ Categories are the `core.notifications.category` vocabulary from [05](./05-sql-s
 * `notification_deliveries.status` updated (`delivered`, `bounced`, `complained`).
 * Suppression (`core.email_suppressions`): hard bounce → permanent; complaint → permanent (+ all non-security categories off for that user); soft bounce 3× within 7 days → `soft_bounce_repeated` with `expires_at = now() + 7 days`. Checked before every send (primary-key lookup).
 * Security & auth emails bypass `unsubscribe_all` but not hard-bounce suppression (UI banner prompts user to fix email).
-* **One-click unsubscribe** (RFC 8058): headers `List-Unsubscribe: <https://app.tabula.example/u/{token}>, <mailto:unsub+{token}@mail.tabula.example>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. Token = HMAC-signed `{userId, category, scope?, exp: +90d}` — POST sets `notification_preferences (scope global, category, channel email) = off` without login. Footer link offers granular preferences (login required).
+* **One-click unsubscribe** (RFC 8058): headers `List-Unsubscribe: <https://app.tableos.example/u/{token}>, <mailto:unsub+{token}@mail.tableos.example>` and `List-Unsubscribe-Post: List-Unsubscribe=One-Click`. Token = HMAC-signed `{userId, category, scope?, exp: +90d}` — POST sets `notification_preferences (scope global, category, channel email) = off` without login. Footer link offers granular preferences (login required).
 
 ## 30.5 Push (later, V2)
 
@@ -138,7 +138,7 @@ Prefs per user are cached in-process (60 s) by the worker, invalidated via `user
 | Event redelivery | unique `(user_id, source_event_id)` |
 | Mention + comment double notify | router excludes mentioned users from `comment` recipients of the same comment |
 | Same event via multiple paths (assigned + mentioned) | per-event recipient map keeps highest-priority category only (`mention > comment_reply > assignment > comment > record_watch`) |
-| Email duplicates on retry | `notification_deliveries` row created before send with status `queued`; provider idempotency (SES has none → we check row status before retry; Postmark `MessageStream` + our `X-Tabula-Delivery-Id` header) |
+| Email duplicates on retry | `notification_deliveries` row created before send with status `queued`; provider idempotency (SES has none → we check row status before retry; Postmark `MessageStream` + our `X-TableOS-Delivery-Id` header) |
 | Notification storms (bulk import with collaborator field) | bulk changes (`records.bulk_changed`) with > 50 assignments to one user → single coalesced notification; imports/sync (`via ∈ import, sync`) don't notify by default |
 
 ---
@@ -255,7 +255,7 @@ flowchart TB
 * Same image (D1), entrypoint `worker.ts --queues=compute,notification,…`. Pools isolate failure & resource profiles (CPU-bound compute vs. I/O-bound webhooks with high concurrency vs. memory-heavy exports).
 * **Autoscaling (KEDA):** scaler on BullMQ metrics exported by a small `queue-metrics` exporter (Prometheus): `waiting + delayed_due` count and **oldest waiting job age** per queue/lane. Example: `compute` target 200 waiting jobs per pod, scale up also if oldest age > 5 s; min 2 pods, max 40; cool-down 120 s. (KEDA's native Redis list scaler works for the `wait` list but not prioritized zsets — hence the exporter.)
 * **Graceful shutdown:** `SIGTERM` → stop fetching (`worker.close()` waits for active jobs) → `terminationGracePeriodSeconds` = max job timeout of the pool + 15 s (bulk pool: chunked jobs ≤ 10 min; so chunks must be small) → jobs not finished are left to BullMQ stalled detection (`stalledInterval 30 s`) **and** the durable lease → re-run idempotently. PreStop hook sleeps 5 s for endpoint deregistration.
-* **Poison jobs:** `maxStalledCount = 1` (a job that crashes the process twice is failed, not retried forever); `attempts` per queue; after final failure → `failed` set (kept 7 days, capped 10k per queue) + durable row marked terminal + `jobs_failed_total{queue,code}` metric; ops tooling `tabula jobs retry --queue --since --filter` re-enqueues after fix. Event consumers (Kafka) send poison messages to `*.dlq` topics ([15](./15-events.md)).
+* **Poison jobs:** `maxStalledCount = 1` (a job that crashes the process twice is failed, not retried forever); `attempts` per queue; after final failure → `failed` set (kept 7 days, capped 10k per queue) + durable row marked terminal + `jobs_failed_total{queue,code}` metric; ops tooling `tableos jobs retry --queue --since --filter` re-enqueues after fix. Event consumers (Kafka) send poison messages to `*.dlq` topics ([15](./15-events.md)).
 * **Reconciler** (scheduler, every 60 s per durable table): `SELECT id FROM automation_runs WHERE status IN ('queued','running') AND lease_until < now() - interval '30 s' LIMIT 500 FOR UPDATE SKIP LOCKED` → re-enqueue with same jobId (BullMQ dedupes if still present). Same for `long_operations`, `webhook_deliveries`, `attachments`, `deletion_batches`, `computed_stale` (older than 2 min), `base_snapshots`.
 
 ---
@@ -397,7 +397,7 @@ Small tables (< 20k): direct scan of `records` partition with JSONB expressions 
 ## 33.7 Read replicas with seq watermark
 
 * Each shard has 1–2 async replicas. Reads that tolerate staleness go to replicas: grid windows, search hydration, exports, activity feeds, snapshots.
-* **Read-your-writes** via change-seq watermark: clients send `X-Tabula-Min-Seq: {baseId}:{seq}` (the last seq they observed/committed). The API's `readerAtLeast(baseId, seq)` checks the replica's applied seq for that base: `SELECT change_seq FROM data.base_runtime WHERE base_id = $1` on the replica (~0.1 ms); if `≥ seq` → replica, else primary (or wait ≤ 50 ms then primary).
+* **Read-your-writes** via change-seq watermark: clients send `X-TableOS-Min-Seq: {baseId}:{seq}` (the last seq they observed/committed). The API's `readerAtLeast(baseId, seq)` checks the replica's applied seq for that base: `SELECT change_seq FROM data.base_runtime WHERE base_id = $1` on the replica (~0.1 ms); if `≥ seq` → replica, else primary (or wait ≤ 50 ms then primary).
 * Replica lag guard: if `pg_last_xact_replay_timestamp()` lag > 2 s, the router stops sending interactive reads to that replica.
 
 ## 33.8 Async computation
@@ -566,7 +566,7 @@ One `r7g.2xlarge` primary + 2 read replicas comfortably; notifications are the l
 | Table (`core`, V2) | `push_devices (user_id, platform, token_hash, token_enc, last_seen_at)` | §30.5 |
 | Column | `durable rows lease_until` on `automation_runs`, `long_operations`, `webhook_deliveries`, `base_snapshots`, `deletion_batches` (where not present) | §31.3 reconciler |
 | Exporter | `queue-metrics` (BullMQ → Prometheus) for KEDA | §31.6 |
-| Header | `X-Tabula-Min-Seq` read watermark | §33.7 |
+| Header | `X-TableOS-Min-Seq` read watermark | §33.7 |
 | Endpoint | `GET /v1/bases/{baseId}/views/{viewId}:open` (composite first-paint) | §33.11.1 |
 | Policy keys | `notifications.emailContent`, per-category org overrides | §30.4.2, §30.6 |
 | Cache artifacts | view anchor lists keyed `(viewId, configVersion, seqBucket, visibilityClass)` | §33.11.3 |

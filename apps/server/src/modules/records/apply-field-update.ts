@@ -1,4 +1,4 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import type { Redis } from "ioredis";
 import { ApiError } from "../../http/errors.js";
 import { withBaseTx, type MutationActor } from "../../kernel/mutation.js";
@@ -15,7 +15,7 @@ export class RecordFieldUpdateError extends Error {
 }
 
 export interface ApplyFieldUpdateParams {
-  db: TabulaDb;
+  db: TableOSDb;
   redis: Redis | null;
   orgId: string;
   workspaceId: string;

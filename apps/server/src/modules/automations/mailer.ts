@@ -1,7 +1,7 @@
 import net from "node:net";
 import tls from "node:tls";
-import type { TabulaDb } from "@tabula/db";
-import { generateUuidV7 } from "@tabula/types";
+import type { TableOSDb } from "@tableos/db";
+import { generateUuidV7 } from "@tableos/types";
 import { sql } from "kysely";
 
 /**
@@ -33,7 +33,7 @@ export function isValidEmail(s: string): boolean {
   return EMAIL_RE.test(s.trim());
 }
 
-export async function sendEmail(db: TabulaDb, msg: OutgoingEmail): Promise<SendResult> {
+export async function sendEmail(db: TableOSDb, msg: OutgoingEmail): Promise<SendResult> {
   const id = generateUuidV7();
   const to = msg.to.map((s) => s.trim()).filter(isValidEmail);
   const cc = (msg.cc ?? []).map((s) => s.trim()).filter(isValidEmail);
@@ -149,7 +149,7 @@ async function smtpSend(url: string, msg: SmtpMessage): Promise<void> {
   };
 
   await expect("220");
-  await cmd(`EHLO tabula.local`, "250");
+  await cmd(`EHLO tableos.local`, "250");
   if (!implicitTls && port !== 25) {
     await cmd("STARTTLS", "220");
     socket.removeListener("data", onData);
@@ -159,7 +159,7 @@ async function smtpSend(url: string, msg: SmtpMessage): Promise<void> {
       socket.once("secureConnect", () => resolve());
       socket.once("error", reject);
     });
-    await cmd(`EHLO tabula.local`, "250");
+    await cmd(`EHLO tableos.local`, "250");
   }
   if (user) {
     const token = Buffer.from(`\u0000${user}\u0000${pass}`).toString("base64");

@@ -1,4 +1,4 @@
-import * as fieldUi from "@tabula/field-ui";
+import * as fieldUi from "@tableos/field-ui";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import { request, type FieldDto } from "../../lib/api.ts";

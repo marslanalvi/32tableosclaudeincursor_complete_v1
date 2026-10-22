@@ -1,5 +1,5 @@
-import { decryptMfaSecret, encryptMfaSecret } from "@tabula/auth";
-import type { TabulaDb } from "@tabula/db";
+import { decryptMfaSecret, encryptMfaSecret } from "@tableos/auth";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { SyncError } from "../sync/source.js";
 
@@ -53,13 +53,13 @@ export function openCredentials(row: Pick<ConnectionRow, "credentials">, key: Bu
   }
 }
 
-export async function loadConnection(db: TabulaDb, id: string): Promise<ConnectionRow | null> {
+export async function loadConnection(db: TableOSDb, id: string): Promise<ConnectionRow | null> {
   const r = await sql<ConnectionRow>`SELECT * FROM core.integration_connections WHERE id = ${id} AND deleted_at IS NULL`.execute(db);
   return r.rows[0] ?? null;
 }
 
 /** Connections are personal: everything the user connected, in any organization. */
-export async function userConnections(db: TabulaDb, userId: string): Promise<ConnectionRow[]> {
+export async function userConnections(db: TableOSDb, userId: string): Promise<ConnectionRow[]> {
   const r = await sql<ConnectionRow>`
     SELECT * FROM core.integration_connections
     WHERE user_id = ${userId} AND deleted_at IS NULL

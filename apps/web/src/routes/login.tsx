@@ -1,6 +1,6 @@
 import { Link, useSearch } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { Button, Input, Label, PasswordInput } from "@tabula/ui";
+import { Button, Input, Label, PasswordInput } from "@tableos/ui";
 import { ApiProblemError } from "../lib/api.ts";
 import {
   authErrorMessage,

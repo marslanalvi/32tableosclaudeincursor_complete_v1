@@ -33,7 +33,7 @@ function memoryPeek(key: string): { count: number; ttl: number } {
 export class AuthRateLimiter {
   constructor(
     private readonly redis: Redis | null,
-    private readonly prefix = "tabula:rl:",
+    private readonly prefix = "tableos:rl:",
   ) {}
 
   /** Current count without incrementing. */

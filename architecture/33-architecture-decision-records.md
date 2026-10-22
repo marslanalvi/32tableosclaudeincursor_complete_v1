@@ -157,7 +157,7 @@ Status: Proposed · Spine: D4
 Tens of thousands of small tenants per shard; isolation failures are existential.
 
 ### Decision
-Shared schema; every data-plane row carries `workspace_id`; **RLS policies** on every tenant table using `current_setting('app.workspace_id', true)::uuid`; the app connects as `tabula_app` (`NOBYPASSRLS`, not owner); each transaction runs `SET LOCAL app.workspace_id` via `withTenant()`. Application-level authorization remains primary (ADR-024); RLS is defense in depth. Automated RLS coverage tests (28 §52.6.2). Enterprise: dedicated shard + dedicated KMS key.
+Shared schema; every data-plane row carries `workspace_id`; **RLS policies** on every tenant table using `current_setting('app.workspace_id', true)::uuid`; the app connects as `tableos_app` (`NOBYPASSRLS`, not owner); each transaction runs `SET LOCAL app.workspace_id` via `withTenant()`. Application-level authorization remains primary (ADR-024); RLS is defense in depth. Automated RLS coverage tests (28 §52.6.2). Enterprise: dedicated shard + dedicated KMS key.
 
 ### Alternatives considered
 * **Schema per tenant** — catalog bloat with 10k+ schemas per shard, slow migrations, pooler issues. Rejected.
@@ -235,7 +235,7 @@ Status: Proposed · Spine: §4
 ~30 field types, each affecting validation, storage, rendering, filtering, sorting, search, import/export, formula typing, conversion and AI.
 
 ### Decision
-`FieldTypeDefinition` interface in `@tabula/fields` (isomorphic core + server-only and client-only extension points): `configSchema`, `validate`, `normalize`, `parseInput`, `format`, `isEmpty`, `compare`, `toSortKey`, `toSidecar`, `filterOperators` (+ SQL & memory implementations), `toSearchText`, `toCsv/fromCsv`, `formulaType`, `conversions`, `storage` (`cells|computed|links|record_column|none`), renderers/editors on the client. A shared conformance suite gates registration.
+`FieldTypeDefinition` interface in `@tableos/fields` (isomorphic core + server-only and client-only extension points): `configSchema`, `validate`, `normalize`, `parseInput`, `format`, `isEmpty`, `compare`, `toSortKey`, `toSidecar`, `filterOperators` (+ SQL & memory implementations), `toSearchText`, `toCsv/fromCsv`, `formulaType`, `conversions`, `storage` (`cells|computed|links|record_column|none`), renderers/editors on the client. A shared conformance suite gates registration.
 
 ### Alternatives considered
 * **Switch statements per subsystem** — fast to start, unmanageable at 30 types × 15 subsystems. Rejected.
@@ -606,7 +606,7 @@ Status: Proposed · Spine: D15
 Attachments up to 5 GB, untrusted content, previews, CDN delivery, per-plan quotas.
 
 ### Decision
-Presigned multipart upload to quarantine bucket → ClamAV scan → promote to `tabula-attachments` (SSE-KMS) → libvips/ffmpeg variants → CloudFront signed URLs from a **separate cookieless domain**; object key `{workspaceId}/{baseId}/{attachmentId}/{variant}`.
+Presigned multipart upload to quarantine bucket → ClamAV scan → promote to `tableos-attachments` (SSE-KMS) → libvips/ffmpeg variants → CloudFront signed URLs from a **separate cookieless domain**; object key `{workspaceId}/{baseId}/{attachmentId}/{variant}`.
 
 ### Alternatives considered
 * **Upload through API servers** — bandwidth and memory on API pods; slow. Rejected.
@@ -756,7 +756,7 @@ Status: Proposed · Spine: D22
 AI features (fields, assistants, automation actions) need multiple models, cost control, policy enforcement (data access, org opt-out), observability, caching, and provider portability.
 
 ### Decision
-`@tabula/ai` provider abstraction (`generate`, `stream`, `embed`, tool use, structured output) and an **AI gateway module**: versioned prompt templates (`ai_prompt_templates`), model routing by task class (default Anthropic `claude-sonnet-5`; `claude-haiku-4-5-20251001` for high-volume classification/extraction; `claude-opus-5-5` for agents), token/cost metering (`ai_invocations`, `usage_events`), response caching (`ai:cache:*`), per-workspace policies, permission-filtered context assembly, eval harness.
+`@tableos/ai` provider abstraction (`generate`, `stream`, `embed`, tool use, structured output) and an **AI gateway module**: versioned prompt templates (`ai_prompt_templates`), model routing by task class (default Anthropic `claude-sonnet-5`; `claude-haiku-4-5-20251001` for high-volume classification/extraction; `claude-opus-5-5` for agents), token/cost metering (`ai_invocations`, `usage_events`), response caching (`ai:cache:*`), per-workspace policies, permission-filtered context assembly, eval harness.
 
 ### Alternatives considered
 * **Direct SDK calls from features** — no central policy/metering; vendor lock. Rejected.

@@ -9,7 +9,7 @@ import {
   type CSSProperties,
   type ReactNode,
 } from "react";
-import * as filterPkg from "@tabula/filter";
+import * as filterPkg from "@tableos/filter";
 import {
   AttachmentsDialog,
   FieldUiServicesProvider,
@@ -24,7 +24,7 @@ import {
   toInputValue,
   type EditDoneReason,
   type FieldLike,
-} from "@tabula/field-ui";
+} from "@tableos/field-ui";
 import type { FieldDto, FilterAst, TableDto, ViewDto } from "../../lib/api.ts";
 import type { ViewConfig } from "../../lib/api-areas/views.ts";
 import { baseLocationPath, readBaseLocation } from "../../lib/base-url.ts";
@@ -36,7 +36,7 @@ import {
   type RecordsPage,
 } from "../../lib/api-areas/records.ts";
 import type { FieldWire } from "../../lib/api-areas/fields.ts";
-import type { RealtimePresenceEntry } from "@tabula/realtime-client";
+import type { RealtimePresenceEntry } from "@tableos/realtime-client";
 import { initials } from "../../app/ui.tsx";
 import { usePresenceStore } from "../../stores/presence.ts";
 import { useOptionalBaseSession } from "../base/BaseSessionProvider.tsx";
@@ -131,7 +131,7 @@ async function copyText(text: string) {
   }
 }
 
-/** Pick a default filter operator via @tabula/filter when available (A's API). */
+/** Pick a default filter operator via @tableos/filter when available (A's API). */
 function defaultOperatorFor(type: string): string {
   const fn = (filterPkg as Record<string, unknown>)["operatorsForFieldType"] as ((t: string) => string[]) | undefined;
   const ops = fn?.(type);
