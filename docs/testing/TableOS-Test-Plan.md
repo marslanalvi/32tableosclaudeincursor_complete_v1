@@ -1,6 +1,6 @@
 # TableOS — Complete Test Plan
 
-Plan 1.0 · for TableOS 0.16.2 · generated 2026-10-21 · 32 modules · 279 test cases (P1 134, P2 106, P3 39)
+Plan 1.0 · for TableOS 0.16.2 · generated 2026-10-22 · 32 modules · 279 test cases (P1 134, P2 106, P3 39)
 
 Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Export for developer**. This file and the PDF are the same plan for reading or printing.
 
@@ -4156,7 +4156,7 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Before you start:**
 
-- Use curl, Postman or similar. Token from Members & access → API tokens. Base URL = the API address.
+- Use curl, Postman or similar. Token from Members & access → API tokens. Base URL = the TableOS address with no trailing slash; send the token as Authorization: Bearer tos_…. Find table IDs in the table tab menu → IDs & API, or with GET /v1/api/bases.
 
 ### M28-01 · Create a token  `P1` `API`
 
@@ -4210,7 +4210,7 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Steps**
 
-1. POST …/records/query with pageSize, sort, filter (eq, contains, gt, empty, and/or), search, fields, viewId; follow nextCursor.
+1.  /v1/tables/{tableId}/records/query with pageSize, sort, filter (eq, contains, gt, empty, and/or), search, fields, viewId; follow nextCursor.
 
 **Expected:** Correct records and paging; nextCursor null on the last page.
 
@@ -4226,7 +4226,7 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Steps**
 
-1. GET …/records/{recordId}?fields=fld_a,fld_b.
+1.  /v1/tables/{tableId}/records/{recordId}?fields=fld_a,fld_b.
 
 **Expected:** That record with the asked fields.
 
@@ -4242,7 +4242,7 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Steps**
 
-1. POST …/records/group.
+1.  /v1/tables/{tableId}/records/group.
 
 **Expected:** Grouped counts/aggregates.
 
@@ -4258,7 +4258,7 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Steps**
 
-1. POST …/records; PATCH …/records/{id}; DELETE …/records/{id}; use field names and IDs; typecast true for a select option name.
+1.  /v1/tables/{tableId}/records;  /v1/tables/{tableId}/records/{id};  /v1/tables/{tableId}/records/{id}; use field names and IDs; typecast true for a select option name.
 
 **Expected:** Works; changes appear live in the UI and in record history as “via API”.
 
@@ -4274,7 +4274,7 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Steps**
 
-1. POST …/records/batch with 500 records, then 501; PATCH …/records/batch; POST …/records/batch-delete.
+1.  /v1/tables/{tableId}/records/batch with 500 records, then 501;  /v1/tables/{tableId}/records/batch;  /v1/tables/{tableId}/records/batch-delete.
 
 **Expected:** 500 works; 501 refused with a clear error.
 

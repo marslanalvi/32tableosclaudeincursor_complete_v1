@@ -78,12 +78,15 @@ const moveBody = z.object({
   after: z.string().nullish(),
 });
 
-function actor(user: NonNullable<FastifyRequest["user"]>): MutationActor {
+/** "script" marks changes made with an API token, so record history can say "via the API". */
+type WriteVia = "api" | "script";
+
+function actor(user: NonNullable<FastifyRequest["user"]>, via: WriteVia): MutationActor {
   return {
     actorType: "user",
     actorId: user.id,
     sessionId: user.sessionId,
-    via: "api",
+    via,
   };
 }
 
@@ -94,7 +97,7 @@ async function resolve(
   request: FastifyRequest<{ Params: { baseId: string; tableId: string } }>,
   reply: FastifyReply,
   action: "record.create" | "record.update" | "record.delete",
-): Promise<{ baseId: string; tableId: string; userId: string; table: TableCtx; user: NonNullable<FastifyRequest["user"]> } | null> {
+): Promise<{ baseId: string; tableId: string; userId: string; table: TableCtx; user: NonNullable<FastifyRequest["user"]>; via: WriteVia } | null> {
   const user = request.user;
   if (!user) {
     notFound(request, reply);
@@ -110,7 +113,7 @@ async function resolve(
   const snapshot = await compileForUser(ctx.db, user.id, baseId);
   assertCan(snapshot, action);
   await assertSyncWritable(ctx.db, tableId, action, request.body);
-  return { baseId, tableId, userId: user.id, table, user };
+  return { baseId, tableId, userId: user.id, table, user, via: request.apiTokenId ? "script" : "api" };
 }
 
 function writeCtx(
@@ -120,6 +123,7 @@ function writeCtx(
   baseId: string,
   workspaceId: string,
   userId: string,
+  via: WriteVia,
 ): WriteContext {
   return {
     trx,
@@ -127,7 +131,7 @@ function writeCtx(
     workspaceId,
     changeSeq: mctx.changeSeq,
     userId,
-    via: "api",
+    via,
     redis: ctx.redis,
     afterCommit: mctx.afterCommit,
   };
@@ -158,10 +162,10 @@ export async function registerRecordsRoutes(
         let ids: string[] = [];
         await withBaseTx(
           ctx.db,
-          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user), redis: ctx.redis },
+          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user, r.via), redis: ctx.redis },
           async (mctx, trx) => {
             const res = await createRecordsInTx(
-              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId),
+              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId, r.via),
               r.tableId,
               [{ fields: body.fields }],
               { ...(body.typecast !== undefined ? { typecast: body.typecast } : {}) },
@@ -203,10 +207,10 @@ export async function registerRecordsRoutes(
         let ids: string[] = [];
         await withBaseTx(
           ctx.db,
-          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user), redis: ctx.redis },
+          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user, r.via), redis: ctx.redis },
           async (mctx, trx) => {
             const res = await createRecordsInTx(
-              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId),
+              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId, r.via),
               r.tableId,
               body.records.map((x) => ({ fields: x.fields, ...(x.id ? { id: x.id } : {}) })),
               { ...(body.typecast !== undefined ? { typecast: body.typecast } : {}) },
@@ -251,10 +255,10 @@ export async function registerRecordsRoutes(
         }));
         await withBaseTx(
           ctx.db,
-          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user), redis: ctx.redis },
+          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user, r.via), redis: ctx.redis },
           async (mctx, trx) => {
             const res = await updateRecordsInTx(
-              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId),
+              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId, r.via),
               r.tableId,
               items,
               { ...(body.typecast !== undefined ? { typecast: body.typecast } : {}) },
@@ -305,10 +309,10 @@ export async function registerRecordsRoutes(
         const ids = body.ids.map(recordUuid);
         await withBaseTx(
           ctx.db,
-          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user), redis: ctx.redis },
+          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user, r.via), redis: ctx.redis },
           async (mctx, trx) => {
             const res = await deleteRecordsInTx(
-              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId),
+              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId, r.via),
               r.tableId,
               ids,
             );
@@ -352,11 +356,11 @@ export async function registerRecordsRoutes(
         }
         await withBaseTx(
           ctx.db,
-          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user), redis: ctx.redis },
+          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user, r.via), redis: ctx.redis },
           async (mctx, trx) => {
             const writer = await TableWriter.load(trx, r.tableId);
             const res = await updateRecordsInTx(
-              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId),
+              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId, r.via),
               r.tableId,
               [{ id: recordId, fields: body.fields, ...(expectedVersion !== undefined ? { expectedVersion } : {}) }],
               { writer, ...(body.typecast !== undefined ? { typecast: body.typecast } : {}) },
@@ -397,10 +401,10 @@ export async function registerRecordsRoutes(
         const recordId = recordUuid(request.params.recordId);
         await withBaseTx(
           ctx.db,
-          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user), redis: ctx.redis },
+          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user, r.via), redis: ctx.redis },
           async (mctx, trx) => {
             const res = await deleteRecordsInTx(
-              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId),
+              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId, r.via),
               r.tableId,
               [recordId],
             );
@@ -438,10 +442,10 @@ export async function registerRecordsRoutes(
         let newId = "";
         await withBaseTx(
           ctx.db,
-          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user), redis: ctx.redis },
+          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user, r.via), redis: ctx.redis },
           async (mctx, trx) => {
             const res = await duplicateRecordInTx(
-              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId),
+              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId, r.via),
               r.tableId,
               sourceId,
             );
@@ -482,13 +486,13 @@ export async function registerRecordsRoutes(
         const afterId = body.after ? recordUuid(body.after) : null;
         await withBaseTx(
           ctx.db,
-          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user), redis: ctx.redis },
+          { orgId: r.table.orgId, workspaceId: r.table.workspaceId, baseId: r.baseId, actor: actor(r.user, r.via), redis: ctx.redis },
           async (mctx, trx) => {
             const old = await sql<{ manual_order: string }>`
               SELECT manual_order FROM data.records WHERE table_id = ${r.tableId} AND id = ${recordId}
             `.execute(trx);
             const key = await moveRecordInTx(
-              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId),
+              writeCtx(ctx, mctx, trx, r.baseId, r.table.workspaceId, r.userId, r.via),
               r.tableId,
               recordId,
               { beforeId, afterId },

@@ -8,6 +8,32 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.3] - 2026-10-22
+
+Fix phase 1 of the team's test round (data safety, security and the public API).
+
+### Fixed
+- **Esc saved a long-text cell** instead of discarding the edit (M12-01). Esc now cancels in every
+  cell editor; Enter, Tab and clicking away still save.
+- **Pasting multi-line JSON into one cell spread it over the rows below** and created new rows
+  (M11-11). Multi-line text pasted into a single JSON or long-text cell now stays in that cell; a
+  real spreadsheet block (tabs or an HTML table) still fills a range. Invalid JSON, pasted or typed,
+  is refused with a message instead of being stored as text.
+- **Production reported version 0.0.0** in `/v1/version` and `x-tableos-version` (M00-01): the
+  bundled server looked for `package.json` one folder too high.
+- **`GET /v1/tables/{tableId}`** (and `GET /v1/bases/{baseId}/tables/{tableId}`) was documented but
+  missing; it returns the table and its fields (M28-03).
+- **API calls failed on common URL and header variants** (M28-04 to M28-10, M28-15): a base URL ending
+  in `/` (`//v1/…`), a trailing slash, a token without the word `Bearer` or in quotes. These now work;
+  a GET on `…/records/query` returns 405 "use POST" instead of "Invalid rec id"; refusals name the
+  request and list what tokens can call; a missing or unknown token says how to send it or that it is
+  invalid, revoked or expired.
+
+### Added
+- `GET …/records` lists records with `pageSize`, `cursor`, `viewId`, `fields` and `search` in the
+  query string (handy from a browser).
+- Changes made with an API token show **Via API** in record history.
+
 ## [0.16.2] - 2026-10-20
 
 ### Fixed

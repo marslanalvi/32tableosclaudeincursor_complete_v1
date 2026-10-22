@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.16.2**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.3**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,19 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.16.3: fix phase 1 (data safety, security, public API)
+
+Source: the Phase 1 prompt from the team's 279-case test round (`Fix-Phases/Phase-1-Data-safety-security-and-the-public-API.md`, kept outside git with the compiled results; 13 items).
+
+* **M12-01 Esc saved long text:** `LongTextEditor` deliberately kept the draft on Esc. It now calls `finish(true)` like `TextEditor`; Ctrl/Cmd+Enter and Tab still save. Help already documented Esc as "Cancel editing".
+* **M11-11 JSON paste spread over rows:** `pasteText` parsed every clipboard as TSV, so each line of pretty-printed JSON went to the next row (and created rows past the end). A single target cell of type `json` or `long_text` now takes the whole text when it has no tab and the clipboard has no HTML `<table>`. JSON cells skip unparseable text (it used to go to the server with `typecast` and be stored as a JSON string) and toast "That isn't valid JSON". `FieldValueEditor` gained `onInvalid`; the grid shows it as a toast when typed text can't be converted.
+* **M00-01 version 0.0.0:** `lib/version.ts` read `../../package.json` relative to the module; in the tsup bundle (`dist/api.js`) that is `apps/package.json`. It now tries `../../` and `../` and accepts only `@tabula/server`. Checked by running the built `dist/api.js`.
+* **M28 API:** live `core.api_tokens` (read-only look) showed Arslan's and Awais's tokens were never accepted (`last_used_at` empty) while the gate returned "API tokens can only call the record API" (Arslan's screenshot): the gate's regexes didn't match `//v1/…` (base URL ending in `/`) and the router 404'd trailing slashes. Fastify `routerOptions: { ignoreTrailingSlash, ignoreDuplicateSlashes }`; `normalizeApiPath` for the token gate and the `/v1/tables/:tableId` forwarder; `bearerToken` accepts `bearer`, a bare `tos_…` and quotes. New `GET /v1/bases/:baseId/tables/:tableId` (the table entry of the base schema, so permissions and shape match), `GET …/records` (query-string paging) and 405 for GET on `query`/`group`/`batch`/`batch-delete`. 401/403 details say how to send a token, that it's invalid/revoked/expired, or which routes tokens can call. Titles for `UNKNOWN_FIELD` and `METHOD_NOT_ALLOWED`.
+* **"Via API" in history:** record routes write `via = 'script'` (already allowed by `data.is_via`, no migration) when `request.apiTokenId` is set; `sourceOf` maps it to `api` and Record activity tags it "Via API". `script` is in `PERMISSION_CHECKED_VIA`, so field permissions still apply to token writes.
+* **M25-02 not a code bug:** Zainab's screenshot view is in base "Testing" in workspace "Zainab Testing", which she owns (workspace `owner` grant, source `creator`); an Owner also gave her an Editor grant on that base. The highest role wins, so she was a Creator there. A pure Editor sees the note and disabled controls and gets 403 on create/change/regenerate/disable (checked).
+* **Test plan:** M28 steps now give full paths (`/v1/tables/{tableId}/records…`) and how to send the token; Help → API reference explains the `…` shorthand and lists `GET …/records`.
+* **Checks:** `.data/verify-r24.mjs` (75 checks: every M28 case by table id and by base+table id, URL/header variants, 409, history source, base limits, version, Editor share rights); `.data/r2-shell/r24-ui.mjs` (Esc for text and long text, JSON paste valid/invalid, TSV block), `r24-ui-api.mjs` (Via API tag, help page), `r24-ui-share.mjs` (Editor share dialog). Full regression suite green.
 
 ## v0.16.2: Redis out of memory
 

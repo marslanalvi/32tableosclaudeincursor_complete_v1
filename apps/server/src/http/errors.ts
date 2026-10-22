@@ -39,6 +39,8 @@ const API_ERROR_TITLES: Record<string, string> = {
   RATE_LIMITED: "Too many requests",
   MFA_REQUIRED: "Multi-factor authentication required",
   NOTHING_TO_UNDO: "Nothing to undo",
+  METHOD_NOT_ALLOWED: "Method not allowed",
+  UNKNOWN_FIELD: "Unknown field",
 };
 
 export function problemType(code: string): string {

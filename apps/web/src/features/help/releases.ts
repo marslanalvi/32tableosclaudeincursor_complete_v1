@@ -8,6 +8,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.3",
+    date: "2026-10-22",
+    title: "Safer cell editing and a sturdier API.",
+    items: [
+      "Esc cancels an edit in every cell, long text included.",
+      "Pasting multi-line JSON or text into one cell keeps it in that cell; invalid JSON is refused with a message.",
+      "The API accepts common URL and header variants, adds GET /v1/tables/{tableId} and GET …/records, and explains refusals.",
+      "Changes made with an API token show “Via API” in record history.",
+      "The version number is reported correctly on the live server.",
+    ],
+  },
+  {
     version: "0.16.2",
     date: "2026-10-20",
     title: "Background work no longer fills up the server's memory.",

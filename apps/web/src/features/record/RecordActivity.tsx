@@ -127,6 +127,7 @@ function verb(e: HistoryEntryWire): string {
 }
 
 const SOURCE_TAG: Partial<Record<HistoryEntryWire["source"], string>> = {
+  api: "Via API",
   automation: "Automation",
   form: "Form",
   import: "Import",

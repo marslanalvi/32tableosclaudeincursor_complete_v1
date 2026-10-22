@@ -7,7 +7,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../lib/app-context.js";
 import { currentRequestContext } from "../kernel/request-context.js";
 import { blockedOrgsForDevice, ensureDeviceKey } from "../modules/access/devices.js";
-import { requiredScope, resolveApiToken } from "../modules/access/api-tokens.js";
+import { API_TOKEN_PREFIX, TOKEN_ROUTES_HINT, normalizeApiPath, requiredScope, resolveApiToken } from "../modules/access/api-tokens.js";
 import { SESSION_IDLE_DAYS, setSessionCookie } from "../modules/auth/session.js";
 import { allowedBeforeMfa, mfaRequired } from "../modules/auth/mfa-policy.js";
 import { sendApiError, unauthorized } from "./errors.js";
@@ -65,11 +65,14 @@ function browserTimeZone(request: FastifyRequest): string | null {
   }
 }
 
+/** `Bearer tos_…`; also a bare or quoted `tos_…`, which Postman and copy-paste often produce. */
 function bearerToken(request: FastifyRequest): string | null {
   const h = request.headers.authorization;
   if (typeof h !== "string") return null;
-  const m = /^Bearer\s+(\S+)$/i.exec(h.trim());
-  return m?.[1] ?? null;
+  const m = /^(?:Bearer\s+)?["']?(\S+?)["']?$/i.exec(h.trim());
+  const token = m?.[1] ?? null;
+  if (!token) return null;
+  return /^Bearer\s/i.test(h.trim()) || token.startsWith(API_TOKEN_PREFIX) ? token : null;
 }
 
 export async function authHook(
@@ -77,7 +80,7 @@ export async function authHook(
   request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
-  const path = request.url.split("?")[0] ?? request.url;
+  const path = normalizeApiPath(request.url);
   const bearer = bearerToken(request);
   // Browsers get a device key before signing in so the login itself is tied to a device.
   const deviceKey = bearer ? null : ensureDeviceKey(request, reply, ctx.env);
@@ -89,12 +92,18 @@ export async function authHook(
     try {
       const token = await resolveApiToken(ctx.db, bearer, request.ip ?? null);
       if (!token) {
-        unauthorized(request, reply);
+        unauthorized(request, reply, "This API token is invalid, revoked or expired, or the person who made it is no longer an Owner or Admin");
         return;
       }
       const scope = requiredScope(request.method, path);
       if (!scope) {
-        sendApiError(request, reply, 403, "FORBIDDEN", "API tokens can only call the record API (see Help → API)");
+        sendApiError(
+          request,
+          reply,
+          403,
+          "FORBIDDEN",
+          `API tokens can only call the record API, not ${request.method} ${path}. ${TOKEN_ROUTES_HINT}`,
+        );
         return;
       }
       if (!token.scopes.includes(scope)) {
@@ -124,7 +133,8 @@ export async function authHook(
 
   const token = request.cookies[SESSION_COOKIE_NAME];
   if (!token) {
-    unauthorized(request, reply);
+    const triedApiKey = request.headers.authorization !== undefined || request.headers["x-api-key"] !== undefined;
+    unauthorized(request, reply, triedApiKey ? "Send your API token in the Authorization header as: Bearer tos_…" : undefined);
     return;
   }
 

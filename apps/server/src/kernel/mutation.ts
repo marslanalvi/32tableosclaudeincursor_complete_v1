@@ -11,7 +11,8 @@ export interface MutationActor {
   actorType: "user" | "system";
   actorId: string | null;
   sessionId?: string;
-  via: "ui" | "api" | "system" | "undo" | "redo" | "restore";
+  /** "script" = an API-token request. */
+  via: "ui" | "api" | "script" | "system" | "undo" | "redo" | "restore";
 }
 
 export type AfterCommitFn = () => Promise<void> | void;

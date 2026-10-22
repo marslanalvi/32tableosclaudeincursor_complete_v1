@@ -40,7 +40,7 @@ export interface HistoryEntryWire {
   at: string;
   kind: "created" | "updated" | "deleted" | "restored";
   actor: { id: string; name: string; email: string } | null;
-  source: "user" | "automation" | "form" | "import" | "undo" | "redo" | "restore" | "system";
+  source: "user" | "api" | "automation" | "form" | "import" | "undo" | "redo" | "restore" | "system";
   sourceName?: string;
   duplicatedFrom?: { id: string; name: string };
   changes: HistoryChangeWire[];
