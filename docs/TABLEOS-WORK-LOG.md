@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.16.5**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.6**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,16 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.16.6: fix phase 2 (sharing, sign-in security, limits)
+
+* **M25-06:** read-only look at live: `core.api_tokens.last_used_ip` and the security alert emails held Render-internal addresses (`10.27.60.202`, `10.24.42.123`, …) that changed between requests, so `lockout.fail("share:<id>:<ip>")` counted each proxy separately. `buildFastify`: `trustProxy: true` plus an `onRequest` hook that sets `X-Forwarded-For` to `CF-Connecting-IP` when it is a valid IP (`request.ip` is computed from the raw headers on each access, so every use is fixed). Calls straight to the onrender.com origin (bypassing Cloudflare) can still choose the leftmost XFF entry.
+* **M21-05 / M25-05:** `apps/public` never mounted `<AttachmentViewerHost />`, so `openAttachmentViewer` did nothing. Mounted in `SharedView`; `public-api.ts` makes attachment `url`/`downloadUrl`/`thumbnailUrl` absolute (`fileUrl`), since the public app runs on another origin. Copy off (server already strips `url`/`downloadUrl`): the viewer shows the thumbnail or file type and "Downloading is turned off for this file."
+* **M28-17:** `tokenRateLimit` (api-tokens.ts): `apiRatePerTokenRps` from the org's plan (cached 60 s, default 5) per token per second via `hitRateLimit` (Redis, memory fallback); 429 `RATE_LIMITED` + `Retry-After: 1`. `/v1/tables/…` forwards with `x-tableos-relay` = a per-process random secret (`lib/internal-relay.ts`) so the inner request isn't counted twice. Test clients that use tokens (`verify-access`, `verify-r17-phase2`, `verify-r24`) retry on 429.
+* **M29-06:** the API already refused names > 200 and comments > 10,000 with "Invalid request body"; `problemFromError` now puts "Name must be 200 characters or fewer." (or "Comment must be 10,000 …") in `detail`. Web: `NAME_MAX`/`COMMENT_MAX` and `LengthNote` in `app/ui.tsx`; `maxLength` on PromptDialog (workspace/base renames), new base/workspace/table, table tab rename, view rename, automation name and the comment box. Field names stay at 255 (by design).
+* **OTHER-02 (Hussnain):** live had his own account removed (`deactivated`). Re-inviting works, but the invite page only offered "Sign in", signing up again said "Email already registered", and accepting kept the old account type (Admin). Preview returns `hasAccount`; AcceptInvite shows "Sign in to accept" or "Create account to accept" (`/signup?next=`); accept sets the invitation's account type when the membership was `deactivated`; clearer 409 on sign-up.
+* **OTHER-01 (Mahad):** expected while two-factor is required; the page now shows "Signed in as …" and Sign out in the header and an info note that every page (Back, new tabs) opens it until it is set up.
+* **Checks:** `.data/verify-r27.mjs` (29 checks), `.data/r2-shell/r27-ui.mjs` (shared view viewer copy off/on with a working Download, name limit note, invite page, two-factor page). Full regression suite and earlier UI checks green.
 
 ## v0.16.5: field names in API responses
 

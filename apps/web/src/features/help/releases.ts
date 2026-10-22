@@ -8,6 +8,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.6",
+    date: "2026-10-22",
+    title: "Safer share links, attachments on shared views, API rate limit.",
+    items: [
+      "Wrong passwords on a share link warn on attempts 3–4 and lock it for 15 minutes on the 5th; Owners are alerted with the visitor’s real IP.",
+      "Attachments on shared views open in a viewer; Download appears when copying is allowed.",
+      "API tokens are limited to 5 requests per second on Free and 20 on Team.",
+      "Name and comment boxes stop at their limits (200 and 10,000 characters) with a clear message.",
+      "Invitations say whether to sign in or create an account; the two-factor setup page shows Sign out at the top.",
+    ],
+  },
+  {
     version: "0.16.5",
     date: "2026-10-22",
     title: "Field names in API responses.",

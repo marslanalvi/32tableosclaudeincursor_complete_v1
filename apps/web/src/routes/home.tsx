@@ -13,6 +13,8 @@ import {
   ConfirmDialog,
   Dialog,
   DropdownMenu,
+  LengthNote,
+  NAME_MAX,
   PromptDialog,
   uiStyles,
 } from "../app/ui.tsx";
@@ -106,9 +108,11 @@ function CreateBaseDialog({
             className={uiStyles.input}
             value={name}
             autoFocus
+            maxLength={NAME_MAX}
             onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => setName(e.target.value)}
           />
+          <LengthNote length={name.length} max={NAME_MAX} />
         </div>
         {workspaces.length > 1 ? (
           <div className={uiStyles.field}>
@@ -204,9 +208,11 @@ function CreateWorkspaceDialog({
             className={uiStyles.input}
             value={name}
             autoFocus
+            maxLength={NAME_MAX}
             onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => setName(e.target.value)}
           />
+          <LengthNote length={name.length} max={NAME_MAX} />
         </div>
         {orgs.length > 1 ? (
           <div className={uiStyles.field}>

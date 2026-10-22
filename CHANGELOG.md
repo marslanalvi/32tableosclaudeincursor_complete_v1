@@ -8,6 +8,34 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.6] - 2026-10-22
+
+Fix phase 2 of the team's test round (sharing, sign-in security and limits).
+
+### Fixed
+- **Wrong passwords on share links never warned or locked** (M25-06). Behind Cloudflare and Render the
+  server saw a different internal proxy address on each request, so attempts were counted per proxy
+  and never reached 3 or 5. The server now trusts the proxy and uses Cloudflare's visitor IP
+  (`CF-Connecting-IP`), so warnings on attempts 3–4, the 15-minute lock on the 5th and the Owner
+  alerts work, and alerts, lockouts, audit entries and token "last used" show the real IP. The same fix
+  applies to sign-in lockouts and every other per-IP limit.
+- **Attachments couldn't be opened on shared views** (M21-05, M25-05): the shared page never mounted the
+  file viewer. Clicking an attachment now opens it; with "Allow copying data" on it shows Open and
+  Download, with it off it says downloading is turned off. File links work from the shared site's
+  own domain.
+- **Over-long names and comments** (M29-06): name boxes (workspace, base, table, view, automation) stop
+  at 200 characters and comments at 10,000, with a note at the limit; the API's refusal now says
+  "Name must be 200 characters or fewer." instead of "Invalid request body".
+- **Inviting someone again after removing them** (Hussnain): the invitation page says whether the email
+  already has an account ("Sign in to accept") or needs one ("Create account to accept"), and the person
+  comes back with the new invitation's account type instead of their old one.
+- **Two-factor setup page felt like a dead end** (Mahad): it shows who is signed in with Sign out at the
+  top and explains that every page opens it until two-factor is set up.
+
+### Added
+- **Per-token API rate limit** from the plan (M28-17): Free 5, Team 20 requests per second; over that,
+  429 with `Retry-After` and the limit in the message.
+
 ## [0.16.5] - 2026-10-22
 
 ### Changed

@@ -7,7 +7,8 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import type { AppContext } from "../lib/app-context.js";
 import { currentRequestContext } from "../kernel/request-context.js";
 import { blockedOrgsForDevice, ensureDeviceKey } from "../modules/access/devices.js";
-import { API_TOKEN_PREFIX, TOKEN_ROUTES_HINT, normalizeApiPath, requiredScope, resolveApiToken } from "../modules/access/api-tokens.js";
+import { API_TOKEN_PREFIX, TOKEN_ROUTES_HINT, normalizeApiPath, requiredScope, resolveApiToken, tokenRateLimit } from "../modules/access/api-tokens.js";
+import { isInternalRelay } from "../lib/internal-relay.js";
 import { SESSION_IDLE_DAYS, setSessionCookie } from "../modules/auth/session.js";
 import { allowedBeforeMfa, mfaRequired } from "../modules/auth/mfa-policy.js";
 import { sendApiError, unauthorized } from "./errors.js";
@@ -109,6 +110,17 @@ export async function authHook(
       if (!token.scopes.includes(scope)) {
         sendApiError(request, reply, 403, "FORBIDDEN", `This token doesn't have the "${scope}" permission`);
         return;
+      }
+      if (!isInternalRelay(request.headers)) {
+        const rate = await tokenRateLimit(ctx, token);
+        if (rate.retryAfterSec > 0) {
+          void reply.header("retry-after", String(rate.retryAfterSec));
+          sendApiError(request, reply, 429, "RATE_LIMITED", `This token can make ${rate.limit} requests per second on your plan. Wait a moment and retry.`, {
+            limitPerSecond: rate.limit,
+            retryAfterSec: rate.retryAfterSec,
+          });
+          return;
+        }
       }
       request.user = { id: token.userId, email: token.email, displayName: token.displayName, sessionId: "" };
       request.apiTokenId = token.id;

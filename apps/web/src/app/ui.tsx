@@ -103,6 +103,17 @@ export function ConfirmDialog({
   );
 }
 
+/** Longest name the server accepts for workspaces, bases, tables, views and automations. */
+export const NAME_MAX = 200;
+/** Longest comment the server accepts. */
+export const COMMENT_MAX = 10_000;
+
+/** Shown under a text box once it is full, so a pasted text that got cut off isn't a surprise. */
+export function LengthNote({ length, max, what = "Names" }: { length: number; max: number; what?: string }) {
+  if (length < max) return null;
+  return <p className={styles.muted}>{`${what} can be up to ${max.toLocaleString("en-US")} characters.`}</p>;
+}
+
 export function PromptDialog({
   title,
   label,
@@ -110,6 +121,7 @@ export function PromptDialog({
   confirmLabel = "Save",
   busy,
   error,
+  maxLength = NAME_MAX,
   onSubmit,
   onClose,
   children,
@@ -120,6 +132,7 @@ export function PromptDialog({
   confirmLabel?: string;
   busy?: boolean;
   error?: string | null;
+  maxLength?: number;
   onSubmit: (value: string) => void;
   onClose: () => void;
   children?: ReactNode;
@@ -168,9 +181,11 @@ export function PromptDialog({
               style={{ marginTop: 6 }}
               value={value}
               autoFocus
+              maxLength={maxLength}
               onChange={(e) => setValue(e.target.value)}
             />
           </label>
+          <LengthNote length={value.length} max={maxLength} />
         </div>
         {children}
         {error ? <p className={styles.error}>{error}</p> : null}

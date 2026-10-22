@@ -156,11 +156,29 @@ export interface QueryRecordsBody {
   cursor?: string | null;
 }
 
-export function queryRecords(token: string, body: QueryRecordsBody) {
-  return call<{ records: PublicRecord[]; nextCursor: string | null }>(token, "/records/query", {
+/** Attachment links from the API can be relative ("/v1/…"); this app is served from another origin. */
+function withAbsoluteFileUrls(rec: PublicRecord): PublicRecord {
+  const fields: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(rec.fields)) {
+    fields[k] =
+      Array.isArray(v) && v.every((x) => x && typeof x === "object" && "filename" in x)
+        ? v.map((a: Record<string, unknown>) => ({
+            ...a,
+            url: fileUrl(a["url"] as string | null),
+            downloadUrl: fileUrl(a["downloadUrl"] as string | null),
+            thumbnailUrl: a["thumbnailUrl"] ? fileUrl(a["thumbnailUrl"] as string) : null,
+          }))
+        : v;
+  }
+  return { ...rec, fields };
+}
+
+export async function queryRecords(token: string, body: QueryRecordsBody) {
+  const res = await call<{ records: PublicRecord[]; nextCursor: string | null }>(token, "/records/query", {
     method: "POST",
     json: body,
   });
+  return { ...res, records: res.records.map(withAbsoluteFileUrls) };
 }
 
 export function fetchRecord(token: string, recordId: string, scope: { tableId?: string; viewId?: string } = {}) {
@@ -168,7 +186,9 @@ export function fetchRecord(token: string, recordId: string, scope: { tableId?: 
   if (scope.tableId) qs.set("tableId", scope.tableId);
   if (scope.viewId) qs.set("viewId", scope.viewId);
   const q = qs.toString();
-  return call<{ record: PublicRecord }>(token, `/records/${encodeURIComponent(recordId)}${q ? `?${q}` : ""}`);
+  return call<{ record: PublicRecord }>(token, `/records/${encodeURIComponent(recordId)}${q ? `?${q}` : ""}`).then((r) => ({
+    record: withAbsoluteFileUrls(r.record),
+  }));
 }
 
 export function submitShareForm(token: string, fields: Record<string, unknown>) {

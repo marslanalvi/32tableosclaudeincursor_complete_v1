@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import cookie from "@fastify/cookie";
 import { SESSION_COOKIE_NAME } from "@tabula/auth";
 import cors from "@fastify/cors";
@@ -75,6 +76,17 @@ export async function buildFastify(ctx: AppContext) {
     bodyLimit: 50 * 1024 * 1024,
     // API clients often send `https://host//v1/…` (base URL ending in "/") or a trailing slash.
     routerOptions: { ignoreTrailingSlash: true, ignoreDuplicateSlashes: true },
+    // Production sits behind Cloudflare and Render's proxy; without this request.ip is a 10.x proxy
+    // address that changes per request, which breaks per-IP lockouts and alerts.
+    trustProxy: true,
+  });
+
+  // request.ip is read from X-Forwarded-For on each access. Cloudflare's CF-Connecting-IP is set
+  // (and overwritten) by Cloudflare itself, so a visitor can't fake it the way they can a leftmost
+  // X-Forwarded-For entry.
+  app.addHook("onRequest", async (request) => {
+    const cf = request.headers["cf-connecting-ip"];
+    if (typeof cf === "string" && isIP(cf.trim())) request.raw.headers["x-forwarded-for"] = cf.trim();
   });
 
   setAuditLogger(ctx.log);

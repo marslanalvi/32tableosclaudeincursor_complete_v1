@@ -169,7 +169,7 @@ export async function registerAuthRoutes(
         SELECT id FROM core.users WHERE email_normalized = ${emailNormalized} LIMIT 1
       `.execute(ctx.db);
       if (existing.rows[0]) {
-        sendApiError(request, reply, 409, "CONFLICT", "Email already registered");
+        sendApiError(request, reply, 409, "CONFLICT", "An account with this email already exists. Sign in with it instead.");
         return;
       }
 

@@ -39,6 +39,8 @@ export interface InvitationPreview {
   /** Account type after accepting: member, admin or owner. */
   orgRole?: string;
   organizationName?: string | null;
+  /** The invited email already has a TableOS account (sign in rather than sign up). */
+  hasAccount?: boolean;
 }
 
 /** Login either signs in (`user`) or asks for the second factor. */

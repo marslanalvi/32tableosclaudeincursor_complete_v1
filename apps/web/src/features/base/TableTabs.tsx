@@ -9,7 +9,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import type { BaseDetail, TableDto } from "../../lib/api.ts";
 import { api } from "../../lib/api.ts";
 import { shellApi } from "../../lib/api-areas/shell.ts";
-import { ConfirmDialog, Dialog, uiStyles } from "../../app/ui.tsx";
+import { ConfirmDialog, Dialog, NAME_MAX, uiStyles } from "../../app/ui.tsx";
 import { toast, errorMessage } from "../../app/toast.tsx";
 import { FloatingPanel } from "./floating.tsx";
 import { fitTabs, moveId } from "./tab-fit.ts";
@@ -114,6 +114,7 @@ function InlineRename({
       value={value}
       size={Math.max(4, value.length + 1)}
       aria-label="Table name"
+      maxLength={NAME_MAX}
       onChange={(e) => setValue(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
@@ -241,6 +242,7 @@ function AddTableDialog({
             className={uiStyles.input}
             value={name}
             autoFocus
+            maxLength={NAME_MAX}
             onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => {
               nameTouched.current = true;

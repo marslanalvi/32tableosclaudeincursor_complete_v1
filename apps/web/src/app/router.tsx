@@ -306,6 +306,9 @@ const inviteRoute = createRoute({
         onSignIn={() =>
           void navigate({ to: "/login", search: { next: `/invite/${encodeURIComponent(token)}` } })
         }
+        onSignUp={() =>
+          void navigate({ to: "/signup", search: { next: `/invite/${encodeURIComponent(token)}` } })
+        }
       />
     );
   },

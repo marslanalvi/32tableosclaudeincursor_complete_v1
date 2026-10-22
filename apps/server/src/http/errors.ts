@@ -267,18 +267,29 @@ export function mapPgError(err: unknown): ApiError | null {
   }
 }
 
+const FIELD_LABELS: Record<string, string> = { name: "Name", body: "Comment", description: "Description", title: "Title" };
+
+/** Readable text for zod's default "String must contain at most N character(s)". */
+function zodIssueMessage(e: ZodError["errors"][number]): string {
+  if (e.code === "too_big" && e.type === "string") {
+    const key = String(e.path[e.path.length - 1] ?? "");
+    const label = FIELD_LABELS[key] ?? (key ? key.charAt(0).toUpperCase() + key.slice(1) : "This text");
+    return `${label} must be ${Number(e.maximum).toLocaleString("en-US")} characters or fewer.`;
+  }
+  return e.message;
+}
+
 /** Map any thrown value to a problem document; null means "unexpected" (500). */
 export function problemFromError(err: unknown): TabulaError | null {
   if (err instanceof ApiError) {
     return apiProblem(err.status, err.code, err.message, err.meta);
   }
   if (err instanceof ZodError) {
+    const errors = err.errors.map((e) => ({ field: e.path.join("."), message: zodIssueMessage(e) }));
+    const tooLong = err.errors.find((e) => e.code === "too_big" && e.type === "string");
     return createTabulaError(TabulaErrorCodes.VALIDATION_FAILED, {
-      detail: "Invalid request body",
-      errors: err.errors.map((e) => ({
-        field: e.path.join("."),
-        message: e.message,
-      })),
+      detail: tooLong ? zodIssueMessage(tooLong) : "Invalid request body",
+      errors,
     });
   }
   if (err instanceof PublicIdError) {

@@ -5,6 +5,7 @@ import { parsePid, pid } from "../../lib/public-ids.js";
 import { ApiError, handleRouteError } from "../../http/errors.js";
 import { compileForUser } from "../access/compile.js";
 import { normalizeApiPath } from "../access/api-tokens.js";
+import { INTERNAL_RELAY_HEADER, INTERNAL_RELAY_SECRET } from "../../lib/internal-relay.js";
 
 const HOP_BY_HOP = new Set(["host", "content-length", "connection", "transfer-encoding", "keep-alive"]);
 
@@ -14,6 +15,7 @@ function callerHeaders(request: FastifyRequest): Record<string, string> {
     if (v === undefined || HOP_BY_HOP.has(k)) continue;
     headers[k] = Array.isArray(v) ? v.join(", ") : v;
   }
+  headers[INTERNAL_RELAY_HEADER] = INTERNAL_RELAY_SECRET;
   return headers;
 }
 
