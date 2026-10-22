@@ -15,6 +15,8 @@ export interface TableLike {
   name: string;
   primaryFieldId?: string | undefined;
   fields: FieldLike[];
+  /** Read-only copy of a table in another base (it can't hold links). */
+  synced?: boolean | undefined;
 }
 
 export interface SelectOption {

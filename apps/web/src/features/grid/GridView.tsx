@@ -83,6 +83,8 @@ export interface GridViewProps {
   sorts: ViewConfig["sorts"];
   groups: ViewConfig["groups"];
   search: string;
+  /** Bumped by Enter / Shift+Enter in the search box: move to the next / previous matching cell. */
+  searchStep?: { n: number; dir: 1 | -1 } | undefined;
   hiddenFieldIds: string[];
   fieldOrder: string[];
   fieldWidths: Record<string, number>;
@@ -147,6 +149,7 @@ export function GridView(props: GridViewProps) {
     sorts,
     groups,
     search,
+    searchStep,
     hiddenFieldIds,
     fieldOrder,
     fieldWidths,
@@ -551,6 +554,50 @@ export function GridView(props: GridViewProps) {
     },
     [itemIndexByNav, offsets, rowH, colLayout],
   );
+
+  // Cells in the loaded rows whose text contains the search term (highlighted; Enter steps through them).
+  const cellMatches = useMemo(() => {
+    const q = term.toLowerCase();
+    if (!q) return [] as Cell[];
+    const out: Cell[] = [];
+    for (const rec of navRows) {
+      for (const f of columns) {
+        if (cellValueToText(f, rec.fields[f.id]).toLowerCase().includes(q)) out.push({ r: rec.id, f: f.id });
+      }
+    }
+    return out;
+  }, [term, navRows, columns]);
+  const matchKeys = useMemo(() => new Set(cellMatches.map((m) => `${m.r}:${m.f}`)), [cellMatches]);
+  const [matchIdx, setMatchIdx] = useState(-1);
+  useEffect(() => setMatchIdx(-1), [term]);
+  const goToMatch = useCallback(
+    (i: number) => {
+      const m = cellMatches[i];
+      if (!m) return;
+      setMatchIdx(i);
+      setActive(m);
+      setAnchor(m);
+      const nav = navIndexById.get(m.r);
+      const col = colIndexById.get(m.f);
+      if (nav !== undefined && col !== undefined) scrollIntoView(nav, col);
+    },
+    [cellMatches, navIndexById, colIndexById, scrollIntoView],
+  );
+  const stepMatch = useCallback(
+    (dir: 1 | -1) => {
+      if (!cellMatches.length) return;
+      const n = cellMatches.length;
+      goToMatch(matchIdx < 0 ? (dir === 1 ? 0 : n - 1) : (matchIdx + dir + n) % n);
+    },
+    [cellMatches.length, matchIdx, goToMatch],
+  );
+  const lastStep = useRef(searchStep?.n ?? 0);
+  useEffect(() => {
+    if (!searchStep || searchStep.n === lastStep.current) return;
+    lastStep.current = searchStep.n;
+    stepMatch(searchStep.dir);
+  }, [searchStep, stepMatch]);
+  const currentMatch = matchIdx >= 0 ? cellMatches[matchIdx] : undefined;
 
   const firstFieldMatch = fieldMatchIds[0];
   useEffect(() => {
@@ -1452,6 +1499,8 @@ export function GridView(props: GridViewProps) {
             wrap ? styles.cellWrap : "",
             peer ? styles.peerCell : "",
             peerEditor ? styles.peerEditing : "",
+            matchKeys.has(`${rec.id}:${f.id}`) ? styles.searchHit : "",
+            currentMatch && currentMatch.r === rec.id && currentMatch.f === f.id ? styles.searchHitCurrent : "",
           ].join(" ");
           return (
             <div key={f.id} className={cls} style={style} data-cell="1" data-r={rec.id} data-f={f.id}>
@@ -1593,11 +1642,28 @@ export function GridView(props: GridViewProps) {
   return (
     <FieldUiServicesProvider value={services}>
       <div className={styles.root}>
-        {fieldMatchIds.length > 0 ? (
+        {fieldMatchIds.length > 0 || cellMatches.length > 0 ? (
           <div className={styles.searchHint} role="status">
-            {fieldMatchIds.length === 1 ? "Matching field:" : `${fieldMatchIds.length} matching fields:`}{" "}
-            <b>{fieldMatchIds.map((id) => columns.find((f) => f.id === id)?.name).join(", ")}</b>
-            {onlyFieldMatch ? <span>· no cell contains “{searchTerm}”, showing all records</span> : null}
+            {cellMatches.length > 0 ? (
+              <span className={styles.searchNav}>
+                {currentMatch ? `${matchIdx + 1} of ${cellMatches.length}` : cellMatches.length} matching cell{cellMatches.length === 1 ? "" : "s"}
+                {hasMore ? " in the loaded rows" : ""}
+                <button type="button" className={styles.searchNavBtn} aria-label="Previous match" title="Previous match (Shift+Enter)" onClick={() => stepMatch(-1)}>
+                  ↑
+                </button>
+                <button type="button" className={styles.searchNavBtn} aria-label="Next match" title="Next match (Enter)" onClick={() => stepMatch(1)}>
+                  ↓
+                </button>
+              </span>
+            ) : null}
+            {fieldMatchIds.length > 0 ? (
+              <span>
+                {cellMatches.length > 0 ? " · " : ""}
+                {fieldMatchIds.length === 1 ? "Matching field:" : `${fieldMatchIds.length} matching fields:`}{" "}
+                <b>{fieldMatchIds.map((id) => columns.find((f) => f.id === id)?.name).join(", ")}</b>
+                {onlyFieldMatch ? <span> · no cell contains “{searchTerm}”, showing all records</span> : null}
+              </span>
+            ) : null}
           </div>
         ) : null}
         <div

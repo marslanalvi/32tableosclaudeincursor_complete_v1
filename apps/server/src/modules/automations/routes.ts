@@ -7,6 +7,7 @@ import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import {
+  actionRefusedText,
   forbidden,
   handleRouteError,
   notFound,
@@ -161,7 +162,7 @@ export async function registerAutomationsRoutes(
       return null;
     }
     if (!authorize(snap, action)) {
-      forbidden(request, reply, `Missing permission: ${action}`);
+      forbidden(request, reply, actionRefusedText(action));
       return null;
     }
     return {

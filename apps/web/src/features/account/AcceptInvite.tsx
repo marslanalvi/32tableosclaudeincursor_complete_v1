@@ -26,11 +26,14 @@ export function AcceptInvite({
   token,
   onDone,
   onSignIn,
+  onSignUp,
 }: {
   token: string;
   onDone: (target: { baseId: string | null; workspaceId: string | null }) => void;
   /** Called when the visitor isn't signed in; route to /login?next=/invite/<token>. */
   onSignIn: () => void;
+  /** Same, for an email with no account yet; route to /signup?next=/invite/<token>. */
+  onSignUp: () => void;
 }) {
   const queryClient = useQueryClient();
   const preview = useQuery({
@@ -95,11 +98,18 @@ export function AcceptInvite({
                     : "This invitation was revoked."}
               </div>
             ) : !signedIn ? (
-              <div className={styles.actions}>
-                <button type="button" className={styles.primary} onClick={onSignIn}>
-                  Sign in to accept
-                </button>
-              </div>
+              <>
+                <p className={styles.muted}>
+                  {inv.hasAccount
+                    ? `${inv.email} already has a TableOS account. Sign in with it to accept, even if you were removed before.`
+                    : `Create a TableOS account with ${inv.email} to accept.`}
+                </p>
+                <div className={styles.actions}>
+                  <button type="button" className={styles.primary} onClick={inv.hasAccount ? onSignIn : onSignUp}>
+                    {inv.hasAccount ? "Sign in to accept" : "Create account to accept"}
+                  </button>
+                </div>
+              </>
             ) : wrongAccount ? (
               <div role="alert" className={styles.error}>
                 You’re signed in as {myEmail}. Sign in as {inv.email} to accept this invitation.

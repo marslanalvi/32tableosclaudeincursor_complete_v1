@@ -211,7 +211,7 @@ export function InviteForm({
           </span>
         </div>
       ) : null}
-      {invite.isError ? <div className={account.error}>{errorText(invite.error)}</div> : null}
+      {invite.isError ? <div className={`${account.error} ${styles.full}`}>{errorText(invite.error)}</div> : null}
       {link ? (
         <div className={`${account.ok} ${styles.full}`}>
           Invitation sent. You can also share this link: <code className={account.code}>{link}</code>{" "}
@@ -400,13 +400,22 @@ function MemberCard({ orgId, member, data }: { orgId: string; member: OrgMember;
   const iAmOwner = data.me?.role === "owner";
   const pending = member.devices.filter((d) => d.status === "pending").length;
   const approved = member.devices.filter((d) => d.status === "approved").length;
+  const other = member.otherGrantCount ?? 0;
+  const prefix = member.orgRole === "admin" ? "Admin · " : "";
+  const ROLE_WORD: Record<string, string> = { owner: "Owner", creator: "Creator", editor: "Editor", commenter: "Commenter", viewer: "Viewer" };
   const summary = member.isOwner
     ? "Owner · full access to everything"
-    : member.grants.length === 0
-      ? member.orgRole === "admin"
-        ? "Admin · no workspaces or bases given yet"
-        : "No access yet"
-      : `${member.orgRole === "admin" ? "Admin · " : ""}${member.grants.length} access rule${member.grants.length === 1 ? "" : "s"}`;
+    : member.isMe && member.ownAccess
+      ? member.ownAccess.length === 0
+        ? `${prefix}no workspaces or bases given yet`
+        : `${prefix}your access: ${member.ownAccess.map((a) => `${ROLE_WORD[a.role] ?? a.role} on ${a.name}`).join(", ")}`
+      : member.grants.length === 0 && other === 0
+        ? member.orgRole === "admin"
+          ? "Admin · no workspaces or bases given yet"
+          : "No access yet"
+        : `${prefix}${member.grants.length ? `${member.grants.length} access rule${member.grants.length === 1 ? "" : "s"}` : ""}${
+            other ? `${member.grants.length ? " + " : ""}access to ${other} workspace${other === 1 ? "" : "s"} or base${other === 1 ? "" : "s"} you don't manage` : ""
+          }`;
   return (
     <li className={styles.member}>
       <div className={styles.memberHead}>

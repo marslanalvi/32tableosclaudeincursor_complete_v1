@@ -59,6 +59,15 @@
   text-align: center;
 }
 
+button.kbd {
+  cursor: pointer;
+}
+
+button.kbd:hover {
+  color: var(--tabula-color-text);
+  border-color: var(--tabula-color-text-muted);
+}
+
 .results {
   list-style: none;
   margin: 0;

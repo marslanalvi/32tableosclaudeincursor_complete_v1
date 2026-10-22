@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ViewDto } from "../../lib/api.ts";
 import { viewsApi, type ViewVisibility, type ViewWire } from "../../lib/api-areas/views.ts";
 import { toast } from "../../app/toast.tsx";
+import { NAME_MAX } from "../../app/ui.tsx";
 import { useBaseRole } from "../grid/field-services.tsx";
 import { VIEW_CREATE_OPTIONS, type ViewKind } from "./view-types.ts";
 import { patchViewInCaches, setViewsInCaches } from "./view-utils.ts";
@@ -339,6 +340,7 @@ export function ViewsSidebar({
             className={styles.renameInput}
             autoFocus
             aria-label="View name"
+            maxLength={NAME_MAX}
             value={renameText}
             onChange={(e) => setRenameText(e.target.value)}
             onFocus={(e) => e.target.select()}
@@ -536,10 +538,10 @@ export function ViewsSidebar({
         <button
           type="button"
           className={styles.newViewBtn}
-          aria-label="Create a new view"
-          title={canCreatePersonal ? "Create a new view" : "Viewers can't create views"}
-          disabled={!canCreatePersonal}
-          onClick={() => setCreateSection(true)}
+          aria-label="Create a grid view"
+          title={canCreatePersonal ? "Create a grid view (other types: Create… below)" : "Viewers can't create views"}
+          disabled={!canCreatePersonal || creating !== null}
+          onClick={() => void createView("grid")}
         >
           +
         </button>

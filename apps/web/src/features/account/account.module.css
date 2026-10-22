@@ -170,7 +170,8 @@
 }
 
 .error,
-.ok {
+.ok,
+.info {
   padding: var(--tabula-space-2) var(--tabula-space-3);
   border-radius: var(--tabula-radius-sm);
   font-size: 13px;
@@ -182,6 +183,17 @@
 .ok {
   background: #e6f4e7;
   color: var(--tabula-color-success);
+}
+.info {
+  background: #eef4ff;
+  color: #1d3f7a;
+}
+
+.headerAside {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--tabula-space-3);
 }
 
 .statusRow {

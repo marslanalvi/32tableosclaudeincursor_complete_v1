@@ -1,6 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { TabulaDb } from "@tabula/db";
 import { sql } from "kysely";
+import type { AppContext } from "../../lib/app-context.js";
+import { LimitsService } from "../billing/limits-service.js";
+import { hitRateLimit } from "../share/service.js";
 
 /** Personal access tokens issued by an org Owner or Admin (`Authorization: Bearer tos_…`). */
 export const API_TOKEN_PREFIX = "tos_";
@@ -67,6 +70,35 @@ export async function resolveApiToken(db: TabulaDb, raw: string, ip: string | nu
     scopes: row.scopes,
     baseIds: row.base_ids,
   };
+}
+
+const DEFAULT_TOKEN_RPS = 5;
+const PLAN_CACHE_MS = 60_000;
+const planRps = new Map<string, { rps: number; at: number }>();
+
+async function tokenRps(ctx: AppContext, orgId: string): Promise<number> {
+  const hit = planRps.get(orgId);
+  if (hit && Date.now() - hit.at < PLAN_CACHE_MS) return hit.rps;
+  let rps = DEFAULT_TOKEN_RPS;
+  try {
+    const v = (await new LimitsService(ctx.db).getOrgPlan(orgId)).limits["apiRatePerTokenRps"];
+    if (typeof v === "number" && v > 0) rps = v;
+  } catch {
+    // Keep the default when the plan can't be read.
+  }
+  planRps.set(orgId, { rps, at: Date.now() });
+  return rps;
+}
+
+/**
+ * Per-token requests per second from the org's plan (Free 5, Team 20). Returns 0 when the request
+ * may go ahead, otherwise the seconds to wait.
+ */
+export async function tokenRateLimit(ctx: AppContext, token: Pick<ResolvedApiToken, "id" | "orgId">): Promise<{ retryAfterSec: number; limit: number }> {
+  const limit = await tokenRps(ctx, token.orgId);
+  const second = Math.floor(Date.now() / 1000);
+  const over = await hitRateLimit(ctx, `apitok:${token.id}:${second}`, limit, 2);
+  return { retryAfterSec: over ? 1 : 0, limit };
 }
 
 const RECORDS = /^\/v1\/(?:bases\/[^/]+\/)?tables\/[^/]+\/records(\/.*)?$/;

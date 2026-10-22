@@ -30,7 +30,7 @@ const Note = ({ children }: { children: ReactNode }) => <div className={s.note}>
 const Warn = ({ children }: { children: ReactNode }) => <div className={s.warn}>{children}</div>;
 const Pre = ({ children }: { children: string }) => <pre className={s.pre}>{children}</pre>;
 
-const STATUS_TEXT: Record<number, string> = { 200: "OK", 201: "Created", 204: "No Content", 401: "Unauthorized", 403: "Forbidden", 409: "Conflict", 422: "Unprocessable Entity" };
+const STATUS_TEXT: Record<number, string> = { 200: "OK", 201: "Created", 204: "No Content", 401: "Unauthorized", 403: "Forbidden", 409: "Conflict", 422: "Unprocessable Entity", 429: "Too Many Requests" };
 
 function ApiSampleBlock({ sample }: { sample: ApiSample }) {
   return (
@@ -967,7 +967,7 @@ const { records, nextCursor } = await res.json();`}</Pre>
             ["404", "The base, table or record doesn’t exist, or the token can’t see it."],
             ["409", "The record changed since you read it (when you send a version)."],
             ["423", "The account or shared link is locked after too many wrong passwords; see the retry-after header."],
-            ["429", "Too many requests; wait and retry."],
+            ["429", "Too many requests: each token may make 5 requests per second on the Free plan, 20 on Team. Wait for the retry-after header (seconds) and retry."],
           ]}
         />
         <p>

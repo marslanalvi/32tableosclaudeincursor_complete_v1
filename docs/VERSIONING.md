@@ -82,4 +82,6 @@ Tags `v0.1.0`–`v0.7.0` were added to existing commits when versioning was intr
 `v0.16.2`: short BullMQ job history (Redis OOM), realtime tickets fall back to memory;
 `v0.16.3`: fix phase 1 of the test round — Esc cancels long-text edits, multi-line JSON paste stays in one cell and invalid JSON is refused, real version in production builds, `GET /v1/tables/{tableId}` and `GET …/records`, API tolerant of `//`, trailing slashes and bare tokens with clearer errors, "Via API" in record history;
 `v0.16.4`: sample request/response JSON for every endpoint and for errors in Help → API reference;
-`v0.16.5`: API-token responses keyed by field name with option names (`returnFieldsByFieldId=true` for IDs)).
+`v0.16.5`: API-token responses keyed by field name with option names (`returnFieldsByFieldId=true` for IDs);
+`v0.16.6`: fix phase 2 — real visitor IP behind Cloudflare/Render (share and sign-in lockouts, alerts), attachment viewer on shared views, per-token rate limit, name/comment limits, re-invite after removal, two-factor page Sign out;
+`v0.16.7`: fix phases 3 and 4 — undo/redo of field type and options changes with values, email/phone validation, lookup guidance, cell search highlights with next/previous, palette Esc, interface form Submit, + creates a view, return to the page after sign-in, invite row wraps, plain-language permission refusals, Members & access summaries).

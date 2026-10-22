@@ -270,7 +270,7 @@ export const API_SAMPLES: ApiSample[] = [
     path: "/v1/version",
     tokenType: "none",
     status: 200,
-    response: { name: "TableOS", version: "0.16.5", commit: "7f47bce", startedAt: "2026-10-22T08:16:19.474Z" },
+    response: { name: "TableOS", version: "0.16.7", commit: "7f47bce", startedAt: "2026-10-22T08:16:19.474Z" },
   },
 ];
 
@@ -346,6 +346,24 @@ export const API_ERROR_SAMPLES: ApiSample[] = [
       detail: 'This token doesn\'t have the "write" permission',
       type: "https://tabula.dev/errors/forbidden",
       requestId: "06d3c750-8d65-4ef4-a265-64b6513622b0",
+    },
+  },
+  {
+    id: "err-rate",
+    title: "429: too many requests",
+    method: "GET",
+    path: `/v1/tables/${TBL}/records`,
+    tokenType: "read",
+    note: "More than the plan's requests per second for one token (Free 5, Team 20). The response has a retry-after header in seconds.",
+    status: 429,
+    response: {
+      code: "RATE_LIMITED",
+      title: "Too many requests",
+      status: 429,
+      detail: "This token can make 5 requests per second on your plan. Wait a moment and retry.",
+      meta: { limitPerSecond: 5, retryAfterSec: 1 },
+      type: "https://tabula.dev/errors/rate-limited",
+      requestId: "3c1d8e72-9b40-4f6a-8d25-61e0a7c4b913",
     },
   },
   {

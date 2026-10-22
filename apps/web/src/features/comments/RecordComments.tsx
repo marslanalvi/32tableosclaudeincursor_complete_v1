@@ -10,6 +10,7 @@ import {
 } from "../../lib/api-areas/collab.ts";
 import { formatBytes, listRecordAttachments, uploadAttachment, type AttachmentWire } from "../../lib/api-areas/files.ts";
 import { ConfirmDialog } from "../grid/Menu.tsx";
+import { COMMENT_MAX, LengthNote } from "../../app/ui.tsx";
 import styles from "./comments.module.css";
 
 const REACTIONS = ["👍", "❤️", "😄", "🎉", "👀", "✅"];
@@ -264,6 +265,7 @@ export function CommentComposer({
         className={styles.textarea}
         value={text}
         rows={2}
+        maxLength={COMMENT_MAX}
         autoFocus={autoFocus}
         placeholder={placeholder}
         aria-label={placeholder}
@@ -306,6 +308,7 @@ export function CommentComposer({
           }
         }}
       />
+      <LengthNote length={text.length} max={COMMENT_MAX} what="Comments" />
       {mention && candidates.length ? (
         <ul className={styles.mentionMenu} role="listbox" aria-label="Mention someone">
           {candidates.map((c, i) => (

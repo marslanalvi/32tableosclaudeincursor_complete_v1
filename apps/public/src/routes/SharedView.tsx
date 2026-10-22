@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fieldTypeIcon, renderCellValue } from "@tabula/field-ui";
+import { AttachmentViewerHost, fieldTypeIcon, renderCellValue } from "@tabula/field-ui";
 import {
   queryRecords,
   type PublicField,
@@ -328,6 +328,7 @@ export function SharedView({ token, share }: { token: string; share: ReadableSha
           onNext={openIndex < records.length - 1 ? () => setOpenId(records[openIndex + 1]!.id) : null}
         />
       ) : null}
+      <AttachmentViewerHost />
     </div>
   );
 }

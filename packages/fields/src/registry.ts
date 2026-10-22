@@ -122,6 +122,11 @@ export function convertCellValue(
   }
   if (intermediate === undefined || intermediate === null || intermediate === "") return {};
   if (Array.isArray(intermediate) && intermediate.length === 0) return {};
+  if (to.type === "checkbox" && from.type !== "checkbox") {
+    // Any non-empty value becomes checked (e.g. a multiple select with options picked).
+    const text = typeof intermediate === "string" ? intermediate.trim().toLowerCase() : null;
+    return text !== null && /^(false|no|0|unchecked)$/.test(text) ? {} : { value: true };
+  }
   try {
     return toDef.normalize(intermediate, to.config, { ...ctx, typecast: true });
   } catch {

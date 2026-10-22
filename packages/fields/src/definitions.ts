@@ -18,6 +18,19 @@ import {
 
 const absent = (): NormalizeResult => ({});
 
+/** name@domain.tld: no spaces, no ".." , a dotted domain ending in letters. */
+export function isValidEmail(s: string): boolean {
+  return /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/.test(s) && !s.includes("..") && !s.startsWith(".") && !s.includes(".@");
+}
+
+/** Phone characters only, and 7–15 digits (E.164) before an optional extension ("x12", "ext. 12", "#12"). */
+export function isValidPhone(s: string): boolean {
+  if (!/^[0-9+().\-\s/xext#*]+$/i.test(s)) return false;
+  const main = s.split(/\s*(?:ext\.?|x|#)\s*\d*$/i)[0] ?? s;
+  const digits = main.replace(/\D/g, "").length;
+  return digits >= 7 && digits <= 15;
+}
+
 // ---------------------------------------------------------------------------
 // Config helpers
 // ---------------------------------------------------------------------------
@@ -629,7 +642,7 @@ export const fieldDefinitions: FieldTypeDefinition[] = [
       if (isEmptyRaw(raw)) return absent();
       const s = asString(raw, 320, "Email", ctx?.typecast).trim();
       if (!s) return absent();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) fieldValidationError("Invalid email address");
+      if (!isValidEmail(s)) fieldValidationError(`"${s.slice(0, 80)}" isn't a valid email address`);
       return { value: s };
     },
   }),
@@ -655,7 +668,7 @@ export const fieldDefinitions: FieldTypeDefinition[] = [
       if (isEmptyRaw(raw)) return absent();
       const s = asString(raw, 64, "Phone", ctx?.typecast).trim();
       if (!s) return absent();
-      if (!/^[0-9+().\-\s/xext#*]+$/i.test(s)) fieldValidationError("Invalid phone number");
+      if (!isValidPhone(s)) fieldValidationError(`"${s.slice(0, 40)}" isn't a valid phone number (7 to 15 digits)`);
       return { value: s };
     },
   }),

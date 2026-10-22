@@ -8,6 +8,31 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.7",
+    date: "2026-10-22",
+    title: "Undo field changes, search that finds cells, clearer permissions.",
+    items: [
+      "Ctrl+Z undoes a field type or options change, bringing back the type, options and every value.",
+      "Search in a view highlights matching cells; Enter and Shift+Enter move between them.",
+      "Email and phone fields refuse invalid values with a clear message.",
+      "Lookups, rollups and counts explain how to add the link they need.",
+      "Interface forms show their Submit button; the + next to “Find a view” creates a grid view.",
+      "Signing back in returns you to the page you were on; refusals say which role is needed.",
+    ],
+  },
+  {
+    version: "0.16.6",
+    date: "2026-10-22",
+    title: "Safer share links, attachments on shared views, API rate limit.",
+    items: [
+      "Wrong passwords on a share link warn on attempts 3–4 and lock it for 15 minutes on the 5th; Owners are alerted with the visitor’s real IP.",
+      "Attachments on shared views open in a viewer; Download appears when copying is allowed.",
+      "API tokens are limited to 5 requests per second on Free and 20 on Team.",
+      "Name and comment boxes stop at their limits (200 and 10,000 characters) with a clear message.",
+      "Invitations say whether to sign in or create an account; the two-factor setup page shows Sign out at the top.",
+    ],
+  },
+  {
     version: "0.16.5",
     date: "2026-10-22",
     title: "Field names in API responses.",

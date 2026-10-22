@@ -8,6 +8,65 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.7] - 2026-10-22
+
+Fix phases 3 and 4 of the team's test round (fields, linking, undo, search; interfaces, navigation, UI polish).
+
+### Fixed
+- **Ctrl+Z after changing a field's type did nothing useful** (M14-03): undo skipped field changes and
+  reverted an older record edit instead. Field changes are now undoable and redoable: the type, the exact
+  select options and every value come back (up to 20,000 filled cells). Removing select options can be
+  undone too. Converting a multiple select (or any non-empty value) to a checkbox now checks it.
+- **Email and phone weren't really validated** (M11-08): emails need a name, a domain and a top-level
+  domain; phone numbers 7–15 digits (an extension is allowed). Invalid values are refused with a clear
+  message in the grid and the API.
+- **Lookup/rollup/count said "add a link first" with no way forward** (M11-12): the message explains it,
+  offers "Add a link field instead", and on synced tables explains that lookups go in the table that
+  links to them.
+- **View search only pointed at column names** (M15-13): matching cells are highlighted, the bar shows
+  "1 of N matching cells" with ↑/↓, and Enter / Shift+Enter move between matches.
+- **Esc button in the search palette did nothing** (Zoonisha): the Esc chip closes it, and Esc works even
+  when focus has left the search box.
+- **Interface Form element had an invisible Submit button** (M23-05): its colours came from the form
+  view's page, so inside an interface it was white on white.
+- **The + next to "Find a view" did nothing** (M31-03): it opened a section that was already open. It now
+  creates a grid view straight away.
+- **Signing back in after signing out on a base went to Home** (M02-08): you return to the page you were on.
+- **Invite button overflowed the Share dialog** (Hussnain): the invite row wraps.
+- **"Missing permission: base.manage_schema"** (M10-01): refusals are in plain words ("Only Creators and
+  Owners of this base can add or change tables and fields…"), and "+ Add or import" is disabled with that
+  reason for people who can't add tables.
+- **Members & access said "no workspaces or bases given yet" for people who had access** (M10-06): your
+  own row lists your access by name, and other rows count access in places you don't manage.
+
+## [0.16.6] - 2026-10-22
+
+Fix phase 2 of the team's test round (sharing, sign-in security and limits).
+
+### Fixed
+- **Wrong passwords on share links never warned or locked** (M25-06). Behind Cloudflare and Render the
+  server saw a different internal proxy address on each request, so attempts were counted per proxy
+  and never reached 3 or 5. The server now trusts the proxy and uses Cloudflare's visitor IP
+  (`CF-Connecting-IP`), so warnings on attempts 3–4, the 15-minute lock on the 5th and the Owner
+  alerts work, and alerts, lockouts, audit entries and token "last used" show the real IP. The same fix
+  applies to sign-in lockouts and every other per-IP limit.
+- **Attachments couldn't be opened on shared views** (M21-05, M25-05): the shared page never mounted the
+  file viewer. Clicking an attachment now opens it; with "Allow copying data" on it shows Open and
+  Download, with it off it says downloading is turned off. File links work from the shared site's
+  own domain.
+- **Over-long names and comments** (M29-06): name boxes (workspace, base, table, view, automation) stop
+  at 200 characters and comments at 10,000, with a note at the limit; the API's refusal now says
+  "Name must be 200 characters or fewer." instead of "Invalid request body".
+- **Inviting someone again after removing them** (Hussnain): the invitation page says whether the email
+  already has an account ("Sign in to accept") or needs one ("Create account to accept"), and the person
+  comes back with the new invitation's account type instead of their old one.
+- **Two-factor setup page felt like a dead end** (Mahad): it shows who is signed in with Sign out at the
+  top and explains that every page opens it until two-factor is set up.
+
+### Added
+- **Per-token API rate limit** from the plan (M28-17): Free 5, Team 20 requests per second; over that,
+  429 with `Retry-After` and the limit in the message.
+
 ## [0.16.5] - 2026-10-22
 
 ### Changed

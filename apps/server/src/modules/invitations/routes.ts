@@ -420,6 +420,10 @@ export async function registerInvitationRoutes(
           return;
         }
         const dto = inviteDto(row);
+        // Only the invitee holds this token; it tells them to sign in rather than sign up (e.g. after being removed).
+        const account = await sql<{ id: string }>`
+          SELECT id FROM core.users WHERE lower(email) = ${row.email_normalized} AND status = 'active' LIMIT 1
+        `.execute(ctx.db);
         void reply.send({
           invitation: {
             ...dto,
@@ -427,6 +431,7 @@ export async function registerInvitationRoutes(
             baseName: row.base_name,
             organizationName: row.org_name,
             inviterName: row.inviter_name,
+            hasAccount: account.rows.length > 0,
           },
         });
       } catch (err) {
@@ -482,8 +487,10 @@ export async function registerInvitationRoutes(
           ON CONFLICT (org_id, user_id) DO UPDATE SET
             status = 'active',
             updated_at = now(),
-            -- An invitation can raise the account type, never lower it.
+            -- An invitation can raise the account type, never lower it; someone who was removed
+            -- comes back with the type of the new invitation.
             role = CASE
+              WHEN core.organization_members.status = 'deactivated' THEN EXCLUDED.role
               WHEN array_position(${[...ORG_ROLE_ORDER]}::text[], EXCLUDED.role)
                  > array_position(${[...ORG_ROLE_ORDER]}::text[], core.organization_members.role)
               THEN EXCLUDED.role ELSE core.organization_members.role END

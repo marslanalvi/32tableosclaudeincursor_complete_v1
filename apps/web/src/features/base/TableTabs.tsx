@@ -9,9 +9,10 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import type { BaseDetail, TableDto } from "../../lib/api.ts";
 import { api } from "../../lib/api.ts";
 import { shellApi } from "../../lib/api-areas/shell.ts";
-import { ConfirmDialog, Dialog, uiStyles } from "../../app/ui.tsx";
+import { ConfirmDialog, Dialog, NAME_MAX, uiStyles } from "../../app/ui.tsx";
 import { toast, errorMessage } from "../../app/toast.tsx";
 import { FloatingPanel } from "./floating.tsx";
+import { useBaseRole } from "../grid/field-services.tsx";
 import { fitTabs, moveId } from "./tab-fit.ts";
 import styles from "./base-shell.module.css";
 
@@ -114,6 +115,7 @@ function InlineRename({
       value={value}
       size={Math.max(4, value.length + 1)}
       aria-label="Table name"
+      maxLength={NAME_MAX}
       onChange={(e) => setValue(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
@@ -241,6 +243,7 @@ function AddTableDialog({
             className={uiStyles.input}
             value={name}
             autoFocus
+            maxLength={NAME_MAX}
             onFocus={(e) => e.currentTarget.select()}
             onChange={(e) => {
               nameTouched.current = true;
@@ -743,6 +746,8 @@ export function TableTabs({
   onOpenAddHandled?: () => void;
 }) {
   const qc = useQueryClient();
+  // Adding tables needs the Creator role on this base (an Admin may be only an Editor here).
+  const canAddTables = useBaseRole(baseId).canEditSchema !== false;
   const [renaming, setRenaming] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<TableDto | null>(null);
   const [adding, setAdding] = useState<AddMode | null>(null);
@@ -1044,7 +1049,8 @@ export function TableTabs({
         type="button"
         className={styles.addTable}
         onClick={() => setAdding("blank")}
-        title="Add or import a table"
+        disabled={!canAddTables}
+        title={canAddTables ? "Add or import a table" : "Only Creators and Owners of this base can add tables"}
       >
         + Add or import
       </button>

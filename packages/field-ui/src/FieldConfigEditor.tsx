@@ -25,6 +25,8 @@ export interface FieldConfigEditorProps {
   fieldId?: string | undefined;
   /** Optional record used for a live formula preview. */
   sampleRecord?: { id?: string; fields: Record<string, unknown> } | undefined;
+  /** Lookup/rollup/count on a table without links: switch the new field to "Link to another record". */
+  onAddLinkField?: (() => void) | undefined;
 }
 
 export function randomOptionId(): string {
@@ -468,19 +470,43 @@ function LinkedFieldPickers({
   onChange,
   fields,
   tables,
+  tableId,
+  onAddLinkField,
 }: {
   type: string;
   config: Config;
   onChange: (c: Config) => void;
   fields: FieldLike[];
   tables: TableLike[];
+  tableId?: string | undefined;
+  onAddLinkField?: (() => void) | undefined;
 }) {
   const linkFields = fields.filter((f) => f.type === "link");
   const linkField = linkFields.find((f) => f.id === config["linkFieldId"]);
   const targetTableId = (linkField?.config?.["linkedTableId"] ?? linkField?.config?.["targetTableId"]) as string | undefined;
   const targetTable = tables.find((t) => t.id === targetTableId);
   if (linkFields.length === 0) {
-    return <span className="tfu-error">This table has no “Link to another record” fields yet. Add one first.</span>;
+    const what = type === "count" ? "Counts" : type === "rollup" ? "Rollups" : "Lookups";
+    if (tables.find((t) => t.id === tableId)?.synced) {
+      return (
+        <span className="tfu-error">
+          This is a synced (read-only) table, so it can’t have links. {what} go in a regular table: add a “Link to another record” field there
+          that points to this table, then add the {type} in that table.
+        </span>
+      );
+    }
+    return (
+      <span className="tfu-error">
+        {what} read values through a “Link to another record” field, and this table doesn’t have one yet.{" "}
+        {onAddLinkField ? (
+          <button type="button" className="tfu-linkbtn" onClick={onAddLinkField}>
+            Add a link field instead
+          </button>
+        ) : (
+          "Add one first."
+        )}
+      </span>
+    );
   }
   return (
     <div className="tfu-cfg">
@@ -767,6 +793,7 @@ export function FieldConfigEditor({
   tableId,
   fieldId,
   sampleRecord,
+  onAddLinkField,
 }: FieldConfigEditorProps): ReactElement | null {
   ensureFieldUiStyles();
   const set = (patch: Config) => onChange({ ...config, ...patch });
@@ -863,7 +890,9 @@ export function FieldConfigEditor({
     case "lookup":
     case "rollup":
     case "count":
-      return <LinkedFieldPickers type={type} config={config} onChange={onChange} fields={fields} tables={tables} />;
+      return (
+        <LinkedFieldPickers type={type} config={config} onChange={onChange} fields={fields} tables={tables} tableId={tableId} onAddLinkField={onAddLinkField} />
+      );
     case "formula":
       return <FormulaEditor config={config} onChange={onChange} fields={fields} fieldId={fieldId} sampleRecord={sampleRecord} />;
     case "collaborator":

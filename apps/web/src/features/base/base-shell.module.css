@@ -195,9 +195,14 @@
   white-space: nowrap;
 }
 
-.addTable:hover {
+.addTable:hover:not(:disabled) {
   background: var(--tabula-color-bg-strong);
   color: var(--tabula-color-text);
+}
+
+.addTable:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* menus rendered through FloatingPanel */

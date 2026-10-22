@@ -64,6 +64,19 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
 
   useEffect(() => setActive(0), [results]);
 
+  // Esc closes the palette even when focus has moved off the search box (e.g. after clicking a result list).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   useEffect(() => {
     const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`);
     el?.scrollIntoView({ block: "nearest" });
@@ -125,7 +138,9 @@ export function SearchPalette({ open, onClose }: { open: boolean; onClose: () =>
               }
             }}
           />
-          <kbd className={styles.kbd}>Esc</kbd>
+          <button type="button" className={styles.kbd} onClick={onClose} aria-label="Close search" title="Close (Esc)">
+            Esc
+          </button>
         </div>
         <ul className={styles.results} id="search-results" role="listbox" ref={listRef}>
           {grouped.map((g) => (

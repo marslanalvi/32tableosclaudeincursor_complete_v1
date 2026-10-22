@@ -28,9 +28,9 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-function Notice({ kind, children }: { kind: "ok" | "error"; children: ReactNode }) {
+function Notice({ kind, children }: { kind: "ok" | "error" | "info"; children: ReactNode }) {
   return (
-    <div role={kind === "error" ? "alert" : "status"} className={kind === "error" ? styles.error : styles.ok}>
+    <div role={kind === "error" ? "alert" : "status"} className={kind === "error" ? styles.error : kind === "info" ? styles.info : styles.ok}>
       {children}
     </div>
   );
@@ -352,26 +352,33 @@ export function SetupTwoFactorPage({ onDone, onSignOut }: { onDone: () => void; 
     <div className={styles.page}>
       <header className={styles.header}>
         <h1 className={styles.title}>Set up two-factor sign-in</h1>
+        <span className={styles.headerAside}>
+          {user ? <span className={styles.muted}>Signed in as {user.email}</span> : null}
+          <button type="button" className={styles.secondary} onClick={onSignOut}>
+            Sign out
+          </button>
+        </span>
       </header>
       <main className={styles.main}>
         <p className={styles.muted}>
           TableOS requires two-factor sign-in for every account. Set it up once with an authenticator app on your phone; from then on you’ll
           enter a 6-digit code when you sign in.
         </p>
+        <Notice kind="info">
+          Until it’s set up, every TableOS page (including Back and new tabs) opens this one. Not now? Sign out, or sign out and sign in
+          with a different account.
+        </Notice>
         {me.isError ? <Notice kind="error">{errorText(me.error)}</Notice> : null}
         {user ? (
           <MfaSection enabled={Boolean(user.mfaEnabled)} hasPassword={user.hasPassword !== false} required onEnabled={onDone} />
         ) : null}
-        <div className={styles.actions}>
-          {user?.mfaEnabled ? (
+        {user?.mfaEnabled ? (
+          <div className={styles.actions}>
             <button type="button" className={styles.primary} onClick={onDone}>
               Continue
             </button>
-          ) : null}
-          <button type="button" className={styles.secondary} onClick={onSignOut}>
-            Sign out
-          </button>
-        </div>
+          </div>
+        ) : null}
       </main>
     </div>
   );

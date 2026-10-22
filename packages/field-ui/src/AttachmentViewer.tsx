@@ -72,11 +72,20 @@ function Preview({ a }: { a: AttachmentValue }): ReactElement {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [a.id]);
   const kind = kindOf(a);
+  if (!a.url && a.thumbnailUrl && !failed) {
+    // Shared links with copying turned off send a thumbnail but no file link.
+    return (
+      <div className="tfu-av-nopreview">
+        <img className="tfu-av-img" src={a.thumbnailUrl} alt={a.filename} onError={() => setFailed(true)} />
+        <span>Downloading is turned off for this file.</span>
+      </div>
+    );
+  }
   if (!a.url || failed) {
     return (
       <div className="tfu-av-nopreview">
         <span className="tfu-av-bigext">{extLabel(a)}</span>
-        <span>{a.url ? "This file couldn't be loaded. It may need to be uploaded again." : "This file has no download link."}</span>
+        <span>{a.url ? "This file couldn't be loaded. It may need to be uploaded again." : "Downloading is turned off for this file."}</span>
       </div>
     );
   }

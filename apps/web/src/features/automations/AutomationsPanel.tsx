@@ -23,6 +23,7 @@ import { RunDetail, RunHistory } from "./RunHistory.tsx";
 import { labelableFields, lastRecord, parseRecordRef, recordLabel } from "./test-record.ts";
 import { recordsApi } from "../../lib/api-areas/records.ts";
 import { shellApi } from "../../lib/api-areas/shell.ts";
+import { NAME_MAX } from "../../app/ui.tsx";
 import { useRememberedState } from "./remembered-state.ts";
 import styles from "./automations.module.css";
 
@@ -391,6 +392,7 @@ function AutomationBuilder({
           className={styles.nameInput}
           value={draft.name}
           aria-label="Automation name"
+          maxLength={NAME_MAX}
           onChange={(e) => change({ name: e.target.value })}
           onBlur={(e) => {
             if (!e.target.value.trim()) change({ name: "Untitled automation" }, true);
