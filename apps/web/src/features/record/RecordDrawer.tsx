@@ -6,7 +6,7 @@ import {
   fieldTypeIcon,
   toInputValue,
   type FieldLike,
-} from "@tabula/field-ui";
+} from "@tableos/field-ui";
 import { errorMessage, recordsApi, removeRecordsFromCaches, type RecordWire } from "../../lib/api-areas/records.ts";
 import { primaryFieldOf, recordTitle, useBaseDetail, useBaseRole, useFieldServices } from "../grid/field-services.tsx";
 import { fieldPermissionAllows, isEditableField } from "../grid/grid-utils.ts";

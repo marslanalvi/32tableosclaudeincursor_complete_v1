@@ -1,6 +1,6 @@
-import { decryptMfaSecret, encryptMfaSecret, mfaKeyFromEnv } from "@tabula/auth";
-import type { Env } from "@tabula/config";
-import type { TabulaDb } from "@tabula/db";
+import { decryptMfaSecret, encryptMfaSecret, mfaKeyFromEnv } from "@tableos/auth";
+import type { Env } from "@tableos/config";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import { createChallenge, findUserChallenge, consumeChallenge } from "./challenges.js";
 
@@ -15,7 +15,7 @@ export function mfaKey(env: Env): Buffer {
 }
 
 export async function setPendingMfaSecret(
-  db: TabulaDb,
+  db: TableOSDb,
   env: Env,
   userId: string,
   secret: string,
@@ -29,7 +29,7 @@ export async function setPendingMfaSecret(
 
 /** Return the pending secret (does not consume it; call `clearPendingMfaSecret`). */
 export async function getPendingMfaSecret(
-  db: TabulaDb,
+  db: TableOSDb,
   env: Env,
   userId: string,
 ): Promise<{ id: string; secret: string } | null> {
@@ -43,13 +43,13 @@ export async function getPendingMfaSecret(
   }
 }
 
-export async function clearPendingMfaSecret(db: TabulaDb, id: string): Promise<void> {
+export async function clearPendingMfaSecret(db: TableOSDb, id: string): Promise<void> {
   await consumeChallenge(db, id);
 }
 
 /** Confirmed TOTP secret for a user, or null when MFA is not enabled. */
 export async function getConfirmedMfaSecret(
-  db: TabulaDb,
+  db: TableOSDb,
   env: Env,
   userId: string,
 ): Promise<string | null> {
@@ -68,7 +68,7 @@ export async function getConfirmedMfaSecret(
   }
 }
 
-export async function userHasMfa(db: TabulaDb, userId: string): Promise<boolean> {
+export async function userHasMfa(db: TableOSDb, userId: string): Promise<boolean> {
   const res = await sql<{ n: number }>`
     SELECT 1 AS n FROM core.user_mfa_factors
     WHERE user_id = ${userId} AND confirmed_at IS NOT NULL

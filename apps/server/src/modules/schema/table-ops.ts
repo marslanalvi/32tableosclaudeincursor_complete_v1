@@ -1,6 +1,6 @@
 /** Table-level schema operations (delete / duplicate / reorder). */
-import { generateUuidV7, keyBetween, keysBetween } from "@tabula/types";
-import { rewriteFormulaRefs } from "@tabula/formula";
+import { generateUuidV7, keyBetween, keysBetween } from "@tableos/types";
+import { rewriteFormulaRefs } from "@tableos/formula";
 import { sql } from "kysely";
 import { ApiError } from "../../http/errors.js";
 import { backfillFieldsInTx, runComputeInTx } from "../compute/engine.js";

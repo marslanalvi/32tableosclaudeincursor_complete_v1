@@ -1,15 +1,15 @@
 import { loadDotEnvFile } from "./load-env-file.js";
-import { loadEnv } from "@tabula/config";
-import { ALL_QUEUE_NAMES, createWorker, type QueueName } from "@tabula/jobs";
-import { createLogger } from "@tabula/observability";
-import { createDb } from "@tabula/db";
-import { QueueNames } from "@tabula/jobs";
+import { loadEnv } from "@tableos/config";
+import { ALL_QUEUE_NAMES, createWorker, type QueueName } from "@tableos/jobs";
+import { createLogger } from "@tableos/observability";
+import { createDb } from "@tableos/db";
+import { QueueNames } from "@tableos/jobs";
 import {
   createEventBus,
   DOMAIN_EVENTS_TOPIC,
   type DomainEvent,
-} from "@tabula/events";
-import { PostgresFtsBackend } from "@tabula/search";
+} from "@tableos/events";
+import { PostgresFtsBackend } from "@tableos/search";
 import { handleComputeJob } from "../modules/compute/jobs.js";
 import {
   handleCommentCreatedNotification,
@@ -24,7 +24,7 @@ import { mfaKey } from "../modules/auth/mfa-pending.js";
 async function main(): Promise<void> {
   loadDotEnvFile();
   const env = loadEnv();
-  const log = createLogger({ name: "tabula-worker", role: "worker" });
+  const log = createLogger({ name: "tableos-worker", role: "worker" });
 
   const argQueues = process.argv
     .find((a) => a.startsWith("--queues="))

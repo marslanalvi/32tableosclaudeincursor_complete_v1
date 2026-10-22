@@ -2,8 +2,8 @@
   max-width: 1080px;
   margin: 0 auto;
   padding: 32px 24px 64px;
-  font-family: var(--tabula-font-sans);
-  color: var(--tabula-color-text);
+  font-family: var(--tableos-font-sans);
+  color: var(--tableos-color-text);
 }
 
 .header {
@@ -13,9 +13,9 @@
 .back {
   display: inline-block;
   margin-bottom: 16px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   text-decoration: none;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
 }
 
 .headRow {
@@ -34,7 +34,7 @@
 
 .subtitle {
   margin: 6px 0 0;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 .toolbar {
@@ -54,30 +54,30 @@
 }
 
 .tableWrap {
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-lg);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-lg);
   overflow: hidden;
-  background: var(--tabula-color-bg-elevated);
+  background: var(--tableos-color-bg-elevated);
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
 }
 
 .table th {
   text-align: left;
   font-weight: 500;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   padding: 10px 12px;
-  background: var(--tabula-color-bg-subtle);
-  border-bottom: 1px solid var(--tabula-color-border);
+  background: var(--tableos-color-bg-subtle);
+  border-bottom: 1px solid var(--tableos-color-border);
 }
 
 .table td {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
   vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -94,11 +94,11 @@
 }
 
 .table tbody tr:active td {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .rowSelected td {
-  background: var(--tabula-color-accent-subtle);
+  background: var(--tableos-color-accent-subtle);
 }
 
 .checkCol {
@@ -127,27 +127,27 @@
 
 .name {
   font-weight: 500;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .count {
   margin: 0;
   padding: 10px 12px;
   font-size: 12px;
-  color: var(--tabula-color-text-muted);
-  border-top: 1px solid var(--tabula-color-border);
+  color: var(--tableos-color-text-muted);
+  border-top: 1px solid var(--tableos-color-border);
 }
 
 .state {
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   padding: 32px 0;
 }
 
 .empty {
   text-align: center;
   padding: 64px 24px;
-  border: 1px dashed var(--tabula-color-border);
-  border-radius: var(--tabula-radius-lg);
+  border: 1px dashed var(--tableos-color-border);
+  border-radius: var(--tableos-radius-lg);
 }
 
 .empty h2 {
@@ -158,7 +158,7 @@
 
 .empty p {
   margin: 0 0 20px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 .formRow {

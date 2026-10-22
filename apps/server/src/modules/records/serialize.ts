@@ -11,9 +11,9 @@
  * All hydration is batched (a fixed number of queries per call, no N+1).
  */
 import { sql, type Kysely } from "kysely";
-import type { Database } from "@tabula/db";
-import type { TabulaStorage } from "@tabula/storage";
-import { parseIsoInstant } from "@tabula/filter";
+import type { Database } from "@tableos/db";
+import type { TableOSStorage } from "@tableos/storage";
+import { parseIsoInstant } from "@tableos/filter";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import { localAttachmentUrl } from "../attachments/service.js";
 
@@ -80,7 +80,7 @@ export interface SerializeOptions {
   /** Only include these fields (uuid or `fld_` ids). Omitted = all fields. */
   fieldIds?: readonly string[] | undefined;
   /** Storage signer for attachment URLs; when absent, the API path is used. */
-  storage?: TabulaStorage | null | undefined;
+  storage?: TableOSStorage | null | undefined;
   /** Pre-loaded field rows for `tableId` (skips one query). */
   fields?: SerializeFieldRow[] | undefined;
 }
@@ -698,7 +698,7 @@ let signerDownUntil = 0;
 async function loadAttachments(
   db: Db,
   ids: string[],
-  storage: TabulaStorage | null,
+  storage: TableOSStorage | null,
 ): Promise<Map<string, AttachmentWire>> {
   const out = new Map<string, AttachmentWire>();
   if (ids.length === 0) return out;

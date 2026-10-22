@@ -17,9 +17,9 @@ const appCommit = (() => {
 })();
 
 // Dev-server ports/targets are overridable so several checkouts can run side by side.
-const apiTarget = process.env["TABULA_API_PROXY"] ?? "http://localhost:3000";
-const realtimeTarget = process.env["TABULA_REALTIME_PROXY"] ?? "ws://localhost:3002";
-const devPort = Number(process.env["TABULA_WEB_PORT"] ?? 5173);
+const apiTarget = process.env["TABLEOS_API_PROXY"] ?? "http://localhost:3000";
+const realtimeTarget = process.env["TABLEOS_REALTIME_PROXY"] ?? "ws://localhost:3002";
+const devPort = Number(process.env["TABLEOS_WEB_PORT"] ?? 5173);
 
 export default defineConfig({
   plugins: [react()],
@@ -30,11 +30,11 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: "@tabula/ui/tokens.css",
+        find: "@tableos/ui/tokens.css",
         replacement: path.resolve(appDir, "../../packages/ui/src/tokens.css"),
       },
       {
-        find: "@tabula/ui",
+        find: "@tableos/ui",
         replacement: path.resolve(appDir, "../../packages/ui/src/index.ts"),
       },
     ],

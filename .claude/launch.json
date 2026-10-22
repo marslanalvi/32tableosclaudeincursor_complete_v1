@@ -4,7 +4,7 @@
     {
       "name": "cc-api",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["pnpm@9.15.0", "--filter", "@tabula/server", "dev"],
+      "runtimeArgs": ["pnpm@9.15.0", "--filter", "@tableos/server", "dev"],
       "port": 3200,
       "url": "http://localhost:3200",
       "env": {
@@ -18,7 +18,7 @@
     {
       "name": "cc-realtime",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["pnpm@9.15.0", "--filter", "@tabula/server", "dev:realtime"],
+      "runtimeArgs": ["pnpm@9.15.0", "--filter", "@tableos/server", "dev:realtime"],
       "port": 3202,
       "url": "http://localhost:3202",
       "env": {
@@ -32,25 +32,25 @@
     {
       "name": "cc-web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["pnpm@9.15.0", "--filter", "@tabula/web", "dev"],
+      "runtimeArgs": ["pnpm@9.15.0", "--filter", "@tableos/web", "dev"],
       "port": 5283,
       "url": "http://localhost:5283",
       "env": {
-        "TABULA_WEB_PORT": "5283",
-        "TABULA_API_PROXY": "http://localhost:3200",
-        "TABULA_REALTIME_PROXY": "ws://localhost:3202",
+        "TABLEOS_WEB_PORT": "5283",
+        "TABLEOS_API_PROXY": "http://localhost:3200",
+        "TABLEOS_REALTIME_PROXY": "ws://localhost:3202",
         "VITE_PUBLIC_APP_URL": "http://localhost:5284"
       }
     },
     {
       "name": "cc-public",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["pnpm@9.15.0", "--filter", "@tabula/public", "dev"],
+      "runtimeArgs": ["pnpm@9.15.0", "--filter", "@tableos/public", "dev"],
       "port": 5284,
       "url": "http://localhost:5284",
       "env": {
-        "TABULA_PUBLIC_PORT": "5284",
-        "TABULA_API_PROXY": "http://localhost:3200"
+        "TABLEOS_PUBLIC_PORT": "5284",
+        "TABLEOS_API_PROXY": "http://localhost:3200"
       }
     }
   ]

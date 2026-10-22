@@ -1,9 +1,9 @@
 {
-  "name": "@tabula/permissions",
+  "name": "@tableos/permissions",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "tabula": {
+  "tableos": {
     "tier": "T1",
     "env": "isomorphic"
   },
@@ -20,10 +20,10 @@
     "test": "node -e \"process.exit(0)\""
   },
   "dependencies": {
-    "@tabula/types": "workspace:*"
+    "@tableos/types": "workspace:*"
   },
   "devDependencies": {
-    "@tabula/tsconfig": "workspace:*",
+    "@tableos/tsconfig": "workspace:*",
     "typescript": "^5.7.2"
   }
 }

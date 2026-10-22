@@ -1,10 +1,10 @@
-import type { CellValue } from "@tabula/fields";
+import type { CellValue } from "@tableos/fields";
 
 export type RecordId = string;
 export type FieldId = string;
 export type QueryHash = string;
 
-export interface TabulaRecord {
+export interface TableOSRecord {
   id: RecordId;
   version: number;
   /** Merged cell + computed values keyed by field id. */

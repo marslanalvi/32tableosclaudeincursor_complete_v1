@@ -109,8 +109,8 @@ Tabs (§4) contain their own nested sections (one level of nesting; tabs inside 
 ## 5. Element model (TypeScript)
 
 ```ts
-// @tabula/interface-model/src/element.ts
-import type { FilterNode, SortSpec, GroupSpec } from '@tabula/query';
+// @tableos/interface-model/src/element.ts
+import type { FilterNode, SortSpec, GroupSpec } from '@tableos/query';
 
 export type ElementType =
   | 'record_list' | 'table' | 'kanban' | 'calendar' | 'timeline' | 'gallery'
@@ -604,7 +604,7 @@ Builders can open "Preview as…" a specific user or role. The server resolves p
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.tabula.example/v1/interface-snapshot.json",
+  "$id": "https://schemas.tableos.example/v1/interface-snapshot.json",
   "type": "object",
   "required": ["schemaVersion", "interfaceId", "theme", "navigation", "pages"],
   "properties": {
@@ -691,7 +691,7 @@ Builders can open "Preview as…" a specific user or role. The server resolves p
       "properties": {
         "tableId": { "$ref": "#/$defs/tableId" },
         "baseViewId": { "type": "string", "pattern": "^viw_[0-9A-Za-z]{22}$" },
-        "filter": { "$ref": "https://schemas.tabula.example/v1/filter.json" },
+        "filter": { "$ref": "https://schemas.tableos.example/v1/filter.json" },
         "sorts": { "type": "array", "maxItems": 5 },
         "groups": { "type": "array", "maxItems": 2 },
         "recordContext": {
@@ -860,7 +860,7 @@ flowchart LR
   end
   Store[(DraftStore Zustand + immer<br/>normalized: pages, sections, elements<br/>pending ops queue)]
   Sync[OpSync<br/>batch & send ops, rebase on ack/conflict,<br/>presence]
-  Runtime["@tabula/interface-runtime<br/>same renderer as end-user app"]
+  Runtime["@tableos/interface-runtime<br/>same renderer as end-user app"]
   Canvas --> Store
   Tree --> Store
   Inspector --> Store
@@ -870,8 +870,8 @@ flowchart LR
   Sync <--> API[(REST page ops + WS presence)]
 ```
 
-* **One renderer** (`@tabula/interface-runtime`) for preview and production — no "looks different after publish" bugs. Builder chrome (selection outlines, drop zones) is an overlay layer.
-* **Schema-driven inspector**: each element type registers `{ schema (TypeBox), inspectorSections, defaultConfig, validate(config, schema), migrate(config, from) }` in an `ElementRegistry` (also used server-side for validation — isomorphic package `@tabula/interface-model`).
+* **One renderer** (`@tableos/interface-runtime`) for preview and production — no "looks different after publish" bugs. Builder chrome (selection outlines, drop zones) is an overlay layer.
+* **Schema-driven inspector**: each element type registers `{ schema (TypeBox), inspectorSections, defaultConfig, validate(config, schema), migrate(config, from) }` in an `ElementRegistry` (also used server-side for validation — isomorphic package `@tableos/interface-model`).
 * **Filter builder** component is shared with views ([`24`](./24-frontend-grid-state-design-system.md)); in interface mode it adds `currentUser`, `recordContext`, `userFilter` value pickers.
 * **Undo/redo**: command stack of ops with inverses (client-side, per editing session); undo emits inverse ops to the server like any edit.
 * **Diagnostics** panel: live validation (same validator as publish) with click-to-navigate.

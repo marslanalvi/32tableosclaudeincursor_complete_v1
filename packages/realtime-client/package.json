@@ -1,9 +1,9 @@
 {
-  "name": "@tabula/realtime-client",
+  "name": "@tableos/realtime-client",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "tabula": {
+  "tableos": {
     "tier": "T2b",
     "env": "browser"
   },
@@ -20,7 +20,7 @@
     "test": "node -e \"process.exit(0)\""
   },
   "devDependencies": {
-    "@tabula/tsconfig": "workspace:*",
+    "@tableos/tsconfig": "workspace:*",
     "typescript": "^5.7.2"
   }
 }

@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { fieldTypeIcon, renderCellValue, type FieldLike } from "@tabula/field-ui";
+import { fieldTypeIcon, renderCellValue, type FieldLike } from "@tableos/field-ui";
 import { DropdownMenu, type MenuItemSpec } from "../../app/ui.tsx";
 import { commentsApi, relativeTime, type NotifyLevel } from "../../lib/api-areas/collab.ts";
 import {
@@ -18,10 +18,10 @@ export type ActivityFilter = "all" | "history" | "comments" | "record_comments" 
 
 /** How revision history is grouped (many people editing the same table). */
 export type HistoryGrouping = "none" | "person" | "field";
-const GROUP_KEY = "tabula.recordActivityGroup";
+const GROUP_KEY = "tableos.recordActivityGroup";
 const GROUP_LABELS: Record<HistoryGrouping, string> = { none: "Don’t group", person: "By person", field: "By field" };
-const FILTER_KEY = "tabula.recordActivityFilter";
-const RESOLVED_KEY = "tabula.recordActivityResolved";
+const FILTER_KEY = "tableos.recordActivityFilter";
+const RESOLVED_KEY = "tableos.recordActivityResolved";
 const FILTER_LABELS: Record<ActivityFilter, string> = {
   all: "All activity",
   history: "Revision history",

@@ -704,7 +704,7 @@ export function ImportWizard({
                   </button>
                 </div>
               ) : null}
-              <div style={{ overflowX: "auto", border: "1px solid var(--tabula-color-border)", borderRadius: 10 }}>
+              <div style={{ overflowX: "auto", border: "1px solid var(--tableos-color-border)", borderRadius: 10 }}>
                 <table className={s.table}>
                   <thead>
                     <tr>
@@ -748,7 +748,7 @@ export function ImportWizard({
                               onChange={(e) => set({ newName: e.target.value })}
                               aria-label="New field name"
                               aria-invalid={nameProblems[i] ? true : undefined}
-                              style={nameProblems[i] ? { borderColor: "var(--tabula-color-danger)", boxShadow: "0 0 0 1px var(--tabula-color-danger)" } : undefined}
+                              style={nameProblems[i] ? { borderColor: "var(--tableos-color-danger)", boxShadow: "0 0 0 1px var(--tableos-color-danger)" } : undefined}
                             />
                             <select
                               className={s.select}
@@ -819,7 +819,7 @@ export function ImportWizard({
                                 ) : null}
                               </div>
                               {nameProblems[i] ? (
-                                <div style={{ marginTop: 4, fontSize: 12, color: "var(--tabula-color-danger)" }}>{nameProblems[i]}</div>
+                                <div style={{ marginTop: 4, fontSize: 12, color: "var(--tableos-color-danger)" }}>{nameProblems[i]}</div>
                               ) : null}
                             </td>
                             <td className={s.muted}>
@@ -859,7 +859,7 @@ export function ImportWizard({
                             </select>
                             {newFieldInputs}
                             {nameProblems[i] ? (
-                              <div style={{ marginTop: 4, fontSize: 12, color: "var(--tabula-color-danger)" }}>{nameProblems[i]}</div>
+                              <div style={{ marginTop: 4, fontSize: 12, color: "var(--tableos-color-danger)" }}>{nameProblems[i]}</div>
                             ) : null}
                           </td>
                           <td className={s.muted}>
@@ -939,7 +939,7 @@ export function ImportWizard({
                     These values don’t fit their field (wrong format or type). Correct them below and import again, import those rows with
                     the invalid value left empty, or skip them.
                   </p>
-                  <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid var(--tabula-color-border)", borderRadius: 10 }}>
+                  <div style={{ maxHeight: 260, overflowY: "auto", border: "1px solid var(--tableos-color-border)", borderRadius: 10 }}>
                     <table className={s.table}>
                       <thead>
                         <tr>

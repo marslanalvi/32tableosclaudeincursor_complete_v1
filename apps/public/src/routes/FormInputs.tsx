@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { optionColor, parseDuration } from "@tabula/field-ui";
+import { optionColor, parseDuration } from "@tableos/field-ui";
 import { fileUrl, uploadFormFile, type PublicField, type UploadedFile } from "../lib/public-api.ts";
 import styles from "./form.module.css";
 

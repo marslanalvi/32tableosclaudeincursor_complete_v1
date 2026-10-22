@@ -1,9 +1,9 @@
-# Tabula — Platform Architecture
+# TableOS — Platform Architecture
 
 > Architecture for an Airtable-class relational spreadsheet/database platform, designed from first principles.
 > **Status:** Draft for architectural approval · **Date:** 2026-10-03 · **Code:** none yet (by design)
 
-"Tabula" is a placeholder product name. Package scope `@tabula/*`.
+"TableOS" is a placeholder product name. Package scope `@tableos/*`.
 
 ## How to read this set
 

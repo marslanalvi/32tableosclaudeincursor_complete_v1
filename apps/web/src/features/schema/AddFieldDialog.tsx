@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { Button, Input, Label } from "@tabula/ui";
-import type { FieldTypeKey } from "@tabula/fields";
+import { Button, Input, Label } from "@tableos/ui";
+import type { FieldTypeKey } from "@tableos/fields";
 import styles from "./add-field.module.css";
 
 const STANDARD_FIELDS: Array<{

@@ -1,4 +1,4 @@
-import type { ServerMessage } from "@tabula/realtime-protocol";
+import type { ServerMessage } from "@tableos/realtime-protocol";
 import { pid } from "../lib/public-ids.js";
 
 type ChangeFrame = Extract<ServerMessage, { type: "change" }>;
@@ -129,7 +129,7 @@ export interface InternalChange {
 
 /**
  * Turn an internal change (raw uuids, slot-keyed cells) into the client frame
- * defined in `@tabula/realtime-protocol` (public ids only; no raw cells).
+ * defined in `@tableos/realtime-protocol` (public ids only; no raw cells).
  */
 export function toClientChangeFrame(change: InternalChange): ChangeFrame {
   const ops = Array.isArray(change.ops) ? change.ops : [];

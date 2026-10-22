@@ -11,7 +11,7 @@
 
 ## 1. Scope and principles
 
-The **query core** (`@tabula/query`, isomorphic) defines *one* filter/sort/group language used by views, the public API (`POST …/records:query`, D16), interface element data sources, automation conditions, form `visibleIf`, color rules, row policies (Enterprise), and webhook filters. It has three back-ends:
+The **query core** (`@tableos/query`, isomorphic) defines *one* filter/sort/group language used by views, the public API (`POST …/records:query`, D16), interface element data sources, automation conditions, form `visibleIf`, color rules, row policies (Enterprise), and webhook filters. It has three back-ends:
 
 1. **SQL compiler** (server, `apps/server/src/modules/query/compiler`) → Kysely expressions over `data.records`, `data.record_links`, `data.record_index_*`.
 2. **In-memory evaluator** (isomorphic) → `true | false | unknown` for a single record image (realtime membership, automations, client-side interfaces, form visibility).
@@ -55,7 +55,7 @@ The sidecar DDL above is quoted from [`06-record-storage.md`](./06-record-storag
 ### 2.1 TypeScript
 
 ```ts
-// @tabula/query/src/ast.ts
+// @tableos/query/src/ast.ts
 export type FilterNode = FilterGroup | FilterCondition | FilterInvalid;
 
 export interface FilterGroup {
@@ -127,7 +127,7 @@ Notes:
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.tabula.example/v1/filter.json",
+  "$id": "https://schemas.tableos.example/v1/filter.json",
   "$defs": {
     "node": { "oneOf": [ { "$ref": "#/$defs/group" }, { "$ref": "#/$defs/cond" }, { "$ref": "#/$defs/invalid" } ] },
     "group": {
@@ -288,7 +288,7 @@ Storage invariant: empty ⇒ key absent (spine §4). Text `""`, empty arrays, `f
 
 **Week start**: `query.weekStartsOn` → base `settings.weekStartsOn` (default Monday = 1; locale-derived on base creation).
 
-**Period resolution** — pure function shared by both back-ends (`@tabula/query/src/time.ts`, uses `Temporal` via polyfill):
+**Period resolution** — pure function shared by both back-ends (`@tableos/query/src/time.ts`, uses `Temporal` via polyfill):
 
 ```ts
 /** Returns a half-open local-date interval [startDate, endDateExclusive) in zone tz. */
@@ -371,7 +371,7 @@ flowchart LR
 The **IR** is what both the SQL emitter and the in-memory evaluator consume (the evaluator skips "Plan"):
 
 ```ts
-// @tabula/query/src/ir.ts
+// @tableos/query/src/ir.ts
 export type Pred =
   | { t: 'and' | 'or'; xs: Pred[] }
   | { t: 'not'; x: Pred }
@@ -710,7 +710,7 @@ Exact counts come from the order list or the capped count ([`10`](./10-view-engi
 | C. `citext` | Simple | Type-level, not applicable to JSONB extraction; same `lower()` underneath |
 | D. `ILIKE` everywhere | Simple | Escaping pitfalls; slower than `strpos` for contains; collation-dependent |
 
-**Decision [Ours]: A**, with one shared fold function. Shard databases are created with the ICU provider and root locale (`CREATE DATABASE … LOCALE_PROVIDER icu ICU_LOCALE 'und'`, PG ≥ 16), so `lower()` applies ICU root case mapping. The evaluator uses `fold(s) = s.normalize('NFC').toLocaleLowerCase('und')` — the same ICU case mapping inside V8. Stored text is NFC-normalized by the field engine on write; operands on validation. Matching is **accent-sensitive** by default (V2: `accentInsensitive` via an `IMMUTABLE` unaccent wrapper on both sides, requires sidecar rebuild). The sidecar `value_eq` column (06 calls it "casefold") **must be produced by this same `fold()`** (exported from `@tabula/query` and used by the field types' `index.extract()`), otherwise sidecar and JSONB paths would disagree on strings like `ß`/`ẞ` — a reconciliation note for 06/07. When the fleet minimum reaches PG 18, true `casefold()` replaces `lower()` behind a compiler flag; `fold()` switches to full folding and text sidecars are rebuilt (same mechanism as a collation change).
+**Decision [Ours]: A**, with one shared fold function. Shard databases are created with the ICU provider and root locale (`CREATE DATABASE … LOCALE_PROVIDER icu ICU_LOCALE 'und'`, PG ≥ 16), so `lower()` applies ICU root case mapping. The evaluator uses `fold(s) = s.normalize('NFC').toLocaleLowerCase('und')` — the same ICU case mapping inside V8. Stored text is NFC-normalized by the field engine on write; operands on validation. Matching is **accent-sensitive** by default (V2: `accentInsensitive` via an `IMMUTABLE` unaccent wrapper on both sides, requires sidecar rebuild). The sidecar `value_eq` column (06 calls it "casefold") **must be produced by this same `fold()`** (exported from `@tableos/query` and used by the field types' `index.extract()`), otherwise sidecar and JSONB paths would disagree on strings like `ß`/`ẞ` — a reconciliation note for 06/07. When the fleet minimum reaches PG 18, true `casefold()` replaces `lower()` behind a compiler flag; `fold()` switches to full folding and text sidecars are rebuilt (same mechanism as a collation change).
 
 ### 8.2 Contains / starts_with
 
@@ -784,7 +784,7 @@ Every order ends with `r.id` in the direction of the **last** sort term (ASC whe
 ### 9.5 The comparator (isomorphic) and collation parity
 
 ```ts
-// @tabula/query/src/compare.ts
+// @tableos/query/src/compare.ts
 export function makeComparator(plan: SortPlan, ctx: CompareCtx): (a: RecordImage, b: RecordImage) => number {
   const terms = plan.terms.map(t => ({ key: keyFn(t, ctx), dir: t.direction === 'asc' ? 1 : -1, emptyFirst: t.emptyPlacement === 'first' }));
   return (a, b) => {
@@ -923,7 +923,7 @@ ORDER BY array_position($optOrder::text[], g1) NULLS FIRST, g2 DESC NULLS FIRST;
 ```
 
 * The **order list** ([`10`](./10-view-engine.md) §8.3) is produced by the same `base` with `ORDER BY <group keys…>, <sorts…>, r.id`, so rows arrive grouped; the header tree supplies counts for virtualization.
-* Group header aggregates use `@tabula/aggregate` definitions (same as the summary bar).
+* Group header aggregates use `@tableos/aggregate` definitions (same as the summary bar).
 * Limits: ≤ 5,000 groups per level returned; beyond that the tree is truncated with `{ truncated: true, remainingGroups, remainingRecords }` and the grid shows a "N more groups" pseudo-header that loads the next 5,000 on expand (keyset over group keys). A view grouped by a near-unique field (e.g., Email) is valid but the UI suggests a different grouping.
 * For tables above the threshold, group keys read from sidecars (`record_index_num` rank for selects, `record_index_text.value_eq` for text, `record_index_time` for datetimes) joined on `record_id`; the `GROUP BY` then runs over narrow tuples.
 
@@ -971,7 +971,7 @@ function locate(virtualRow: number): { kind: 'header'; path: string } | { kind: 
 ### 12.1 Interface
 
 ```ts
-// @tabula/query/src/evaluate.ts
+// @tableos/query/src/evaluate.ts
 export type Tri = true | false | 'unknown';
 
 export interface RecordImage {
@@ -1039,7 +1039,7 @@ Additional suites: validator fuzzing (malformed JSON, oversized operands, depth 
 | Index (06) | `record_index_text (table_id, field_slot, value_eq text_pattern_ops)` | Fast `starts_with` on very large tables (only if trigram prefix proves insufficient) — §8.2 |
 | Index (06, optional) | per-partition `GIN (cells jsonb_path_ops)` on `records` | Index-backed positive equality on choice/user/checkbox below and around the sidecar threshold — §6.4 (2), (6). Evaluate write amplification vs HOT updates first (06 states no index touches `cells` to keep HOT) — **default: not added** |
 | Sidecar semantics (06/09) | Link field slots get a `record_index_text` row holding the **first linked primary sort key** | Sort/group by linked record & contact above the threshold — §9.7 |
-| Shared function (06/07) | `fold()` exported from `@tabula/query` is the only producer of `record_index_text.value_eq` for free text | SQL/sidecar/evaluator parity — §8.1 |
+| Shared function (06/07) | `fold()` exported from `@tableos/query` is the only producer of `record_index_text.value_eq` for free text | SQL/sidecar/evaluator parity — §8.1 |
 | Field config | `fields.config.sort.numericCollation boolean` | Natural number ordering in text — §8.3 |
 | Base settings | `bases.settings.weekStartsOn`, `bases.settings.timeZone` (if not already defined in 02/05) | Date semantics — §4.3 |
 | Database setup | ICU-provider shard databases (`ICU_LOCALE 'und'`), pre-created collations `und-u-kn-x-icu` and supported `<locale>-x-icu` | Collation — §8 |

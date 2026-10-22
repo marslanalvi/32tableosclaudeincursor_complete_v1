@@ -1,5 +1,5 @@
-import { encodePublicId, generateUuidV7, keyBetween, keysBetween } from "@tabula/types";
-import type { Database } from "@tabula/db";
+import { encodePublicId, generateUuidV7, keyBetween, keysBetween } from "@tableos/types";
+import type { Database } from "@tableos/db";
 import { sql, type Transaction } from "kysely";
 
 type DbTrx = Transaction<Database>;

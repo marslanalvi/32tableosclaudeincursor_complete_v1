@@ -1,5 +1,5 @@
 -- numeric `/` rounds for 128-bit values (result scale can be 0), so the 0063
--- encoder drifted from @tabula/types. div() is exact integer division.
+-- encoder drifted from @tableos/types. div() is exact integer division.
 CREATE OR REPLACE FUNCTION data.encode_public_id(prefix text, id uuid)
 RETURNS text
 LANGUAGE plpgsql IMMUTABLE STRICT PARALLEL SAFE AS $$

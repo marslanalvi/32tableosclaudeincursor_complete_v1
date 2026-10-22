@@ -1,8 +1,8 @@
 import { sql } from "kysely";
-import type { TabulaDb } from "@tabula/db";
-import type { SqlFieldInfo } from "@tabula/filter";
-import type { PlanQueryContext } from "@tabula/query";
-import { decodePublicId } from "@tabula/types";
+import type { TableOSDb } from "@tableos/db";
+import type { SqlFieldInfo } from "@tableos/filter";
+import type { PlanQueryContext } from "@tableos/query";
+import { decodePublicId } from "@tableos/types";
 import { pid } from "../../lib/public-ids.js";
 
 export interface QueryFieldRow {
@@ -15,7 +15,7 @@ export interface QueryFieldRow {
   is_computed: boolean;
 }
 
-export async function loadQueryFields(db: TabulaDb, tableId: string): Promise<QueryFieldRow[]> {
+export async function loadQueryFields(db: TableOSDb, tableId: string): Promise<QueryFieldRow[]> {
   const result = await sql<QueryFieldRow>`
     SELECT id, slot, name, type, config, index_state, is_computed
     FROM data.fields
@@ -43,7 +43,7 @@ function lookupTargetId(f: SqlFieldInfo): string | null {
 }
 
 /** Field metadata for SQL compilation: link relations, peer primary fields and lookup targets resolved. */
-export async function loadSqlFieldInfos(db: TabulaDb, fields: QueryFieldRow[]): Promise<SqlFieldInfo[]> {
+export async function loadSqlFieldInfos(db: TableOSDb, fields: QueryFieldRow[]): Promise<SqlFieldInfo[]> {
   const infos = fields.map(toInfo);
   const targetIds = [...new Set(infos.map(lookupTargetId).filter((x): x is string => !!x))];
   const targets = targetIds.length
@@ -62,7 +62,7 @@ export async function loadSqlFieldInfos(db: TabulaDb, fields: QueryFieldRow[]): 
   return infos;
 }
 
-async function attachLinkInfo(db: TabulaDb, infos: SqlFieldInfo[]): Promise<void> {
+async function attachLinkInfo(db: TableOSDb, infos: SqlFieldInfo[]): Promise<void> {
   const linkIds = infos.filter((f) => f.type === "link" || f.type === "contact").map((f) => f.id);
   if (linkIds.length === 0) return;
   const rels = await sql<{ id: string; a_field_id: string; b_field_id: string | null; a_table_id: string; b_table_id: string }>`
@@ -146,7 +146,7 @@ export interface UserQueryContext {
   timeZone: string;
 }
 
-export async function loadUserQueryContext(db: TabulaDb, userId: string): Promise<UserQueryContext> {
+export async function loadUserQueryContext(db: TableOSDb, userId: string): Promise<UserQueryContext> {
   const r = await sql<{ time_zone: string }>`SELECT time_zone FROM core.users WHERE id = ${userId}`.execute(db);
   return { userId, timeZone: r.rows[0]?.time_zone || "UTC" };
 }

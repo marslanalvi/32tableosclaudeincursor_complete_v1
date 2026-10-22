@@ -1,5 +1,5 @@
 {
-  "extends": "@tabula/tsconfig/isomorphic.json",
+  "extends": "@tableos/tsconfig/isomorphic.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM"],
     "outDir": "dist",

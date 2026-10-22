@@ -1,4 +1,4 @@
-import { SESSION_COOKIE_NAME } from "@tabula/auth";
+import { SESSION_COOKIE_NAME } from "@tableos/auth";
 import { resolveLookupTargets } from "./filter-eval.js";
 import type { TableMeta, WireRecord } from "./tokens.js";
 
@@ -6,7 +6,7 @@ import type { TableMeta, WireRecord } from "./tokens.js";
  * Automations perform record reads/writes through the public HTTP API (as the
  * automation's owner, with a short-lived service session) so they get exactly
  * the same validation, typecast, compute, links, permissions and realtime
- * fan-out as a user edit. Writes carry `X-Tabula-Client-Op-Id: aut:<runId>`,
+ * fan-out as a user edit. Writes carry `X-TableOS-Client-Op-Id: aut:<runId>`,
  * which the kernel stores as the change's client mutation id — that is how the
  * automation consumer recognises (and loop-guards) changes caused by a run.
  */
@@ -43,8 +43,8 @@ export class AutomationApiClient {
   async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const headers: Record<string, string> = {
       cookie: `${SESSION_COOKIE_NAME}=${this.sessionToken}`,
-      "x-tabula-client-op-id": this.clientOpId,
-      "user-agent": "tabula-automation",
+      "x-tableos-client-op-id": this.clientOpId,
+      "user-agent": "tableos-automation",
     };
     if (body !== undefined) headers["content-type"] = "application/json";
     let res: Response;

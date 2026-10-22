@@ -10,15 +10,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--tabula-radius-full);
-  border: 1px solid var(--tabula-color-border);
-  background: var(--tabula-color-bg-elevated);
-  color: var(--tabula-color-text);
+  border-radius: var(--tableos-radius-full);
+  border: 1px solid var(--tableos-color-border);
+  background: var(--tableos-color-bg-elevated);
+  color: var(--tableos-color-text);
   cursor: pointer;
 }
 
 .bell:focus-visible {
-  outline: 2px solid var(--tabula-color-info-border);
+  outline: 2px solid var(--tableos-color-info-border);
   outline-offset: 2px;
 }
 
@@ -30,13 +30,13 @@
   height: 18px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--tabula-color-signature-coral);
+  background: var(--tableos-color-signature-coral);
   color: #fff;
   font-size: 11px;
   font-weight: 500;
   line-height: 18px;
   text-align: center;
-  border: 2px solid var(--tabula-color-bg-elevated);
+  border: 2px solid var(--tableos-color-bg-elevated);
   box-sizing: content-box;
 }
 
@@ -49,12 +49,12 @@
   max-height: min(520px, 75vh);
   display: flex;
   flex-direction: column;
-  background: var(--tabula-color-bg-elevated);
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-lg);
-  box-shadow: var(--tabula-shadow-lg);
-  color: var(--tabula-color-text);
-  font-family: var(--tabula-font-sans);
+  background: var(--tableos-color-bg-elevated);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-lg);
+  box-shadow: var(--tableos-shadow-lg);
+  color: var(--tableos-color-text);
+  font-family: var(--tableos-font-sans);
   overflow: hidden;
 }
 
@@ -66,22 +66,22 @@
 }
 
 .panelTitle {
-  font-size: var(--tabula-font-size-lg);
+  font-size: var(--tableos-font-size-lg);
   font-weight: 500;
 }
 
 .linkBtn {
   border: 0;
   background: none;
-  color: var(--tabula-color-link);
+  color: var(--tableos-color-link);
   font: inherit;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   cursor: pointer;
   padding: 4px;
 }
 
 .linkBtn:disabled {
-  color: var(--tabula-color-text-subtle);
+  color: var(--tableos-color-text-subtle);
   cursor: default;
 }
 
@@ -93,9 +93,9 @@
   margin: 0 16px 8px;
   padding: 8px 10px;
   border-radius: 8px;
-  background: var(--tabula-color-surface-muted, #f4f6fa);
-  color: var(--tabula-color-text-muted);
-  font-size: var(--tabula-font-size-sm);
+  background: var(--tableos-color-surface-muted, #f4f6fa);
+  color: var(--tableos-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
 }
 
 .desktopBtn {
@@ -103,10 +103,10 @@
   border: 0;
   border-radius: 6px;
   padding: 4px 10px;
-  background: var(--tabula-color-primary, #181d26);
+  background: var(--tableos-color-primary, #181d26);
   color: #fff;
   font: inherit;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   cursor: pointer;
 }
 
@@ -114,16 +114,16 @@
   display: flex;
   gap: 16px;
   padding: 0 16px;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
 }
 
 .filter {
   border: 0;
   background: none;
   font: inherit;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   font-weight: 500;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   padding: 8px 0;
   border-bottom: 2px solid transparent;
   cursor: pointer;
@@ -131,8 +131,8 @@
 
 .filterActive {
   composes: filter;
-  color: var(--tabula-color-text);
-  border-bottom-color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
+  border-bottom-color: var(--tableos-color-text);
 }
 
 .list {
@@ -151,7 +151,7 @@
 
 .itemUnread {
   composes: item;
-  background: var(--tabula-color-accent-subtle);
+  background: var(--tableos-color-accent-subtle);
 }
 
 .itemMain {
@@ -174,8 +174,8 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--tabula-color-signature-mint);
-  color: var(--tabula-color-text);
+  background: var(--tableos-color-signature-mint);
+  color: var(--tableos-color-text);
   font-size: 11px;
   font-weight: 500;
   display: inline-flex;
@@ -191,13 +191,13 @@
 }
 
 .itemTitle {
-  font-size: var(--tabula-font-size-md);
+  font-size: var(--tableos-font-size-md);
   line-height: 1.35;
 }
 
 .itemBody {
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-body);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-body);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -206,8 +206,8 @@
 }
 
 .itemMeta {
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-text-muted);
 }
 
 .dotBtn {
@@ -227,19 +227,19 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--tabula-color-link);
+  background: var(--tableos-color-link);
 }
 
 .dotEmpty {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  border: 1px solid var(--tabula-color-border-strong);
+  border: 1px solid var(--tableos-color-border-strong);
 }
 
 .empty {
   padding: 28px 16px;
   text-align: center;
-  font-size: var(--tabula-font-size-md);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-md);
+  color: var(--tableos-color-text-muted);
 }

@@ -11,9 +11,9 @@ import {
   optionColorAt,
   plainText,
   type FieldConfig,
-} from "@tabula/fields";
-import type { Database } from "@tabula/db";
-import { generateUuidV7, keyBetween, keysBetween } from "@tabula/types";
+} from "@tableos/fields";
+import type { Database } from "@tableos/db";
+import { generateUuidV7, keyBetween, keysBetween } from "@tableos/types";
 import type { Redis } from "ioredis";
 import { sql, type Transaction } from "kysely";
 import { ApiError } from "../../http/errors.js";

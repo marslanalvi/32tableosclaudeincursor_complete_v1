@@ -29,7 +29,7 @@ export function AccountMenu() {
           heading: true,
           label: (
             <span style={{ textTransform: "none", letterSpacing: 0 }}>
-              <strong style={{ display: "block", fontWeight: 500, color: "var(--tabula-color-text)", fontSize: 14 }}>
+              <strong style={{ display: "block", fontWeight: 500, color: "var(--tableos-color-text)", fontSize: 14 }}>
                 {me.data?.name || "Signed in"}
               </strong>
               {me.data?.email}

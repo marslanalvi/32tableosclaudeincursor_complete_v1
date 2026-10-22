@@ -1,5 +1,5 @@
 {
-  "extends": "@tabula/tsconfig/react.json",
+  "extends": "@tableos/tsconfig/react.json",
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src"

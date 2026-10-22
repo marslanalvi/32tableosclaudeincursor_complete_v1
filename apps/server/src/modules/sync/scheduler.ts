@@ -1,4 +1,4 @@
-import type { DomainEvent } from "@tabula/events";
+import type { DomainEvent } from "@tableos/events";
 import { dueSyncIds, runTableSync, SyncBusyError, SyncCancelledError, type SyncDeps } from "./engine.js";
 
 interface Logger {

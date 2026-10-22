@@ -34,7 +34,7 @@ export interface StoredObjectInfo {
 
 export type StorageDriverName = "gcs" | "local" | "db";
 
-export interface TabulaStorage {
+export interface TableOSStorage {
   readonly driver: StorageDriverName;
   /**
    * Direct-to-storage upload URL. The local driver has no URL of its own;
@@ -102,7 +102,7 @@ function createGcsClient(env: StorageEnv): Storage {
   });
 }
 
-export function createStorage(env: StorageEnv): TabulaStorage {
+export function createStorage(env: StorageEnv): TableOSStorage {
   const storage = createGcsClient(env);
   const bucket = storage.bucket(env.bucket);
 
@@ -196,7 +196,7 @@ export function createStorage(env: StorageEnv): TabulaStorage {
  * served by the API (no presigned URLs). Keys are sanitised so they can never
  * escape the root.
  */
-export function createLocalStorage(rootDir: string): TabulaStorage {
+export function createLocalStorage(rootDir: string): TableOSStorage {
   const root = path.resolve(rootDir);
 
   function resolveKey(key: string): string {

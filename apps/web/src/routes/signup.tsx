@@ -1,6 +1,6 @@
 import { Link, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
-import { Button, Input, Label, PasswordInput } from "@tabula/ui";
+import { Button, Input, Label, PasswordInput } from "@tableos/ui";
 import { authErrorMessage, useSignup } from "../features/auth/use-auth.ts";
 import authStyles from "../features/auth/auth-layout.module.css";
 import { AuthTopNav } from "./login.tsx";
@@ -63,7 +63,7 @@ export function SignupPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <span className={authStyles.hint} style={tooShort ? { color: "var(--tabula-color-danger)" } : undefined}>
+              <span className={authStyles.hint} style={tooShort ? { color: "var(--tableos-color-danger)" } : undefined}>
                 At least 8 characters.
               </span>
             </div>

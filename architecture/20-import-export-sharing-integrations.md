@@ -75,7 +75,7 @@ Non-goals (MVP): Google Sheets live link (that's a **sync source**, Part D), `.n
 ```
  Client                  API (import module)                 import worker (BullMQ queue `import`)
  ──────                  ───────────────────                 ──────────────────────────────────────
- 1 attachments:init  ─▶  presigned PUT → tabula-uploads-quarantine
+ 1 attachments:init  ─▶  presigned PUT → tableos-uploads-quarantine
  2 PUT file to S3
  3 POST /imports     ─▶  import_jobs(status=uploaded) + long_operations ─▶ ANALYZE job
                                                                    ├ ClamAV scan (file-scan queue)
@@ -106,7 +106,7 @@ succeeded/completed_with_errors → rolling_back → rolled_back
 
 ## 3. Upload and file handling
 
-* Upload via the standard attachment flow (`31-…` §17) with `purpose: "import"`: lands in `tabula-uploads-quarantine`, 7-day lifecycle (Spine §11). Import files are **not** promoted to `tabula-attachments` — they are transient inputs; the import job references `quarantine/{workspaceId}/imports/{importId}/source`.
+* Upload via the standard attachment flow (`31-…` §17) with `purpose: "import"`: lands in `tableos-uploads-quarantine`, 7-day lifecycle (Spine §11). Import files are **not** promoted to `tableos-attachments` — they are transient inputs; the import job references `quarantine/{workspaceId}/imports/{importId}/source`.
 * Malware scan is mandatory before parsing (xlsx is a zip; zip-bomb protection: max uncompressed size 2 GB, max ratio 100:1, max entries 10k).
 * Parsing runs in the `import` worker pool, with per-job memory cap (`--max-old-space-size` per process; one large import per process) — never in the API process.
 * Streaming parsers:
@@ -286,7 +286,7 @@ Realtime: open grids receive `records.bulk_insert` ops per batch; clients with t
 
 ## 14. Export model
 
-* Exports are defined by a **source** (`viewId`, or `tableId` + optional `filter`/`fields`) and produce a file in `tabula-exports` (7-day lifecycle). State in `export_jobs`; progress via `long_operations` (`export.run`).
+* Exports are defined by a **source** (`viewId`, or `tableId` + optional `filter`/`fields`) and produce a file in `tableos-exports` (7-day lifecycle). State in `export_jobs`; progress via `long_operations` (`export.run`).
 * Small view CSV (≤ 10k rows): synchronous streaming endpoint (`GET …/views/{viewId}/export.csv`) — what the UI's "Download CSV" uses for typical views.
 * Base-level "full export" (all tables, schema JSON, attachments manifest) is a V1 feature using the snapshot machinery (`base_snapshots`) and produces a zip.
 
@@ -310,7 +310,7 @@ Field order and visibility = view's visible fields in order (hidden fields exclu
 
 ## 17. Large exports and delivery
 
-* Worker streams: DB cursor (keyset pages of 2,000 records via the planner, `Tabula-Consistency: eventual` to replicas allowed) → row renderer → format writer → **S3 multipart upload stream** (`@aws-sdk/lib-storage` `Upload`, 16 MB parts). Memory bounded; no temp disk needed.
+* Worker streams: DB cursor (keyset pages of 2,000 records via the planner, `TableOS-Consistency: eventual` to replicas allowed) → row renderer → format writer → **S3 multipart upload stream** (`@aws-sdk/lib-storage` `Upload`, 16 MB parts). Memory bounded; no temp disk needed.
 * Consistency: exports record `snapshotSeq` at start; rows changed mid-export may reflect newer values (documented; same semantics as pagination §16.3 of `17-…`). Enterprise option `consistent: true` runs the export inside a `REPEATABLE READ` read-only transaction on a replica (bounded to 30 min; larger tables fall back with a warning).
 * Completion: `export.completed` event → notification (in-app + email with link to the app, **never** the signed URL itself in email) → `GET …/exports/{id}` returns `downloadUrl`.
 * Export via API: `POST /v1/bases/{baseId}/exports` → `202` → poll → download (`31-…` §24). Rate cost 10 units; concurrency 2 per token.
@@ -339,7 +339,7 @@ Flow:
 
 1. `POST …/invitations { email, role }` (workspace/base/interface) — checks: inviter can grant ≤ own role (`base.manage_members` / `workspace.manage`), org policy `externalInvites` (`verified_domains_only` ⇒ email domain ∈ `organization_domains(verified)` or `allowedEmailDomains`), seat availability (`PLAN_LIMIT_EXCEEDED` if a paid seat would be needed and auto-add is off).
 2. `invitations` row: `token_hash` (SHA-256 of 256-bit token), `email_normalized`, `resource_type/id`, `role`, `invited_by`, `expires_at` (14 days), `status`.
-3. Email via `email` queue with link `https://app.tabula.example/invite/{token}`.
+3. Email via `email` queue with link `https://app.tableos.example/invite/{token}`.
 4. Accept (`POST /v1/invitations/{token}:accept`) requires a session whose **verified email matches** the invited email (case-insensitive; plus-addressing not normalized). If the user signs up through the link, the email is verified by the invitation itself (possession of the token proves mailbox control) — except when the org enforces SSO for that domain: then SSO login is required first.
 5. Existing users: invitations to known emails also appear in-app (notification) — accept without email round-trip.
 6. On accept: `access_grants` upsert (never downgrades an existing higher role), `invitation.accepted` + `grant.changed` events, `perm_epoch` bump for the base(s) → PermissionSnapshot invalidation.
@@ -349,13 +349,13 @@ Abuse controls: invites per inviter 100/day (Free 20/day), per base 500/day; inv
 ## 20. Share links: token architecture
 
 ```
-https://share.tabula.example/v/shr_4Lp9…/Xk7Q2mN8vR1sT5wY3zA6bC9dE0fG4hJ7k   (view)
+https://share.tableos.example/v/shr_4Lp9…/Xk7Q2mN8vR1sT5wY3zA6bC9dE0fG4hJ7k   (view)
                                 └ share id ┘ └────────── 128-bit secret, base62 (22 chars) ──┘
 ```
 
 * **Two-part URL:** public `shr_…` ID (lookup key, safe in logs/analytics) + **128-bit random secret** (`crypto.randomBytes(16)`, base62). DB stores only `token_hash = SHA-256(secret)` and `token_prefix` (first 6 chars) for identification in admin UIs ("link ending/starting `Xk7Q2m…`"). Possession of the full URL = capability.
 * Lookup: `share_links` by ID (the shard is found via `share_id → base_id` routing entry; see Proposed additions `core.public_link_directory`), constant-time compare of hash. 128 bits of entropy makes online guessing infeasible; per-IP rate limiting adds a margin.
-* Served from a **separate origin** `share.tabula.example` (cookie isolation from the app origin; a hostile share-page XSS cannot read app cookies; separate CSP).
+* Served from a **separate origin** `share.tableos.example` (cookie isolation from the app origin; a hostile share-page XSS cannot read app cookies; separate CSP).
 * `:regenerate` replaces the secret (old URL dead immediately); revoke sets `status=revoked`. Both bump a `share_epoch` that invalidates unlock cookies (§21).
 * Cache: `share:{shareId}` Redis entry (config projection, status, epoch; TTL 60 s; invalidated via pub/sub on change) → share requests do not hit Postgres for metadata.
 
@@ -365,7 +365,7 @@ https://share.tabula.example/v/shr_4Lp9…/Xk7Q2mN8vR1sT5wY3zA6bC9dE0fG4hJ7k   (
 |---|---|---|
 | `public` | Secret URL only | Default where org policy allows |
 | `password` | `password_hash` = **Argon2id** (m=64 MB, t=3, p=1); `POST /share/{shareId}/unlock { password }` | Rate limit: 5 attempts / 15 min per (share, IP) and 50 / hour per share globally (GCRA); exceed → `429` + soft lockout 15 min. Success → **unlock cookie** `tshr_{shareId}` = HMAC-signed `{shareId, shareEpoch, exp: 24h}`, `HttpOnly; Secure; SameSite=None` (needed for embeds), `Path=/v/{shareId}` (scoped to that share only) |
-| `email_domain` / `email_list` (restricted shares) | Viewer enters email → **magic link** (one-time 256-bit token, 15 min, stored hashed in Redis `share:magic:{hash}`) → click sets unlock cookie bound to `{shareId, email, shareEpoch}` | Domain check on normalized email; access log records the email (for owner analytics). Logged-in Tabula users whose verified email matches skip the magic link |
+| `email_domain` / `email_list` (restricted shares) | Viewer enters email → **magic link** (one-time 256-bit token, 15 min, stored hashed in Redis `share:magic:{hash}`) → click sets unlock cookie bound to `{shareId, email, shareEpoch}` | Domain check on normalized email; access log records the email (for owner analytics). Logged-in TableOS users whose verified email matches skip the magic link |
 | Expiring | `expires_at` checked at every request; expired → generic 404 page | Owner notified 3 days before expiry (optional) |
 | Combination | password + expiry + domain restriction may combine | Org policy `password_required` forces `password` or restricted modes |
 
@@ -402,9 +402,9 @@ Rules:
 
 ## 23. Embeds
 
-* `embed.enabled = true` exposes `https://share.tabula.example/embed/v/{shareId}/{secret}`.
+* `embed.enabled = true` exposes `https://share.tableos.example/embed/v/{shareId}/{secret}`.
 * **CSP** on embed responses: `frame-ancestors <embed.frameAncestors…>` (owner-configured list of origins, e.g. `https://intranet.example.com`; default `*` only allowed when org policy permits public embeds). Non-embed share pages send `frame-ancestors 'none'` (clickjacking protection) and `X-Frame-Options: DENY`.
-* **Embed-specific token:** for embeds whose host app wants to avoid exposing the share secret in page source, owners can generate **signed embed tokens** server-side: JWT-like compact token `{ shareId, aud: "embed", origin, exp ≤ 24h, viewerRef? }` signed with a per-share **embed signing secret** (shown once; `share_links.embed.secret_hash`). The host backend mints tokens per page view; we verify signature + `origin` vs `Origin`/`Sec-Fetch-Site` + expiry. This enables "secure embed" (only your logged-in users see the embed) without Tabula accounts.
+* **Embed-specific token:** for embeds whose host app wants to avoid exposing the share secret in page source, owners can generate **signed embed tokens** server-side: JWT-like compact token `{ shareId, aud: "embed", origin, exp ≤ 24h, viewerRef? }` signed with a per-share **embed signing secret** (shown once; `share_links.embed.secret_hash`). The host backend mints tokens per page view; we verify signature + `origin` vs `Origin`/`Sec-Fetch-Site` + expiry. This enables "secure embed" (only your logged-in users see the embed) without TableOS accounts.
 * Cookies inside iframes are third-party: password-protected embeds rely on the embed token or on `SameSite=None; Partitioned` (CHIPS) unlock cookies.
 
 ## 24. Revocation, analytics, abuse prevention
@@ -600,7 +600,7 @@ async function getAccessToken(conn: ConnectionRef): Promise<string> {
 
 ## 30. Inbound provider webhooks
 
-* Callback URL per subscription: `https://hooks.tabula.example/c/{connectorId}/{routeToken}` where `routeToken` (128-bit) maps to `(connection_id, trigger subscription)` — stored hashed; reuse the `inbound_webhooks` table with `kind='connector'` (see Proposed additions).
+* Callback URL per subscription: `https://hooks.tableos.example/c/{connectorId}/{routeToken}` where `routeToken` (128-bit) maps to `(connection_id, trigger subscription)` — stored hashed; reuse the `inbound_webhooks` table with `kind='connector'` (see Proposed additions).
 * **Verification per provider** declared in the manifest:
 
 ```ts
@@ -646,7 +646,7 @@ interface SyncResourceDefinition {
 * Synced fields are locked (`fields.restrictions.edit = system`); API writes to them → `403 FIELD_NOT_EDITABLE`.
 * Consistency: cursor advanced only after the page's records committed (same tx stores `sync_sources.cursor`), so crashes re-process at most one page (idempotent upserts).
 * Limits: sync row count counts toward records-per-base; Free plan: no sync; schedules ≥ 5 min.
-* **Base-to-base sync** (internal source connector `tabula-base`) uses the same mechanism reading another base's view through the API with a service principal — no cross-shard SQL.
+* **Base-to-base sync** (internal source connector `tableos-base`) uses the same mechanism reading another base's view through the API with a service principal — no cross-shard SQL.
 
 ## 33. Third-party connectors: packaging, registry, sandboxing
 
@@ -660,7 +660,7 @@ packages/connectors/
 ```
 
 * **First-party** connectors: workspace packages compiled into the server image; `ConnectorRegistry` loads all `packages/connectors/*/manifest.json` at boot, validates manifests (JSON Schema + lint: every action has schemas, egress hosts declared, scopes minimal), and registers runtimes. Multiple versions can coexist (`slack@1`, `slack@2`); automation steps pin a major version; minor/patch upgrades apply automatically.
-* **Verified/community** connectors (V1+): published through the developer portal as a bundle (`manifest.json` + single ESM bundle built with our CLI `tabula connector build`, no native deps), stored in S3 with content hash; catalogue rows in `core.connectors` / `core.connector_versions` (Proposed). Review pipeline: static analysis (no dynamic `eval`/`Function`, dependency audit), manifest review (scopes, egress), automated tests against recorded fixtures, manual review for `verified`.
+* **Verified/community** connectors (V1+): published through the developer portal as a bundle (`manifest.json` + single ESM bundle built with our CLI `tableos connector build`, no native deps), stored in S3 with content hash; catalogue rows in `core.connectors` / `core.connector_versions` (Proposed). Review pipeline: static analysis (no dynamic `eval`/`Function`, dependency audit), manifest review (scopes, egress), automated tests against recorded fixtures, manual review for `verified`.
 * **Sandboxed execution** for non-first-party code: runs in the `sandbox` role (D21) — V8 isolate (`isolated-vm`) with memory 128 MB, CPU time limit per invocation (action `timeoutMs`), no `fs`, no `process`, network only through a host-provided `fetch` that routes via the **egress proxy** enforcing `egress.allowedHosts` and blocking private IP ranges. The isolate receives **only a short-lived access token** (or uses a proxied `http` client that injects auth host-side, preferred) — never refresh tokens, KEKs or DEKs. `refresh`/`exchangeCode` for community connectors are restricted to declarative OAuth (standard RFC 6749 flows executed by the host); custom refresh code is allowed only for verified connectors.
 * **Versioning & compatibility:** `connector-sdk` is semver'd; manifests declare `sdkVersion`; the host supports the current and previous major.
 * **Kill switch:** `feature_flags`-driven per connector/version disable (security incident) → steps fail with a clear message; connections marked `disabled_policy`.
@@ -701,7 +701,7 @@ Notes: app-level event subscriptions (one Events API endpoint for our Slack app)
 
 * OAuth2 (Google), scopes `gmail.send` (action) and `gmail.readonly` or `gmail.metadata` (trigger) — minimal-scope selection per used actions, incremental authorization when a user adds a trigger later (`:reauthorize` with extra scopes). Google restricted-scope verification is a compliance prerequisite (security assessment) — tracked in `25-security-observability-infrastructure.md`.
 * Trigger `new_email` (label/query filter): **push** via Gmail `watch` → Google Pub/Sub push → our endpoint (verification `jwt` with Google-signed OIDC token); event contains `historyId` only → runtime calls `history.list(startHistoryId)` with the cursor from `integration_trigger_states` → emits messages. Watch renewal daily (expires ≤ 7 days). Fallback polling every 2–5 min when push setup fails.
-* Action `send_email` (MIME built by framework helper; attachments from Tabula attachments streamed via signed URL fetch, size ≤ 25 MB). Contact timeline integration: sent/received emails matched to `contact_identifiers` → `contact.activity_logged` (`contact_activities`, source externalId = Gmail message ID for dedupe).
+* Action `send_email` (MIME built by framework helper; attachments from TableOS attachments streamed via signed URL fetch, size ≤ 25 MB). Contact timeline integration: sent/received emails matched to `contact_identifiers` → `contact.activity_logged` (`contact_activities`, source externalId = Gmail message ID for dedupe).
 
 ### 34.3 Google Calendar
 
@@ -713,7 +713,7 @@ Notes: app-level event subscriptions (one Events API endpoint for our Slack app)
 * OAuth2 with per-org instance URL (Salesforce-like: `instance_url` returned from token endpoint stored in `metadata`, egress allowlist pattern `*.my.provider.example`).
 * Actions: `upsert_contact` (by email), `create_deal`, `update_deal_stage`, `search_records` (provider query passthrough with schema); dynamic options for pipelines/stages/owners.
 * Triggers: provider webhooks where available (HMAC v3-style signatures with timestamp), else polling `updated_since` with overlap + seen-ID ring.
-* Sync resources: `contacts`, `companies`, `deals` → synced tables; **two-way** (V2) is explicitly out of scope for sync tables; write-back happens via automation actions (`record.updated` in Tabula → `update_deal_stage`), with loop prevention through `excludeOwnChanges`-like origin tagging: writes made by the connector carry `actor.type=integration` and the trigger matcher skips automations whose trigger is "record updated" when `via=sync` unless explicitly enabled.
+* Sync resources: `contacts`, `companies`, `deals` → synced tables; **two-way** (V2) is explicitly out of scope for sync tables; write-back happens via automation actions (`record.updated` in TableOS → `update_deal_stage`), with loop prevention through `excludeOwnChanges`-like origin tagging: writes made by the connector carry `actor.type=integration` and the trigger matcher skips automations whose trigger is "record updated" when `via=sync` unless explicitly enabled.
 * Provider rate limits (e.g. 100 req/10 s per app): manifest `rateLimits` with `scope: 'app'` enforced by a shared GCRA bucket keyed `rl:connector:{id}:{externalAccountId}`.
 
 ### 34.5 Generic HTTP
@@ -743,4 +743,4 @@ Notes: app-level event subscriptions (one Events API endpoint for our Slack app)
 | Redis namespaces `share:{shareId}`, `share:magic:{hash}`, `share:hll:{shareId}:{day}`, `lock:integration-refresh:{conId}`, `rl:connector:{id}:{acct}` | Redis | Not listed in Spine §10 (`lock:` and `rl:` prefixes exist; `share:` is new) |
 | Queue `integration-refresh` **or** reuse `maintenance` | Queue | We reuse `maintenance` (no new queue) — listed for reconciliation only |
 | Org policy keys: `sharing.revokeLinksOnCreatorRemoval`, `integrations.allowList/denyList/allowedTiers`, `exports.allowedRoles` | Policy keys | `organization_policies` |
-| Hostnames `share.tabula.example`, `hooks.tabula.example` | Infra | Origin isolation for public content and inbound hooks |
+| Hostnames `share.tableos.example`, `hooks.tableos.example` | Infra | Origin isolation for public content and inbound hooks |

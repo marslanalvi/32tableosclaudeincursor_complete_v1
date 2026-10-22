@@ -1,5 +1,5 @@
-import type { TabulaDb } from "@tabula/db";
-import type { BaseRole, WorkspaceRole } from "@tabula/permissions";
+import type { TableOSDb } from "@tableos/db";
+import type { BaseRole, WorkspaceRole } from "@tableos/permissions";
 import { compileForUser } from "./compile.js";
 import { BASE_ROLE_RANK, WORKSPACE_ROLE_RANK, getWorkspaceAccess, type OrgRole } from "./workspace-access.js";
 
@@ -10,7 +10,7 @@ import { BASE_ROLE_RANK, WORKSPACE_ROLE_RANK, getWorkspaceAccess, type OrgRole }
  * highest rank they may give (on the scale of that resource), 0 = may not manage access there.
  */
 export async function grantCeiling(
-  db: TabulaDb,
+  db: TableOSDb,
   actorId: string,
   actorRole: OrgRole | null,
   target: { workspaceId: string } | { baseId: string },

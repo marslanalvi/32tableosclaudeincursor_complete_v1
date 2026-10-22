@@ -1,5 +1,5 @@
-import type { Database, TabulaDb } from "@tabula/db";
-import { generateUuidV7 } from "@tabula/types";
+import type { Database, TableOSDb } from "@tableos/db";
+import { generateUuidV7 } from "@tableos/types";
 import type { Redis } from "ioredis";
 import { sql, type Transaction } from "kysely";
 import { publishBaseChange } from "./realtime-fanout.js";
@@ -57,7 +57,7 @@ async function runAfterCommitCallbacks(fns: AfterCommitFn[]): Promise<void> {
  * `afterCommit` callbacks; they run after this transaction commits.
  */
 export async function runTransactionWithAfterCommit<T>(
-  db: TabulaDb,
+  db: TableOSDb,
   fn: (trx: DbTrx) => Promise<T>,
 ): Promise<T> {
   const callbacks: AfterCommitFn[] = [];
@@ -97,7 +97,7 @@ export interface MutationResult {
 }
 
 export async function withBaseTx(
-  db: TabulaDb,
+  db: TableOSDb,
   params: {
     orgId: string;
     workspaceId: string;
@@ -206,7 +206,7 @@ export async function withBaseTx(
         ${params.workspaceId},
         ${params.baseId},
         ${mutation.eventType},
-        'tabula.domain-events.v1',
+        'tableos.domain-events.v1',
         ${params.baseId},
         ${mutation.aggregateType},
         ${mutation.aggregateId},

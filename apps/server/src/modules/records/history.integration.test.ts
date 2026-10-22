@@ -2,13 +2,13 @@
  * Live-API integration test for record revision history
  * (`GET /v1/bases/:b/tables/:t/records/:r/history`).
  *
- * Requires a running API (TABULA_API_URL, default http://localhost:3200).
+ * Requires a running API (TABLEOS_API_URL, default http://localhost:3200).
  * Run: node --import tsx --test src/modules/records/history.integration.test.ts
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const API = process.env["TABULA_API_URL"] ?? "http://localhost:3200";
+const API = process.env["TABLEOS_API_URL"] ?? "http://localhost:3200";
 
 type Res<T = any> = { status: number; body: T };
 
@@ -50,7 +50,7 @@ const history = async (table: string, rec: string, qs = "") =>
 test("setup: user, base, fields, linked table", async () => {
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const su = ok(
-    await api("POST", "/v1/auth/signup", { email: `r2-grid-h${stamp}@tabula.test`, password: "Passw0rd!Passw0rd", name: "Hana History" }),
+    await api("POST", "/v1/auth/signup", { email: `r2-grid-h${stamp}@tableos.test`, password: "Passw0rd!Passw0rd", name: "Hana History" }),
     201,
     "signup",
   );
@@ -176,7 +176,7 @@ test("deleted fields keep their last name; pagination; duplicate; access", async
   const other = client();
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   ok(
-    await other("POST", "/v1/auth/signup", { email: `r2-grid-h${stamp}-x@tabula.test`, password: "Passw0rd!Passw0rd", name: "Outsider" }),
+    await other("POST", "/v1/auth/signup", { email: `r2-grid-h${stamp}-x@tableos.test`, password: "Passw0rd!Passw0rd", name: "Outsider" }),
     201,
     "signup other",
   );

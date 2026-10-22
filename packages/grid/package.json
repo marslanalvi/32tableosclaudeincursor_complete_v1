@@ -1,9 +1,9 @@
 {
-  "name": "@tabula/grid",
+  "name": "@tableos/grid",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "tabula": {
+  "tableos": {
     "tier": "T2b",
     "env": "browser"
   },
@@ -20,7 +20,7 @@
     "test": "node -e \"process.exit(0)\""
   },
   "devDependencies": {
-    "@tabula/tsconfig": "workspace:*",
+    "@tableos/tsconfig": "workspace:*",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "react": "^19.0.0",

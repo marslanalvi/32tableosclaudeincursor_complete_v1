@@ -86,7 +86,7 @@ export class ShareApiError extends Error {
 }
 
 // Unlock tokens for password-protected shares live for the browser session.
-const unlockKey = (token: string) => `tabula.share.unlock:${token}`;
+const unlockKey = (token: string) => `tableos.share.unlock:${token}`;
 
 export function getUnlockToken(token: string): string | null {
   try {

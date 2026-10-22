@@ -1,6 +1,6 @@
 {
-  "name": "@tabula/public",
-  "version": "0.16.7",
+  "name": "@tableos/public",
+  "version": "0.16.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,16 +10,16 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@tabula/field-ui": "workspace:*",
-    "@tabula/types": "workspace:*",
-    "@tabula/ui": "workspace:*",
+    "@tableos/field-ui": "workspace:*",
+    "@tableos/types": "workspace:*",
+    "@tableos/ui": "workspace:*",
     "@tanstack/react-query": "^5.62.8",
     "@tanstack/react-router": "^1.91.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@tabula/tsconfig": "workspace:*",
+    "@tableos/tsconfig": "workspace:*",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",

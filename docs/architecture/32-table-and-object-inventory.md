@@ -181,11 +181,11 @@ Organization ‹org›                                   [C] organizations
 ├── Subscription → Plan                              [C] subscriptions → plans
 ├── Usage counters / raw usage events                [C] usage_counters, usage_events
 ├── OAuth client apps owned by the org ‹app›         [C] oauth_clients
-├── Org-private templates ‹tpl›                      [C] templates (visibility=org) + [S3] tabula-snapshots
+├── Org-private templates ‹tpl›                      [C] templates (visibility=org) + [S3] tableos-snapshots
 ├── Support access grants                            [C] support_access_grants
 ├── Rate-limit overrides                             [C] rate_limit_overrides
 ├── Dedicated shard(s) (Enterprise)                  [C] shards.dedicated_org_id
-├── Audit log                                        [A] audit_events (+ [S3] tabula-audit-archive)
+├── Audit log                                        [A] audit_events (+ [S3] tableos-audit-archive)
 │   └── SIEM exports                                 [A] audit_exports
 ├── Grants at org scope                              [C] access_grants (resource_type=org)
 ├── Invitations (org/workspace/base/interface) ‹inv› [C] invitations
@@ -210,10 +210,10 @@ Organization ‹org›                                   [C] organizations
         ├── Grants at base scope / interface_only    [C] access_grants (resource_type=base)
         ├── Change log ‹chg› (30 d; undo/redo, realtime catch-up, webhooks)  [D] base_changes
         ├── Domain events ‹evt› (outbox)             [D] outbox_events → Kafka
-        ├── Snapshots ‹snp›                          [D] base_snapshots + [S3] tabula-snapshots
+        ├── Snapshots ‹snp›                          [D] base_snapshots + [S3] tableos-snapshots
         ├── Long operations ‹lop›                    [D] long_operations
         │   ├── Imports ‹imp› → row errors           [D] import_jobs → import_errors
-        │   └── Exports ‹exp›                        [D] export_jobs + [S3] tabula-exports
+        │   └── Exports ‹exp›                        [D] export_jobs + [S3] tableos-exports
         ├── Sync sources → runs                      [D] sync_sources → sync_runs (target: tables kind=sync)
         ├── Secrets (base-level) ‹sct›               [D] secrets (base_id set)
         ├── Share links ‹shr› (view/form/interface/base)  [D] share_links ↔ [C] public_link_directory [Proposed]
@@ -235,8 +235,8 @@ Organization ‹org›                                   [C] organizations
         │   │   ├── Rich-text CRDT docs (V1+)        [D] record_rich_docs
         │   │   ├── Revisions ‹rev›                  [D] record_revisions
         │   │   ├── Pending recompute markers        [D] computed_stale
-        │   │   ├── Attachments ‹att›                [D] attachments + [S3] tabula-attachments
-        │   │   │   └── Variants (thumbs, posters)   [D] attachment_variants (+ attachment_blobs [Proposed]) + [S3] tabula-attachment-variants
+        │   │   ├── Attachments ‹att›                [D] attachments + [S3] tableos-attachments
+        │   │   │   └── Variants (thumbs, posters)   [D] attachment_variants (+ attachment_blobs [Proposed]) + [S3] tableos-attachment-variants
         │   │   ├── Comments ‹cmt› (threads)         [D] comments
         │   │   │   ├── Reactions                    [D] comment_reactions
         │   │   │   └── Mentions                     [D] mentions (also from long_text cells)
@@ -286,7 +286,7 @@ Global (platform) objects
 ├── Shards (data plane cells)                        [C] shards
 ├── Plans                                            [C] plans
 ├── Feature flags                                    [C] feature_flags
-├── Public template gallery ‹tpl›                    [C] templates (org_id NULL) + [S3] tabula-snapshots
+├── Public template gallery ‹tpl›                    [C] templates (org_id NULL) + [S3] tableos-snapshots
 ├── OAuth client apps (platform-curated) ‹app›       [C] oauth_clients (org_id NULL)
 ├── Email suppression list                           [C] email_suppressions
 ├── System AI prompt templates                       [D] ai_prompt_templates (workspace_id NULL, seeded on every shard)

@@ -1,4 +1,4 @@
-import { TabulaErrorCodes, createTabulaError } from "@tabula/types";
+import { TableOSErrorCodes, createTableOSError } from "@tableos/types";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { handleRouteError, sendProblem } from "../../http/errors.js";
 import {
@@ -14,7 +14,7 @@ export function serviceUnavailable(
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.VALIDATION_FAILED, {
+    createTableOSError(TableOSErrorCodes.VALIDATION_FAILED, {
       status: 503,
       title: "Service unavailable",
       detail,
@@ -27,7 +27,7 @@ export function gone(request: FastifyRequest, reply: FastifyReply, detail: strin
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.NOT_FOUND, {
+    createTableOSError(TableOSErrorCodes.NOT_FOUND, {
       status: 410,
       title: "Gone",
       detail,
@@ -40,7 +40,7 @@ export function tooManyRequests(request: FastifyRequest, reply: FastifyReply, de
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.VALIDATION_FAILED, {
+    createTableOSError(TableOSErrorCodes.VALIDATION_FAILED, {
       status: 429,
       title: "Too many requests",
       detail,
@@ -52,7 +52,7 @@ export function passwordRequired(request: FastifyRequest, reply: FastifyReply, w
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.UNAUTHENTICATED, {
+    createTableOSError(TableOSErrorCodes.UNAUTHENTICATED, {
       title: wrong ? "Incorrect password" : "Password required",
       detail: wrong ? "The password is incorrect" : "This share is password protected",
       meta: { reason: wrong ? "password_incorrect" : "password_required" },
@@ -70,7 +70,7 @@ export function handleWave4Error(request: FastifyRequest, reply: FastifyReply, e
     sendProblem(
       reply,
       request,
-      createTabulaError(TabulaErrorCodes.VALIDATION_FAILED, {
+      createTableOSError(TableOSErrorCodes.VALIDATION_FAILED, {
         status: /too large/i.test(err.message) ? 413 : 422,
         detail: err.message,
       }),

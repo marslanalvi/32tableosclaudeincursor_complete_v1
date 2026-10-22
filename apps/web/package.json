@@ -1,6 +1,6 @@
 {
-  "name": "@tabula/web",
-  "version": "0.16.7",
+  "name": "@tableos/web",
+  "version": "0.16.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,14 +11,14 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@tabula/field-ui": "workspace:*",
-    "@tabula/fields": "workspace:*",
-    "@tabula/filter": "workspace:*",
-    "@tabula/grid": "workspace:*",
-    "@tabula/record-store": "workspace:*",
-    "@tabula/realtime-client": "workspace:*",
-    "@tabula/types": "workspace:*",
-    "@tabula/ui": "workspace:*",
+    "@tableos/field-ui": "workspace:*",
+    "@tableos/fields": "workspace:*",
+    "@tableos/filter": "workspace:*",
+    "@tableos/grid": "workspace:*",
+    "@tableos/record-store": "workspace:*",
+    "@tableos/realtime-client": "workspace:*",
+    "@tableos/types": "workspace:*",
+    "@tableos/ui": "workspace:*",
     "@tanstack/react-query": "^5.62.8",
     "@tanstack/react-router": "^1.91.2",
     "react": "^19.0.0",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
-    "@tabula/tsconfig": "workspace:*",
+    "@tableos/tsconfig": "workspace:*",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",

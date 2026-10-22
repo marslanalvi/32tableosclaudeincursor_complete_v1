@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { Env } from "@tabula/config";
-import type { TabulaDb } from "@tabula/db";
+import type { Env } from "@tableos/config";
+import type { TableOSDb } from "@tableos/db";
 import { safeFetch } from "../../lib/http-egress.js";
 import { consumeChallenge, createChallenge, findChallenge } from "./challenges.js";
 
@@ -13,13 +13,13 @@ export function googleOAuthEnabled(env: Env): boolean {
 }
 
 /** OAuth `state` is persisted in core.auth_challenges (not process memory). */
-export async function createOAuthState(db: TabulaDb): Promise<string> {
+export async function createOAuthState(db: TableOSDb): Promise<string> {
   const state = randomBytes(24).toString("base64url");
   await createChallenge(db, "oauth_state", { ttlMs: 600_000, token: state });
   return state;
 }
 
-export async function consumeOAuthState(db: TabulaDb, state: string): Promise<boolean> {
+export async function consumeOAuthState(db: TableOSDb, state: string): Promise<boolean> {
   const row = await findChallenge(db, "oauth_state", state);
   if (!row) return false;
   return consumeChallenge(db, row.id);

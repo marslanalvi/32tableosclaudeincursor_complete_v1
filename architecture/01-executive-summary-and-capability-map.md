@@ -40,7 +40,7 @@
 
 ### 1.1 What we are building
 
-**Tabula** is a multi-tenant SaaS product that lets non-engineers model their own relational data and build workflows on top of it. A user creates a **base** (a small relational database), adds **tables**, defines typed **fields** (text, number, select, date, attachment, link-to-another-record, formula, lookup, rollup…), enters **records** in a spreadsheet-like grid, and then:
+**TableOS** is a multi-tenant SaaS product that lets non-engineers model their own relational data and build workflows on top of it. A user creates a **base** (a small relational database), adds **tables**, defines typed **fields** (text, number, select, date, attachment, link-to-another-record, formula, lookup, rollup…), enters **records** in a spreadsheet-like grid, and then:
 
 * looks at the same records through **views** (grid, kanban, calendar, gallery, timeline, list, form) with per-view filters, sorts, grouping and hidden fields;
 * builds **interfaces** — purpose-built app pages (dashboards, record review screens, portals) composed of elements bound to tables;
@@ -173,7 +173,7 @@ API tx ──► data.records / record_links / … (current state)
                   ▼
      relay (logical replication slot per shard; commit-ordered; gap-free)
                   ▼
-     Kafka API: tabula.base-changes.v1 · tabula.domain-events.v1 · tabula.audit.v1 · tabula.usage.v1
+     Kafka API: tableos.base-changes.v1 · tableos.domain-events.v1 · tableos.audit.v1 · tableos.usage.v1
                   ▼
      consumers: realtime fan-out · automation trigger matcher · webhook dispatcher · search indexer ·
                 notification router · audit writer · usage meter · AI field runner · contact timeline
@@ -353,7 +353,7 @@ Every major feature gets a subsection with a short **[Observed]** capability sta
 | Q8 | `base.created`, `base.updated`, `base.deleted`, `base.restored`, `base.duplicated`. |
 | Q9 | `base.read`, `base.manage_schema` (creator), `base.manage_members`, `base.share`; `interface_only` role sees no base UI. |
 | Q10 | Schema snapshot `schema:{baseId}:{schemaVersion}` (immutable per version); `base_directory` route cache (in-process + Redis); perm snapshot per principal. |
-| Q11 | Shard Postgres (metadata + content); snapshots in `tabula-snapshots`. |
+| Q11 | Shard Postgres (metadata + content); snapshots in `tableos-snapshots`. |
 | Q12 | Soft delete: `bases.deleted_at` + `deletion_batches` entry; `base_directory.status='trashed'`; webhooks paused, automations stop matching, share links stop resolving. Purge after `TRASH_RETENTION`. |
 | Q13 | Restore clears flags; automations return to their prior on/off state; webhooks resume from their cursor if within `BASE_CHANGES_RETENTION`, otherwise marked `expired` and must be re-created. |
 | Q14 | Base settings LWW; schema changes serialized by the `base_runtime` row lock (`schema_version`++). |
@@ -394,7 +394,7 @@ Every major feature gets a subsection with a short **[Observed]** capability sta
 | Q3 | `data.fields` (`slot`, `type`, `config`, `restrictions`, `order_key`, `deleted_at`), `data.field_dependencies`, `data.link_relations` (link/contact). |
 | Q4 | Table 1→N fields; formula/lookup/rollup depend on other fields (possibly through links); views reference fields in filters/sorts/visibility. |
 | Q5 | `POST /v1/bases/{baseId}/tables/{tableId}/fields`, `PATCH …/fields/{fieldId}` (name/description/options), `PATCH …/fields/{fieldId}` with a new `type` (preflight returns a lossy-conversion preview; large tables return `202` + `lop_` long operation, see [`06` §15](./06-record-storage.md)), `DELETE …/fields/{fieldId}`, `POST …/fields/{fieldId}:restore`. |
-| Q6 | Schema snapshot (`TQ['bases', baseId, 'schema']`); grid column model derived per view; client-side `@tabula/formula` validates formula text as the user types. |
+| Q6 | Schema snapshot (`TQ['bases', baseId, 'schema']`); grid column model derived per view; client-side `@tableos/formula` validates formula text as the user types. |
 | Q7 | `schema`, `compute` (dependency graph, recompute), `links`, `query` (sidecar enablement), `history`; queues `compute`, `maintenance` (conversion batches). |
 | Q8 | `field.created`, `field.updated`, `field.type_changed`, `field.deleted`, `field.restored`, `link_relation.created/deleted`. |
 | Q9 | `field.create/update/delete` (base creator); `fields.restrictions` restrict who may edit values (Enterprise: hide). |
@@ -513,7 +513,7 @@ Every major feature gets a subsection with a short **[Observed]** capability sta
 | Q3 | `data.fields.config`, `data.field_dependencies`, `records.computed`, `computed_stale`. |
 | Q4 | Depends on same-record fields (and, through lookups/rollups, on other records). |
 | Q5 | Field CRUD; `POST /v1/bases/{baseId}/formula:validate` (server check for API clients); values via record endpoints. |
-| Q6 | `@tabula/formula` in client: parse/type-check on each keystroke; optimistic recompute of same-record formulas when the user edits a cell. |
+| Q6 | `@tableos/formula` in client: parse/type-check on each keystroke; optimistic recompute of same-record formulas when the user edits a cell. |
 | Q7 | `compute` (sync same-record recompute in the write tx; volatile buckets via `scheduler`); `ai` (formula assistant). |
 | Q8 | `field.created/updated`, `record.computed_updated`. |
 | Q9 | `field.create/update`; reading as any field. |
@@ -533,7 +533,7 @@ Every major feature gets a subsection with a short **[Observed]** capability sta
 |---|---|
 | Q1 | Thumbnails in cells, upload by drag-drop/paste/URL, preview carousel, download. |
 | Q2 | `Attachment` aggregate (root) with `AttachmentVariant`s; referenced by record cells. |
-| Q3 | `data.attachments` (object key, mime, size, checksum, scan status, dims), `data.attachment_variants`; S3 `tabula-uploads-quarantine` → `tabula-attachments`, `tabula-attachment-variants`. |
+| Q3 | `data.attachments` (object key, mime, size, checksum, scan status, dims), `data.attachment_variants`; S3 `tableos-uploads-quarantine` → `tableos-attachments`, `tableos-attachment-variants`. |
 | Q4 | Belongs to base (and to the record/field where first attached); one attachment may be referenced by several cells after copy/duplicate (reachability checked by the orphan sweep). |
 | Q5 | `POST /v1/bases/{baseId}/attachments:initiate` (presigned multipart URLs), `POST /v1/attachments/{attachmentId}:complete`, `GET /v1/attachments/{attachmentId}` (metadata + signed URLs), `POST /v1/bases/{baseId}/attachments:fromUrl`. Cell write `{"fld_…": ["att_…"]}`. |
 | Q6 | Upload manager store (`UI.uploads`, per-file progress, resumable parts); attachment metadata embedded in record payloads. |
@@ -743,7 +743,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 | Q4 | Base 1→N automations; version references tables/fields/views/connections/secrets by ID; run → version, trigger event (`trigger_event_id`), trigger record. |
 | Q5 | `GET/POST /v1/bases/{baseId}/automations`, `GET/PATCH/DELETE …/automations/{automationId}` (draft, `If-Match`), `POST …/automations/{automationId}:publish`, `:enable`, `:disable`, `POST …/automations/{automationId}:test` (dry-run of trigger or step), `GET …/automations/{automationId}/runs`, `GET …/runs/{runId}`, `POST …/runs/{runId}:retry`. |
 | Q6 | `TQ['automations', baseId]`, `UI.automationDraft` (editor), `TQ['automationRuns', automationId, cursor]` with live status via realtime `automation.*` messages to editors. |
-| Q7 | `automation` (trigger matcher consuming `tabula.domain-events.v1`; step runner), `sandbox` role for scripts, `integration` (connections, OAuth refresh), `ai` (AI steps), `notification`/`email`; queues `automation-trigger`, `automation-step`, `automation-schedule`; `scheduler` for schedules + reconciler. |
+| Q7 | `automation` (trigger matcher consuming `tableos.domain-events.v1`; step runner), `sandbox` role for scripts, `integration` (connections, OAuth refresh), `ai` (AI steps), `notification`/`email`; queues `automation-trigger`, `automation-step`, `automation-schedule`; `scheduler` for schedules + reconciler. |
 | Q8 | `automation.created`, `automation.published`, `automation.paused`, `automation.triggered`, `automation.completed`, `automation.failed`, `automation.step_failed`, `automation.disabled_by_system`; actions emit normal domain events with `actor.type='automation'` and incremented `causationDepth`. |
 | Q9 | `automation.read`, `automation.edit` (creator), `automation.run` (manual/button). Runs execute with the **automation's owner-less service identity** scoped to its base: writes are permitted on the base regardless of the editor's later role changes, but field/table restrictions that target "automations" are honored; external access only via configured connections/secrets. |
 | Q10 | Trigger index per base in-process: `{eventType, tableId} → [automationVersion]` rebuilt on `automation.published/paused`; hourly budget counters `ratebudget:automation:{automationId}:{hour}`. |
@@ -766,7 +766,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 | Q4 | Base 1→N subscriptions; created by a user or OAuth app; cursor points into `base_changes.seq`. |
 | Q5 | `POST/GET /v1/bases/{baseId}/webhooks`, `DELETE …/webhooks/{webhookId}`, `POST …/webhooks/{webhookId}:refresh` (extend expiry), `GET …/webhooks/{webhookId}/payloads?cursor=` (change list since cursor). |
 | Q6 | N/A (developer console lists `TQ['webhooks', baseId]`). |
-| Q7 | `integration` (dispatcher consumes `tabula.base-changes.v1`, matches spec, coalesces per subscription, enqueues `webhook-out`), egress proxy with SSRF protections. |
+| Q7 | `integration` (dispatcher consumes `tableos.base-changes.v1`, matches spec, coalesces per subscription, enqueues `webhook-out`), egress proxy with SSRF protections. |
 | Q8 | No new domain events for each delivery (avoid recursion); status changes audited. |
 | Q9 | Creating requires `api.access` + `base.read` and the token's scopes; payload fetch re-checks the creator's **current** permissions and filters fields/tables accordingly. |
 | Q10 | Per-base subscription index in-process (invalidated on create/delete). |
@@ -787,7 +787,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 | Q2 | `InboundWebhook` (child of Automation aggregate). |
 | Q3 | `data.inbound_webhooks` (url_token hash, secret ref, automation_id, status, last_received_at). |
 | Q4 | 1:1 with an automation trigger. |
-| Q5 | `POST https://hooks.tabula.example/v1/in/{token}` (public; the opaque 32-byte token is the credential, stored as SHA-256; optional HMAC signature header), ≤ 1 MB JSON/form body; config via automation endpoints. |
+| Q5 | `POST https://hooks.tableos.example/v1/in/{token}` (public; the opaque 32-byte token is the credential, stored as SHA-256; optional HMAC signature header), ≤ 1 MB JSON/form body; config via automation endpoints. |
 | Q6 | Part of `UI.automationDraft`. |
 | Q7 | Dedicated `api` route group on the `hooks.` host (separate rate limits, no session, no cookies), `automation`; queue `automation-trigger`. Routing: `sha256(token)` → `core.public_link_directory` (proposed in [`04` §6.29](./04-database-architecture.md#629-proposed-additions)) → workspace/base → shard. |
 | Q8 | `inbound_webhook.received` → `automation.triggered`. |
@@ -854,7 +854,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 |---|---|
 | Q1 | Import wizard: upload, preview first 50 rows, field mapping with type suggestions, "create new table" vs "append/merge into existing" (merge key), progress, error report download. |
 | Q2 | `ImportJob` aggregate (root) with `ImportError`s; progress via `LongOperation`. |
-| Q3 | `data.import_jobs`, `data.import_errors`, `data.long_operations`; source file in `tabula-uploads-quarantine` then scanned. |
+| Q3 | `data.import_jobs`, `data.import_errors`, `data.long_operations`; source file in `tableos-uploads-quarantine` then scanned. |
 | Q4 | Job → target base/table; creates fields/records; one `deletion_batch`-like grouping via `long_operations.id` for "undo import". |
 | Q5 | `POST /v1/bases/{baseId}/imports` (create, returns upload URL), `POST …/imports/{importId}:analyze` (detect columns/types), `PUT …/imports/{importId}/mapping`, `POST …/imports/{importId}:start`, `GET …/imports/{importId}`, `GET …/imports/{importId}/errors`, `POST …/imports/{importId}:cancel`, `POST …/imports/{importId}:undo`. |
 | Q6 | `UI.importWizard`; `TQ['imports', importId]` + realtime progress. |
@@ -871,13 +871,13 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 
 #### 2.7.7 Export
 
-[Observed] CSV export of a view; full base download in some tiers. [Ours] `export_jobs` producing objects in `tabula-exports` (7-day lifecycle), delivered via signed URL.
+[Observed] CSV export of a view; full base download in some tiers. [Ours] `export_jobs` producing objects in `tableos-exports` (7-day lifecycle), delivered via signed URL.
 
 | # | Answer |
 |---|---|
 | Q1 | "Download CSV" on a view; base export (CSV zip / JSON) for admins; progress and email when ready. |
 | Q2 | `ExportJob`. |
-| Q3 | `data.export_jobs`, `data.long_operations`; S3 `tabula-exports`. |
+| Q3 | `data.export_jobs`, `data.long_operations`; S3 `tableos-exports`. |
 | Q4 | Job → view/table/base. |
 | Q5 | `POST /v1/bases/{baseId}/exports` (`{scope: view|table|base, format: csv|xlsx|json, viewId?}`), `GET …/exports/{exportId}` (status + signed URL). |
 | Q6 | `TQ['exports', exportId]`. |
@@ -904,11 +904,11 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 |---|---|
 | Q1 | Cmd-K global search (bases, tables, records, contacts, interfaces); in-view search bar with match navigation. |
 | Q2 | `SearchDocument` (derived projection; not an aggregate). |
-| Q3 | MVP `data.search_documents` (doc_type, base_id, table_id, record_id, `tsvector`, trigram text, updated_seq); V1 OpenSearch index per shard `tabula-records-{shardId}`. |
+| Q3 | MVP `data.search_documents` (doc_type, base_id, table_id, record_id, `tsvector`, trigram text, updated_seq); V1 OpenSearch index per shard `tableos-records-{shardId}`. |
 | Q4 | Projection of records/tables/fields/bases/contacts. |
 | Q5 | `GET /v1/search?q=&scope=workspace|base&baseId=&types=` ; in-view: `POST …/records:query {search: "acme"}`. |
 | Q6 | `TQ['search', scope, q]` (debounced 150 ms); in-view highlight state `UI.viewSearch`. |
-| Q7 | `search` (indexer consumes `tabula.domain-events.v1`; queue `search-index` in MVP), `access` (filter by accessible base IDs, then post-filter restricted fields). |
+| Q7 | `search` (indexer consumes `tableos.domain-events.v1`; queue `search-index` in MVP), `access` (filter by accessible base IDs, then post-filter restricted fields). |
 | Q8 | Consumes `record.*`, `field.*`, `table.*`, `base.*`; emits none. |
 | Q9 | Results limited to bases where `base.read`; field-restricted text is not indexed into the shared doc (Enterprise field hide: indexed into a restricted sub-field and filtered at query time). |
 | Q10 | None beyond OpenSearch; accessible-base-id list taken from the principal's snapshots (control-plane query, cached 60 s in-process). |
@@ -981,7 +981,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 | Q8 | `*.deleted` / `*.restored` per object kind, `trash.purged`. |
 | Q9 | Restore requires the permission needed to delete the object; permanent delete requires base creator (base content) / workspace owner (bases). |
 | Q10 | None. |
-| Q11 | Postgres; very large captured link sets stored in `tabula-snapshots` with key referenced from the batch. |
+| Q11 | Postgres; very large captured link sets stored in `tableos-snapshots` with key referenced from the batch. |
 | Q12 | Purge: hard delete rows in batches of 5,000 (records, links, revisions, comments, attachments marked for orphan sweep). |
 | Q13 | Restore validates conflicts (e.g., unique primary in sync tables, restored field name collision → auto-suffix "(restored)"), then clears flags and re-inserts captured links. |
 | Q14 | Restore takes an advisory lock on the batch; concurrent restore = idempotent no-op. |
@@ -1042,7 +1042,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 |---|---|
 | Q1 | Template gallery with categories/preview; "Use template"; org-private templates (Enterprise). |
 | Q2 | `Template`. |
-| Q3 | `core.templates` (category, visibility ∈ public/org, snapshot object key, schema version, preview images); S3 `tabula-snapshots`. |
+| Q3 | `core.templates` (category, visibility ∈ public/org, snapshot object key, schema version, preview images); S3 `tableos-snapshots`. |
 | Q4 | Template → source base snapshot; instantiated bases record `bases.settings.templateId`. |
 | Q5 | `GET /v1/templates?category=`, `GET /v1/templates/{templateId}`, `POST /v1/workspaces/{wsId}/bases {fromTemplateId}`, `POST /v1/orgs/{orgId}/templates {fromBaseId}`. |
 | Q6 | `TQ['templates', category]`. |
@@ -1059,7 +1059,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 
 #### 2.8.8 AI
 
-[Observed] AI features in the category: AI-generated field values, formula/automation authoring help, summarization, natural-language base building, agent-like assistants. [Ours] `@tabula/ai` provider abstraction + AI gateway module; `ai_generated` field type; every call logged in `ai_invocations`; org AI policy (D22). Detail in [`21`](./21-ai-architecture.md).
+[Observed] AI features in the category: AI-generated field values, formula/automation authoring help, summarization, natural-language base building, agent-like assistants. [Ours] `@tableos/ai` provider abstraction + AI gateway module; `ai_generated` field type; every call logged in `ai_invocations`; org AI policy (D22). Detail in [`21`](./21-ai-architecture.md).
 
 | # | Answer |
 |---|---|
@@ -1096,7 +1096,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 | Q4 | Org-scoped. |
 | Q5 | `GET /v1/admin/orgs/{orgId}/users`, `POST …/users/{userId}:deactivate`, `GET …/bases` (from `base_directory`), `GET/PUT …/policies`, `GET …/audit-events?filter=&cursor=`, `POST …/audit-exports`, `POST …/support-access-grants`. |
 | Q6 | Admin app routes; `TQ['admin', orgId, …]`. |
-| Q7 | `organization`, `audit` (writer consumes `tabula.audit.v1`), `access`, `auth`. |
+| Q7 | `organization`, `audit` (writer consumes `tableos.audit.v1`), `access`, `auth`. |
 | Q8 | Consumes everything security-relevant; emits `grant.changed`, `user.deactivated`. |
 | Q9 | `org.manage`, `audit.read`. |
 | Q10 | Policies inside perm snapshots (policy change bumps `perm_epoch` on all org bases via fan-out job). |
@@ -1155,7 +1155,7 @@ All rows of 2.5.1 apply; the matrix lists what differs per type.
 
 #### 2.9.4 Billing
 
-[Observed] Per-seat plans with limits; usage-based add-ons (automation runs, AI credits). [Ours] Stripe as payment processor; `plans.limits` JSON is the single source of limits; seats derived from billable members; metering via `tabula.usage.v1`.
+[Observed] Per-seat plans with limits; usage-based add-ons (automation runs, AI credits). [Ours] Stripe as payment processor; `plans.limits` JSON is the single source of limits; seats derived from billable members; metering via `tableos.usage.v1`.
 
 | # | Answer |
 |---|---|

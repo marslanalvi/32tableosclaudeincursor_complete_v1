@@ -1,5 +1,5 @@
 import { Redis } from "ioredis";
-import type { Env } from "@tabula/config";
+import type { Env } from "@tableos/config";
 import type { Logger } from "pino";
 
 const CONNECT_TIMEOUT_MS = 3000;

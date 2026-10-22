@@ -1,9 +1,9 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import {
   maxWorkspaceRole,
   type BaseRole,
   type WorkspaceRole,
-} from "@tabula/permissions";
+} from "@tableos/permissions";
 import { sql } from "kysely";
 import { requestMayAccess } from "../../kernel/request-context.js";
 
@@ -48,7 +48,7 @@ export interface WorkspaceAccess {
  * org owner/admin.
  */
 export async function getWorkspaceAccess(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   workspaceId: string,
 ): Promise<WorkspaceAccess | null> {
@@ -78,7 +78,7 @@ export async function getWorkspaceAccess(
 
 /** Org role of the user, or null when not an active member. */
 export async function getOrgRole(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   orgId: string,
 ): Promise<OrgRole | null> {
@@ -91,7 +91,7 @@ export async function getOrgRole(
 }
 
 /** Owners only: create Admins and Owners, transfer ownership. */
-export async function isOrgOwner(db: TabulaDb, userId: string, orgId: string): Promise<boolean> {
+export async function isOrgOwner(db: TableOSDb, userId: string, orgId: string): Promise<boolean> {
   return requestMayAccess(orgId) && (await getOrgRole(db, userId, orgId)) === "owner";
 }
 
@@ -100,7 +100,7 @@ export function isOrgManagerRole(role: string | null | undefined): boolean {
   return role === "owner" || role === "admin";
 }
 
-export async function isOrgManager(db: TabulaDb, userId: string, orgId: string): Promise<boolean> {
+export async function isOrgManager(db: TableOSDb, userId: string, orgId: string): Promise<boolean> {
   return requestMayAccess(orgId) && isOrgManagerRole(await getOrgRole(db, userId, orgId));
 }
 

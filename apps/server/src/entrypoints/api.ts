@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { runMigrations } from "@tabula/db";
+import { runMigrations } from "@tableos/db";
 import { createApp } from "../composition/create-app.js";
 import { startAutomationEngine } from "../modules/automations/consumer.js";
 import { mfaKey } from "../modules/auth/mfa-pending.js";

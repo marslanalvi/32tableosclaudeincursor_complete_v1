@@ -10,7 +10,7 @@ describe("InMemoryEventBus", () => {
     const bus = new InMemoryEventBus();
     const received: DomainEvent[] = [];
 
-    await bus.subscribe("tabula.domain-events.v1", "test", async (event) => {
+    await bus.subscribe("tableos.domain-events.v1", "test", async (event) => {
       received.push(event);
     });
 
@@ -25,7 +25,7 @@ describe("InMemoryEventBus", () => {
       data: { recordId: "rec_1" },
     };
 
-    await bus.publish("tabula.domain-events.v1", "bas_1", event);
+    await bus.publish("tableos.domain-events.v1", "bas_1", event);
     await bus.close();
 
     assert.equal(received.length, 1);

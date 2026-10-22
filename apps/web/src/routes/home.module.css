@@ -2,7 +2,7 @@
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--tabula-color-bg);
+  background: var(--tableos-color-bg);
 }
 
 .header {
@@ -12,8 +12,8 @@
   align-items: center;
   gap: 24px;
   padding: 0 24px;
-  border-bottom: 1px solid var(--tabula-color-border);
-  background: var(--tabula-color-bg);
+  border-bottom: 1px solid var(--tableos-color-border);
+  background: var(--tableos-color-bg);
 }
 
 .wordmark {
@@ -22,14 +22,14 @@
   gap: 10px;
   font-size: 20px;
   font-weight: 500;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .logo {
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--tabula-color-primary);
+  background: var(--tableos-color-primary);
   color: #fff;
   display: inline-flex;
   align-items: center;
@@ -46,17 +46,17 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-full);
-  background: var(--tabula-color-bg);
-  color: var(--tabula-color-text-subtle);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-full);
+  background: var(--tableos-color-bg);
+  color: var(--tableos-color-text-subtle);
   cursor: pointer;
 }
 
 .searchHint kbd {
   font-family: inherit;
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-text-subtle);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-text-subtle);
 }
 
 .headerActions {
@@ -75,25 +75,25 @@
   width: 240px;
   flex: none;
   padding: 24px 12px;
-  border-right: 1px solid var(--tabula-color-border);
+  border-right: 1px solid var(--tableos-color-border);
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
 .sidebarLabel {
-  font-size: var(--tabula-font-size-xs);
+  font-size: var(--tableos-font-size-xs);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--tabula-color-text-subtle);
+  color: var(--tableos-color-text-subtle);
   padding: 0 12px 8px;
 }
 
 .sidebarItem {
   display: block;
   padding: 8px 12px;
-  border-radius: var(--tabula-radius-sm);
-  color: var(--tabula-color-text);
+  border-radius: var(--tableos-radius-sm);
+  color: var(--tableos-color-text);
   font-weight: 400;
   white-space: nowrap;
   overflow: hidden;
@@ -101,8 +101,8 @@
 }
 
 .sidebarItem:hover {
-  background: var(--tabula-color-bg-subtle);
-  color: var(--tabula-color-text);
+  background: var(--tableos-color-bg-subtle);
+  color: var(--tableos-color-text);
   text-decoration: none;
 }
 
@@ -112,13 +112,13 @@
   border: none;
   background: transparent;
   padding: 8px 12px;
-  border-radius: var(--tabula-radius-sm);
-  color: var(--tabula-color-text-muted);
+  border-radius: var(--tableos-radius-sm);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
 }
 
 .sidebarCreate:hover {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .main {
@@ -129,7 +129,7 @@
 }
 
 .pageTitle {
-  font-size: var(--tabula-font-size-3xl);
+  font-size: var(--tableos-font-size-3xl);
   font-weight: 400;
   margin-bottom: 32px;
 }
@@ -146,7 +146,7 @@
 }
 
 .workspaceTitle {
-  font-size: var(--tabula-font-size-xl);
+  font-size: var(--tableos-font-size-xl);
   font-weight: 400;
 }
 
@@ -164,13 +164,13 @@
 
 .baseCard {
   position: relative;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
-  background: var(--tabula-color-bg);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
+  background: var(--tableos-color-bg);
 }
 
 .baseCard:hover {
-  box-shadow: var(--tabula-shadow-sm);
+  box-shadow: var(--tableos-shadow-sm);
 }
 
 .baseCardLink {
@@ -178,19 +178,19 @@
   align-items: center;
   gap: 12px;
   padding: 16px 44px 16px 16px;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
   font-weight: 400;
 }
 
 .baseCardLink:hover {
   text-decoration: none;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .baseIcon {
   width: 48px;
   height: 48px;
-  border-radius: var(--tabula-radius-md);
+  border-radius: var(--tableos-radius-md);
   color: #fff;
   display: inline-flex;
   align-items: center;
@@ -207,7 +207,7 @@
 }
 
 .baseName {
-  font-size: var(--tabula-font-size-lg);
+  font-size: var(--tableos-font-size-lg);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -215,8 +215,8 @@
 }
 
 .baseMeta {
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-subtle);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-subtle);
 }
 
 .baseCardMenu {
@@ -231,24 +231,24 @@
   gap: 12px;
   padding: 16px;
   min-height: 82px;
-  border: 1px dashed var(--tabula-color-border-strong);
-  border-radius: var(--tabula-radius-md);
+  border: 1px dashed var(--tableos-color-border-strong);
+  border-radius: var(--tableos-radius-md);
   background: transparent;
-  color: var(--tabula-color-text-muted);
-  font-size: var(--tabula-font-size-md);
+  color: var(--tableos-color-text-muted);
+  font-size: var(--tableos-font-size-md);
   cursor: pointer;
   text-align: left;
 }
 
 .createCard:hover {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .createPlus {
   width: 48px;
   height: 48px;
-  border-radius: var(--tabula-radius-md);
-  background: var(--tabula-color-bg-subtle);
+  border-radius: var(--tableos-radius-md);
+  background: var(--tableos-color-bg-subtle);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -257,8 +257,8 @@
 
 .emptyState {
   padding: 48px;
-  border-radius: var(--tabula-radius-lg);
-  background: var(--tabula-color-bg-subtle);
+  border-radius: var(--tableos-radius-lg);
+  background: var(--tableos-color-bg-subtle);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -277,11 +277,11 @@
   gap: 4px;
   text-align: left;
   padding: 12px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
-  background: var(--tabula-color-bg);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
+  background: var(--tableos-color-bg);
   cursor: pointer;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .startOption strong {
@@ -289,13 +289,13 @@
 }
 
 .startOption span {
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-muted);
 }
 
 .startOption[data-active="true"] {
-  border-color: var(--tabula-color-accent);
-  box-shadow: 0 0 0 1px var(--tabula-color-accent);
+  border-color: var(--tableos-color-accent);
+  box-shadow: 0 0 0 1px var(--tableos-color-accent);
 }
 
 .inviteRow {
@@ -305,12 +305,12 @@
 }
 
 .inviteLink {
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-muted);
 }
 
 .membersTitle {
-  font-size: var(--tabula-font-size-lg);
+  font-size: var(--tableos-font-size-lg);
   font-weight: 500;
   margin: 24px 0 8px;
 }
@@ -326,7 +326,7 @@
   align-items: center;
   gap: 12px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
 }
 
 .memberText {
@@ -335,8 +335,8 @@
 }
 
 .roleTag {
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-muted);
   text-transform: capitalize;
 }
 

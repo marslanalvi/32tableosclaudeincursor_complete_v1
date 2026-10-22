@@ -6,7 +6,7 @@ import {
   SqlParams,
   type SqlFieldInfo,
   type SqlKeyType,
-} from "@tabula/filter";
+} from "@tableos/filter";
 import { decodeRecordCursor, encodeRecordCursor, hashString } from "./cursor.js";
 import type { DecodedCursor, PlanQueryContext, RecordQueryInput, RecordQueryPlan, SortKeyPlan, SortSpec } from "./types.js";
 

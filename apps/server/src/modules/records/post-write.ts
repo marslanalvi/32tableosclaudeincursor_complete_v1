@@ -8,7 +8,7 @@
  * - Computed fields of the record are recomputed, plus dependents in this and
  *   linked tables.
  */
-import type { Database } from "@tabula/db";
+import type { Database } from "@tableos/db";
 import { sql, type Transaction } from "kysely";
 import type { Redis } from "ioredis";
 import { runComputeInTx, type RecordChange } from "../compute/engine.js";

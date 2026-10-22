@@ -1,10 +1,10 @@
 import { Readable } from "node:stream";
-import type { TabulaDb } from "@tabula/db";
-import type { TabulaStorage } from "@tabula/storage";
+import type { TableOSDb } from "@tableos/db";
+import type { TableOSStorage } from "@tableos/storage";
 import { sql } from "kysely";
 
 /** Attachment bodies in `data.attachment_blobs`; served (and uploaded) through the API like the local driver. */
-export function createDbStorage(db: TabulaDb): TabulaStorage {
+export function createDbStorage(db: TableOSDb): TableOSStorage {
   return {
     driver: "db",
 

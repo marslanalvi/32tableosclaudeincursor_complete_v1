@@ -11,17 +11,17 @@
  * tables. Large fan-outs are deferred to the compute worker
  * (`data.computed_stale` + a COMPUTE job enqueued after commit).
  */
-import { buildFieldGraph, planRecompute, type FieldDependencyEdge } from "@tabula/compute";
-import { formatCellValue, plainText } from "@tabula/fields";
+import { buildFieldGraph, planRecompute, type FieldDependencyEdge } from "@tableos/compute";
+import { formatCellValue, plainText } from "@tableos/fields";
 import {
   FormulaEvalError,
   evaluateFormula,
   parseFormula,
   type FormulaAst,
   type RuntimeValue,
-} from "@tabula/formula";
-import type { Database } from "@tabula/db";
-import { QueueNames, createQueue } from "@tabula/jobs";
+} from "@tableos/formula";
+import type { Database } from "@tableos/db";
+import { QueueNames, createQueue } from "@tableos/jobs";
 import type { Redis } from "ioredis";
 import { sql, type Kysely } from "kysely";
 import { pid } from "../../lib/public-ids.js";

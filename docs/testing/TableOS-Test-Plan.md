@@ -1,6 +1,6 @@
 # TableOS — Complete Test Plan
 
-Plan 1.0 · for TableOS 0.16.2 · generated 2026-10-22 · 32 modules · 279 test cases (P1 134, P2 106, P3 39)
+Plan 2.0 · for TableOS 0.16.7 · generated 2026-10-22 · 32 modules · 304 test cases (P1 140, P2 118, P3 46)
 
 Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Export for developer**. This file and the PDF are the same plan for reading or printing.
 
@@ -56,36 +56,36 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 |---|---|---|
 | M00 Environment and test accounts | 6 | 5 |
 | M01 Sign-up and invitations | 9 | 4 |
-| M02 Sign-in, two-factor and sessions | 9 | 2 |
+| M02 Sign-in, two-factor and sessions | 11 | 2 |
 | M03 Sign-in security: wrong passwords and alerts | 6 | 3 |
 | M04 Account types: Owner, Admin, Member | 9 | 6 |
-| M05 Members & access: invites, roles, end dates | 15 | 10 |
+| M05 Members & access: invites, roles, end dates | 18 | 10 |
 | M06 Device approval | 8 | 3 |
 | M07 Security settings and Activity log | 6 | 3 |
 | M08 Workspaces | 8 | 4 |
 | M09 Bases | 9 | 5 |
-| M10 Tables | 6 | 3 |
-| M11 Fields and field types | 19 | 10 |
-| M12 Editing records in the grid | 10 | 5 |
+| M10 Tables | 7 | 3 |
+| M11 Fields and field types | 23 | 12 |
+| M12 Editing records in the grid | 11 | 6 |
 | M13 Comments, mentions and history | 6 | 4 |
-| M14 Undo, redo and trash | 4 | 3 |
-| M15 Views | 18 | 7 |
+| M14 Undo, redo and trash | 6 | 4 |
+| M15 Views | 20 | 7 |
 | M16 Links, lookups, rollups and counts | 7 | 4 |
 | M17 Formulas | 8 | 4 |
 | M18 Synced tables from another base | 8 | 3 |
 | M19 Connectors: Airtable, HubSpot, Gmail, Slack | 7 | 0 |
 | M20 Import and export | 10 | 6 |
-| M21 Attachments | 5 | 2 |
+| M21 Attachments | 6 | 2 |
 | M22 Forms | 5 | 3 |
-| M23 Interfaces | 6 | 2 |
+| M23 Interfaces | 7 | 2 |
 | M24 Automations | 15 | 5 |
-| M25 Public share links | 9 | 6 |
-| M26 Search, notifications and contacts | 6 | 2 |
+| M25 Public share links | 10 | 7 |
+| M26 Search, notifications and contacts | 7 | 2 |
 | M27 Live collaboration (realtime) | 7 | 2 |
-| M28 API and access tokens | 17 | 9 |
+| M28 API and access tokens | 22 | 10 |
 | M29 Limits and performance | 7 | 1 |
 | M30 Permission matrix spot checks | 8 | 8 |
-| M31 Help, UI and browsers | 6 | 0 |
+| M31 Help, UI and browsers | 7 | 0 |
 
 ---
 
@@ -105,7 +105,7 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. Open Help → Release notes.
 2. Open <API>/v1/version in a browser tab.
 
-**Expected:** Both show the same version (e.g. 0.16.2). Note it at the top of this workbook.
+**Expected:** Both show the same version (0.16.7 or later; never 0.0.0). Note it at the top of this workbook.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -495,6 +495,41 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. Click Sign in with Google with an invited Google account.
 
 **Expected:** Signs in; two-factor is still required.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M02-10 · Return to the page after signing in  `P2` `UI`
+
+**Steps**
+
+1. Open a base and table.
+2. Account menu → Log out.
+3. Sign in again (with two-factor).
+
+**Expected:** You land back on that base and table, not Home.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M02-11 · Two-factor setup page  `P3` `UI`
+
+**Steps**
+
+1. With two-factor required, sign in with an account that hasn’t set it up.
+2. Press Back; open TableOS in a new tab.
+
+**Expected:** The page shows who is signed in, a Sign out button at the top and explains that every page opens it until two-factor is set up.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -998,6 +1033,57 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. Check the invitations list; cancel one.
 
 **Expected:** Listed with role and expiry; cancelled invitation link stops working.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M05-16 · Invite someone again after removing them  `P2` `UI`
+
+**Steps**
+
+1. Remove a Member.
+2. Invite the same email again (as Member).
+3. Open the invitation link signed out.
+
+**Expected:** The page says the email already has an account → Sign in to accept. After accepting they’re back with the new invitation’s account type (not their old one).
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M05-17 · Invite row fits  `P3` `UI`
+
+**Steps**
+
+1. Workspace Share dialog and Members & access, at 1280 and 1920 px wide, as OWNER (most columns).
+
+**Expected:** Email, account type, access, role and Invite all fit or wrap; nothing spills outside the box.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M05-18 · Access shown matches reality  `P2` `UI`
+
+**Steps**
+
+1. As ADMIN with Viewer on one base, open Members & access → People.
+2. As OWNER, change someone’s access and look again.
+
+**Expected:** Your own row says “your access: Viewer on …”; other people’s rows count access in places you don’t manage instead of “no access”. Changes show right away.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -1634,6 +1720,22 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Screenshots:** (paste or attach in the workbook)
 
+### M10-07 · Adding tables needs Creator  `P2` `Security`
+
+**Steps**
+
+1. As EDITOR (or an Admin who is only Editor/Viewer on the base) look at + Add or import.
+
+**Expected:** Greyed out; hovering says only Creators and Owners of this base can add tables. Any refusal is in plain words (no “base.manage_schema”).
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
 ---
 
 ## M11 — Fields and field types
@@ -1948,6 +2050,73 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Screenshots:** (paste or attach in the workbook)
 
+### M11-20 · Invalid email and phone are refused  `P1` `Data`
+
+**Steps**
+
+1. Type “a@b”, “x..y@a.com” in an Email cell; “123” and a 20-digit number in a Phone cell.
+2. Then type valid ones (name@example.com, +92 300 1234567).
+
+**Expected:** Invalid values aren’t saved and a message says why; valid ones save and become mailto:/tel: links.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M11-21 · Paste multi-line JSON into one cell  `P1` `Data`
+
+**Steps**
+
+1. Copy a pretty-printed JSON object (several lines).
+2. Select one cell of a JSON field and paste.
+
+**Expected:** The whole object goes into that one cell; no rows are created or changed. Pasting invalid JSON shows “That isn’t valid JSON” and changes nothing.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M11-22 · Lookup without a link  `P3` `UI`
+
+**Steps**
+
+1. In a table with no link field, add a Lookup (or Rollup/Count).
+2. Try the same in a synced table.
+
+**Expected:** It explains a link is needed and offers “Add a link field instead”; in a synced table it explains lookups go in the table that links to it.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M11-23 · Link picker tells records apart  `P3` `UI`
+
+**Steps**
+
+1. Link to a table whose primary field is Record ID; open the picker.
+
+**Expected:** Each record shows a few of its values (e.g. “Company: Acme”) under its ID.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
 ---
 
 ## M12 — Editing records in the grid
@@ -2105,6 +2274,22 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. Open a table with 5,000+ rows (after CSV-L import) and scroll.
 
 **Expected:** Smooth; rows load as you scroll; row count in the footer is right.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M12-11 · Esc discards a long-text edit  `P1` `Data`
+
+**Steps**
+
+1. Type into a Long text cell (and in edit mode with Enter), press Esc.
+
+**Expected:** The old value stays; nothing is saved. Enter/Tab/clicking away still save.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -2277,6 +2462,40 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. Tools → Trash: restore a deleted record, field and table.
 
 **Expected:** Each restored.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M14-05 · Undo a field type change keeps values  `P1` `Data`
+
+**Steps**
+
+1. Fill a Multiple select field in several records; change it to Checkbox.
+2. Press Ctrl+Z.
+
+**Expected:** Checked boxes appear where options were picked; after Ctrl+Z the field is Multiple select again with the same options and every value back.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M14-06 · Redo and undo of removed options  `P2` `Data`
+
+**Steps**
+
+1. After the undo above press Ctrl+Shift+Z (redo), then Ctrl+Z again.
+2. Remove an option from a select field; Ctrl+Z.
+
+**Expected:** Redo re-applies the change; undo brings the removed option and its values back. Undo never jumps to an older, unrelated edit.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -2571,6 +2790,39 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. Copy the URL of a view and open it in a new tab.
 
 **Expected:** Opens the same view.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M15-19 · Search highlights cells  `P2` `UI`
+
+**Steps**
+
+1. Toolbar 🔍 → type a word that appears in several cells.
+2. Press Enter several times, then Shift+Enter; press Esc.
+
+**Expected:** Matching cells are highlighted; the bar says “1 of N matching cells”; Enter/Shift+Enter (or ↑ ↓) move between them; Esc closes the search.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M15-20 · + next to Find a view  `P2` `UI`
+
+**Steps**
+
+1. Click the + next to “Find a view” (in Chrome, Edge, Firefox and Safari).
+
+**Expected:** A new Grid view is created and selected with its name ready to edit.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -3340,6 +3592,23 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Screenshots:** (paste or attach in the workbook)
 
+### M21-06 · Attachments on a shared view  `P2` `UI`
+
+**Steps**
+
+1. Share a view that has attachments with “Allow copying data” off; open it signed out and click a file.
+2. Turn copying on, reload, click again.
+
+**Expected:** Off: the file opens with “Downloading is turned off”, no Download button. On: Open and Download work and the file downloads.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
 ---
 
 ## M22 — Forms
@@ -3519,6 +3788,23 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. Open the interface as EDITOR and VIEWER.
 
 **Expected:** They see the page according to their role.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M23-07 · Form element Submit button  `P2` `UI`
+
+**Steps**
+
+1. Add a Form element to an interface page; publish; open it in Published mode.
+2. Fill it and submit.
+
+**Expected:** A dark Submit button is visible (grey while editing); submitting creates the record.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -3924,6 +4210,22 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 **Screenshots:** (paste or attach in the workbook)
 
+### M25-10 · Share password lock and alert IP  `P1` `Security`
+
+**Steps**
+
+1. Wrong password 5 times on a password-protected link (signed out, normal internet, not the office VPN if possible).
+
+**Expected:** Warnings on attempts 3–4, locked 15 minutes on the 5th; the Owner’s alert shows your real public IP (not a 10.x address).
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
 ---
 
 ## M26 — Search, notifications and contacts
@@ -4017,6 +4319,22 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. As EDITOR open Share/member lists and @mention list.
 
 **Expected:** Names only (your own email visible); Owners/Admins/Workspace Owners see emails.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M26-07 · Search palette closes  `P3` `UI`
+
+**Steps**
+
+1. Ctrl+K; click the Esc button; Ctrl+K again and press Esc; also after clicking inside the list.
+
+**Expected:** The palette closes every time.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -4388,7 +4706,7 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 1. Send invalid JSON, an unknown field, a stale version, a missing token.
 
-**Expected:** 400/422 listing the problem; 409 for version conflicts; 401 without token.
+**Expected:** 400/422 listing the problem; 409 for a stale version (the message says which version the record is at); 401 without token. Each error's “type” is a link to Help → API reference on this TableOS.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -4420,7 +4738,88 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 
 1. Send 30 requests in one second with one token (plan: Free 5/s, Team 20/s).
 
-**Expected:** Record what happens (429 with retry-after, or all succeed). Report either way.
+**Expected:** About 5 succeed on Free (20 on Team); the rest get 429 with a retry-after header and a message naming the limit. Requests a few per second are never limited.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M28-18 · Field names in responses  `P1` `API`
+
+**Steps**
+
+1. GET …/records and POST …/records/query with a token.
+2. Repeat with ?returnFieldsByFieldId=true (or "returnFieldsByFieldId": true in the body).
+
+**Expected:** Records are keyed by field name with option names for selects (e.g. "Status": "Active"). With the flag: field IDs and option IDs.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M28-19 · List records with GET  `P2` `API`
+
+**Steps**
+
+1. GET /v1/tables/{tableId}/records?pageSize=5&fields=Name in a browser-like client.
+
+**Expected:** Records and nextCursor; GET on …/records/query says to use POST (405).
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M28-20 · URL and header variants  `P2` `API`
+
+**Steps**
+
+1. Base URL ending in “/” (//v1/…), a trailing slash, a token without the word Bearer, a token in quotes.
+
+**Expected:** All work. A wrong path is refused with a message listing what tokens can call.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M28-21 · Changes via API in history  `P2` `API`
+
+**Steps**
+
+1. Create or edit a record with a token; open the record’s history in TableOS.
+
+**Expected:** The entries are tagged “Via API”; edits made in the app are not.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M28-22 · Help → API reference samples  `P3` `API`
+
+**Steps**
+
+1. Open Help → API reference; compare a sample with a real call.
+
+**Expected:** Every endpoint has request and response samples that match what the API returns (field names, error bodies).
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 
@@ -4779,6 +5178,22 @@ Use **TableOS-Test-Workbook.html** to record results and screenshots, then **Exp
 1. Chrome dev tools → Network → Slow 3G; use the app.
 
 **Expected:** Loading states shown; no duplicate actions.
+
+**Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
+
+**What happened / notes:**
+
+> 
+
+**Screenshots:** (paste or attach in the workbook)
+
+### M31-07 · Product name  `P3` `UI`
+
+**Steps**
+
+1. Look through pages, emails, API errors (the “type” link), webhooks’ User-Agent and downloaded files.
+
+**Expected:** Everything says TableOS; no other product name appears anywhere.
 
 **Result:** ☐ Pass ☐ Fail ☐ Blocked ☐ N/A · **Severity:** ☐ Critical ☐ High ☐ Medium ☐ Low
 

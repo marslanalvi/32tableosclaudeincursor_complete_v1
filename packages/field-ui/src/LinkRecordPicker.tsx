@@ -135,7 +135,7 @@ export function LinkRecordPicker({
                 onClick={() => onPick(r)}
               >
                 <strong>{r.name || "Unnamed record"}</strong>
-                <span className="tfu-rec-sub">{sel ? "Linked — click to unlink" : r.id}</span>
+                <span className="tfu-rec-sub">{sel ? "Linked — click to unlink" : r.detail || r.id}</span>
               </button>
             );
           })}

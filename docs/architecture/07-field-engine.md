@@ -16,8 +16,8 @@ Two packages:
 
 | Package | Runs on | Contents |
 |---|---|---|
-| `@tabula/field-types` | server **and** browser (isomorphic, no Node/DOM deps) | definitions: Zod config schemas, codecs, formatters, comparators, in-memory filter evaluators, converters, importers, formula mappings, realtime op semantics. SQL compiler hooks live in a server-only sub-entry `@tabula/field-types/sql` so the browser bundle stays small. |
-| `@tabula/field-ui` | browser | canvas cell renderers, React editors, config panels, filter operand editors, form inputs; registered against the same keys |
+| `@tableos/field-types` | server **and** browser (isomorphic, no Node/DOM deps) | definitions: Zod config schemas, codecs, formatters, comparators, in-memory filter evaluators, converters, importers, formula mappings, realtime op semantics. SQL compiler hooks live in a server-only sub-entry `@tableos/field-types/sql` so the browser bundle stays small. |
+| `@tableos/field-ui` | browser | canvas cell renderers, React editors, config panels, filter operand editors, form inputs; registered against the same keys |
 
 Why isomorphic: the client uses the same validation, formatting, comparison and filter evaluation for optimistic edits, local sort/filter of the loaded window, and formula preview ([08](08-formula-engine.md)); the server remains authoritative.
 
@@ -40,7 +40,7 @@ Non-goals: user-defined field types at runtime (third-party custom fields would 
 ## 2. Core types
 
 ```ts
-// @tabula/field-types/src/core/types.ts
+// @tableos/field-types/src/core/types.ts
 
 export type Uuid = string & { readonly __brand: 'Uuid' };
 export type Slot = number;                                  // fields.slot (smallint), JSONB key = String(slot)
@@ -55,7 +55,7 @@ export type FieldTypeKey =
   | 'button' | 'ai_generated' | 'json';
 
 /** Sentinel for "no value" — never stored (spine §4: empty ⇒ key absent). */
-export const EMPTY: unique symbol = Symbol.for('tabula.empty');
+export const EMPTY: unique symbol = Symbol.for('tableos.empty');
 export type Empty = typeof EMPTY;
 
 /** A stored reference whose target no longer exists (deleted option, purged attachment). */
@@ -144,7 +144,7 @@ Resolvers are **batched** (DataLoader-style per request) so validation of a 1,00
 ## 3. The `FieldTypeDefinition` interface (split by concern)
 
 ```ts
-// @tabula/field-types/src/core/definition.ts
+// @tableos/field-types/src/core/definition.ts
 
 export interface FieldTypeDefinition<
   C = unknown,          // config
@@ -278,7 +278,7 @@ export interface OrderingConcern<C, S> {
   compare(a: S, b: S, ctx: OrderContext<C>): number;
   /** Must be monotone with compare: compare(a,b) < 0 ⇒ sortKey(a) ≤ sortKey(b) (≤ due to truncation). */
   sortKey(v: S, ctx: OrderContext<C>): SortKey;
-  /** Unindexed SQL sort expression over JSONB (server only, from '@tabula/field-types/sql'). */
+  /** Unindexed SQL sort expression over JSONB (server only, from '@tableos/field-types/sql'). */
   sqlSortExpr(ref: SqlCellRef, ctx: SqlContext<C>): SqlExpr;
   /** Grouping: one key per value; multi-valued types may group by the whole set or each element. */
   groupKeys(v: S | Empty, ctx: OrderContext<C>, mode: 'whole' | 'each'): string[];
@@ -467,7 +467,7 @@ Paste into the grid uses the same `importer.parse` (with the viewer's locale), s
 ### 3.10 Formula type mapping
 
 ```ts
-// FType is defined in @tabula/formula (08 §5); repeated here for reference
+// FType is defined in @tableos/formula (08 §5); repeated here for reference
 export type FType =
   | { t: 'number' } | { t: 'currency'; code: string; scale: number } | { t: 'percent' }
   | { t: 'text' } | { t: 'bool' } | { t: 'date' } | { t: 'datetime' } | { t: 'duration' }
@@ -532,7 +532,7 @@ export interface PermissionHints {
 ## 4. Registry
 
 ```ts
-// @tabula/field-types/src/core/registry.ts
+// @tableos/field-types/src/core/registry.ts
 export class FieldTypeRegistry {
   #defs = new Map<FieldTypeKey, FieldTypeDefinition<any, any, any>>();
   #frozen = false;
@@ -553,7 +553,7 @@ export class FieldTypeRegistry {
   freeze(): this { this.#frozen = true; return this; }
 }
 
-// @tabula/field-types/src/index.ts — the single place types are enumerated
+// @tableos/field-types/src/index.ts — the single place types are enumerated
 export const fieldTypes = new FieldTypeRegistry();
 [text, longText, number, currency, percent, date, datetime, duration, checkbox, singleSelect, multiSelect,
  email, phone, url, rating, collaborator, attachment, barcode, link, contact, formula, lookup, rollup, count,
@@ -607,7 +607,7 @@ packages/field-types/src/types/currency/
   display.ts            # Intl.NumberFormat currency formatting
   ordering.ts           # compare (big.js), sortKey (decimal string), groupKeys
   filters.ts            # operators: eq neq gt gte lt lte is_between is_empty is_not_empty
-  filters.sql.ts        # server-only SQL hooks (imported via '@tabula/field-types/sql')
+  filters.sql.ts        # server-only SQL hooks (imported via '@tableos/field-types/sql')
   index-strategy.ts     # kind 'num'
   conversion.ts         # convertFrom(number|percent|text|…)
   import.ts             # parse "€1.234,50", "(1,234.50)", "1234.5 USD"
@@ -631,7 +631,7 @@ Checklist for a new type (enforced by CI script `pnpm fieldtypes:check`):
 1. Add key to `FieldTypeKey` + `FieldTypeMap` (codegen) and to the spine §4 table (architecture review — new keys are a public API change).
 2. Implement all concerns; computed types also `dependencies` + `evaluator`.
 3. Fixtures + contract suite pass; differential SQL tests pass for every operator × {JSONB path, sidecar path}.
-4. Register UI in `@tabula/field-ui`; Storybook stories for renderer/editor/config panel; visual regression snapshots.
+4. Register UI in `@tableos/field-ui`; Storybook stories for renderer/editor/config panel; visual regression snapshots.
 5. Add the type's rows/columns to the conversion matrix (§9) and implement converters or explicitly declare `clear`.
 6. OpenAPI regenerated (`apiSchema`), public docs page generated from definition metadata.
 7. Feature-flag the type (`availability: 'beta'`) until migration/backfill and performance tests pass.
@@ -664,7 +664,7 @@ Golden tests: formatted outputs per locale snapshot; known-tricky inputs (`"1,5"
 
 ---
 
-## 7. Frontend registration (`@tabula/field-ui`)
+## 7. Frontend registration (`@tableos/field-ui`)
 
 ```ts
 export interface CellDrawArgs<S, C> {
@@ -674,7 +674,7 @@ export interface CellDrawArgs<S, C> {
   field: FieldDef<C>;
   theme: GridTheme;                    // design tokens (24)
   state: { selected: boolean; editing: boolean; stale: boolean; error?: string };
-  fmt: DisplayFormatter<C, S>;         // from @tabula/field-types
+  fmt: DisplayFormatter<C, S>;         // from @tableos/field-types
   images: ImageCache;                  // thumbnails for attachment/collaborator avatars
 }
 
@@ -696,7 +696,7 @@ export interface FieldUiDefinition<C = unknown, S = unknown> {
 registerFieldUi(currencyUi);   // registry mirrors FieldTypeRegistry; startup asserts every key has UI
 ```
 
-UI never reimplements validation: editors call `codec.validate`/`importer.parse` from `@tabula/field-types` and render `ValueIssue` codes via i18n.
+UI never reimplements validation: editors call `codec.validate`/`importer.parse` from `@tableos/field-types` and render `ValueIssue` codes via i18n.
 
 ---
 
@@ -1059,7 +1059,7 @@ Inverse ops (undo, D25) are generated by `realtime.invert` with the **effective*
 
 | Kind | Name | Purpose |
 |---|---|---|
-| Package | `@tabula/field-types` (+ `/sql` server entry), `@tabula/field-ui` | plugin system (to be listed in [26](26-architecture-style-stack-repo-services.md) repo layout) |
+| Package | `@tableos/field-types` (+ `/sql` server entry), `@tableos/field-ui` | plugin system (to be listed in [26](26-architecture-style-stack-repo-services.md) repo layout) |
 | Column | `fields.config_version smallint` | config schema version for `config.migrate` (could live inside `fields.config` as `_v` if 05 prefers no column) |
 | Constant | `SYNC_CONVERT_LIMIT = 5000` (shared with 06) | sync vs background conversion |
 | Constant | `MAX_SELECT_OPTIONS = 1000`, `MAX_MULTI_ITEMS = 100`, `MAX_ATTACHMENTS_PER_CELL = 100` | per-type limits |

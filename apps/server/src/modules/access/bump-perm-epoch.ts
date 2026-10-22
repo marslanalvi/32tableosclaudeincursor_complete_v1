@@ -1,5 +1,5 @@
-import type { BumpPermEpochResult } from "@tabula/permissions";
-import type { Database } from "@tabula/db";
+import type { BumpPermEpochResult } from "@tableos/permissions";
+import type { Database } from "@tableos/db";
 import { sql, type Transaction } from "kysely";
 import { invalidateBaseSnapshotCache } from "./compile.js";
 

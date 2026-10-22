@@ -1,4 +1,4 @@
-## Tabula backend audit: findings
+## TableOS backend audit: findings
 
 I read every file I cite below. No files were modified. Paths are relative to `E:\Blue Cascade\Projects\32TableOSClaudeCode`.
 
@@ -45,7 +45,7 @@ I read every file I cite below. No files were modified. Paths are relative to `E
 
 ### Records
 - **P1: plan-limit counter drifts up.** Create increments `base_runtime.record_count` (`records/routes.ts:102-106`). Delete (`:508-510`), undo of create and contact merge never decrement it. `LimitsService.assertCanCreateRecord` (`billing/limits-service.ts:175`) reads that counter, so users hit the limit after deleting records. **Fix:** decrement on delete and increment on restore, inside the same transaction.
-- **P1: no input validation.** `schema/field-map.ts:25-52` accepts any value for any field, including computed, autonumber and `created_*` fields. `@tabula/fields` `validate`/`normalize` is never called by the server. Unknown keys are silently dropped. **Fix:** run the registry's `validate`+`normalize`, reject writes to computed/read-only types, and return 422 on unknown fields.
+- **P1: no input validation.** `schema/field-map.ts:25-52` accepts any value for any field, including computed, autonumber and `created_*` fields. `@tableos/fields` `validate`/`normalize` is never called by the server. Unknown keys are silently dropped. **Fix:** run the registry's `validate`+`normalize`, reject writes to computed/read-only types, and return 422 on unknown fields.
 - **P2: delete of a missing record still succeeds.** `records/routes.ts:493-510` doesn't check the row exists. It returns 204 and still decrements `tables.record_count`. Linked records' lookups and rollups are not recomputed.
 - **P2: `atomic` is ignored.** It is accepted by `batchBody` (`:42`) but unused. A duplicate client `id` in a batch → PK violation 500.
 

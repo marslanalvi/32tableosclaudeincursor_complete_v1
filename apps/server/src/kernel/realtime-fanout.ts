@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import type { RealtimeActor } from "@tabula/realtime-protocol";
+import type { RealtimeActor } from "@tableos/realtime-protocol";
 import type { Redis } from "ioredis";
 
 /**

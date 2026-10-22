@@ -4,8 +4,8 @@
 // priority: P1 = must work (blocker if broken), P2 = important, P3 = polish.
 // kind: UI, API, Security, Limit, Realtime, Data.
 
-export const PLAN_VERSION = "1.0";
-export const APP_VERSION = "0.16.2";
+export const PLAN_VERSION = "2.0";
+export const APP_VERSION = "0.16.7";
 
 /** Accounts the plan refers to. Create them in module M00 before anything else. */
 export const ACCOUNTS = [
@@ -40,7 +40,7 @@ export const MODULES = [
     "Use a desktop browser (Chrome or Edge, latest) for OWNER, and a second browser or a private window for every other account.",
     "Install an authenticator app on your phone (Google Authenticator, Microsoft Authenticator, Authy…). Every account needs two-factor.",
   ], [
-    ["Record the version under test", ["Open Help → Release notes.", "Open <API>/v1/version in a browser tab."], "Both show the same version (e.g. 0.16.2). Note it at the top of this workbook.", "P1", "UI"],
+    ["Record the version under test", ["Open Help → Release notes.", "Open <API>/v1/version in a browser tab."], "Both show the same version (0.16.7 or later; never 0.0.0). Note it at the top of this workbook.", "P1", "UI"],
     ["OWNER signs in for the first time", ["Sign in as OWNER with the agreed password."], "You are taken to “Set up two-factor sign-in” and nothing else opens until it is done.", "P1", "Security"],
     ["OWNER sets up two-factor", ["Click Set up two-factor authentication.", "Scan the QR code with the authenticator app.", "Enter the 6-digit code and Turn on."], "Two-factor turns on and TableOS opens Home. Account → Two-factor shows On and has no “Turn off” option.", "P1", "Security"],
     ["Create the test workspaces and base", ["As OWNER create WS-A and WS-B on Home.", "In WS-A create BASE-1 with tables Contacts, Companies, Deals; in WS-B create BASE-2."], "All appear on Home under the right workspace.", "P1", "Data"],
@@ -393,9 +393,9 @@ export const MODULES = [
     ["Admin tokens", ["As ADMIN create a token; read WS-B data with it."], "Refused: an Admin’s token only reaches what the Admin was given. Admin sees only their own tokens.", "P1", "Security"],
     ["Non-record APIs refused", ["Call e.g. /v1/workspaces with a token."], "403 “API tokens can only call the record API”.", "P2", "Security"],
     ["Synced tables are read-only", ["Write to a synced table via API."], "403.", "P2", "API"],
-    ["Errors", ["Send invalid JSON, an unknown field, a stale version, a missing token."], "400/422 listing the problem; 409 for version conflicts; 401 without token.", "P2", "API"],
+    ["Errors", ["Send invalid JSON, an unknown field, a stale version, a missing token."], "400/422 listing the problem; 409 for a stale version (the message says which version the record is at); 401 without token. Each error's “type” is a link to Help → API reference on this TableOS.", "P2", "API"],
     ["Version", ["GET /v1/version without a token; check the x-tableos-version header on any response."], "Both show the running version.", "P3", "API"],
-    ["Rate per token", ["Send 30 requests in one second with one token (plan: Free 5/s, Team 20/s)."], "Record what happens (429 with retry-after, or all succeed). Report either way.", "P2", "Limit"],
+    ["Rate per token", ["Send 30 requests in one second with one token (plan: Free 5/s, Team 20/s)."], "About 5 succeed on Free (20 on Team); the rest get 429 with a retry-after header and a message naming the limit. Requests a few per second are never limited.", "P2", "Limit"],
   ]),
 
   M("M29", "Limits and performance", "TableOS behaves well at its limits and with real amounts of data.", [], [
@@ -430,3 +430,62 @@ export const MODULES = [
     ["Slow network", ["Chrome dev tools → Network → Slow 3G; use the app."], "Loading states shown; no duplicate actions.", "P3", "UI"],
   ]),
 ];
+
+/**
+ * Plan 2.0 (TableOS 0.16.3–0.16.7): checks for what the fix phases changed. Appended to their modules
+ * so the plan 1.0 case numbers stay the same.
+ */
+const V2_CASES = {
+  M02: [
+    ["Return to the page after signing in", ["Open a base and table.", "Account menu → Log out.", "Sign in again (with two-factor)."], "You land back on that base and table, not Home.", "P2", "UI"],
+    ["Two-factor setup page", ["With two-factor required, sign in with an account that hasn’t set it up.", "Press Back; open TableOS in a new tab."], "The page shows who is signed in, a Sign out button at the top and explains that every page opens it until two-factor is set up.", "P3", "UI"],
+  ],
+  M05: [
+    ["Invite someone again after removing them", ["Remove a Member.", "Invite the same email again (as Member).", "Open the invitation link signed out."], "The page says the email already has an account → Sign in to accept. After accepting they’re back with the new invitation’s account type (not their old one).", "P2", "UI"],
+    ["Invite row fits", ["Workspace Share dialog and Members & access, at 1280 and 1920 px wide, as OWNER (most columns)."], "Email, account type, access, role and Invite all fit or wrap; nothing spills outside the box.", "P3", "UI"],
+    ["Access shown matches reality", ["As ADMIN with Viewer on one base, open Members & access → People.", "As OWNER, change someone’s access and look again."], "Your own row says “your access: Viewer on …”; other people’s rows count access in places you don’t manage instead of “no access”. Changes show right away.", "P2", "UI"],
+  ],
+  M10: [
+    ["Adding tables needs Creator", ["As EDITOR (or an Admin who is only Editor/Viewer on the base) look at + Add or import."], "Greyed out; hovering says only Creators and Owners of this base can add tables. Any refusal is in plain words (no “base.manage_schema”).", "P2", "Security"],
+  ],
+  M11: [
+    ["Invalid email and phone are refused", ["Type “a@b”, “x..y@a.com” in an Email cell; “123” and a 20-digit number in a Phone cell.", "Then type valid ones (name@example.com, +92 300 1234567)."], "Invalid values aren’t saved and a message says why; valid ones save and become mailto:/tel: links.", "P1", "Data"],
+    ["Paste multi-line JSON into one cell", ["Copy a pretty-printed JSON object (several lines).", "Select one cell of a JSON field and paste."], "The whole object goes into that one cell; no rows are created or changed. Pasting invalid JSON shows “That isn’t valid JSON” and changes nothing.", "P1", "Data"],
+    ["Lookup without a link", ["In a table with no link field, add a Lookup (or Rollup/Count).", "Try the same in a synced table."], "It explains a link is needed and offers “Add a link field instead”; in a synced table it explains lookups go in the table that links to it.", "P3", "UI"],
+    ["Link picker tells records apart", ["Link to a table whose primary field is Record ID; open the picker."], "Each record shows a few of its values (e.g. “Company: Acme”) under its ID.", "P3", "UI"],
+  ],
+  M12: [
+    ["Esc discards a long-text edit", ["Type into a Long text cell (and in edit mode with Enter), press Esc."], "The old value stays; nothing is saved. Enter/Tab/clicking away still save.", "P1", "Data"],
+  ],
+  M14: [
+    ["Undo a field type change keeps values", ["Fill a Multiple select field in several records; change it to Checkbox.", "Press Ctrl+Z."], "Checked boxes appear where options were picked; after Ctrl+Z the field is Multiple select again with the same options and every value back.", "P1", "Data"],
+    ["Redo and undo of removed options", ["After the undo above press Ctrl+Shift+Z (redo), then Ctrl+Z again.", "Remove an option from a select field; Ctrl+Z."], "Redo re-applies the change; undo brings the removed option and its values back. Undo never jumps to an older, unrelated edit.", "P2", "Data"],
+  ],
+  M15: [
+    ["Search highlights cells", ["Toolbar 🔍 → type a word that appears in several cells.", "Press Enter several times, then Shift+Enter; press Esc."], "Matching cells are highlighted; the bar says “1 of N matching cells”; Enter/Shift+Enter (or ↑ ↓) move between them; Esc closes the search.", "P2", "UI"],
+    ["+ next to Find a view", ["Click the + next to “Find a view” (in Chrome, Edge, Firefox and Safari)."], "A new Grid view is created and selected with its name ready to edit.", "P2", "UI"],
+  ],
+  M21: [
+    ["Attachments on a shared view", ["Share a view that has attachments with “Allow copying data” off; open it signed out and click a file.", "Turn copying on, reload, click again."], "Off: the file opens with “Downloading is turned off”, no Download button. On: Open and Download work and the file downloads.", "P2", "UI"],
+  ],
+  M23: [
+    ["Form element Submit button", ["Add a Form element to an interface page; publish; open it in Published mode.", "Fill it and submit."], "A dark Submit button is visible (grey while editing); submitting creates the record.", "P2", "UI"],
+  ],
+  M25: [
+    ["Share password lock and alert IP", ["Wrong password 5 times on a password-protected link (signed out, normal internet, not the office VPN if possible)."], "Warnings on attempts 3–4, locked 15 minutes on the 5th; the Owner’s alert shows your real public IP (not a 10.x address).", "P1", "Security"],
+  ],
+  M26: [
+    ["Search palette closes", ["Ctrl+K; click the Esc button; Ctrl+K again and press Esc; also after clicking inside the list."], "The palette closes every time.", "P3", "UI"],
+  ],
+  M28: [
+    ["Field names in responses", ["GET …/records and POST …/records/query with a token.", "Repeat with ?returnFieldsByFieldId=true (or \"returnFieldsByFieldId\": true in the body)."], "Records are keyed by field name with option names for selects (e.g. \"Status\": \"Active\"). With the flag: field IDs and option IDs.", "P1", "API"],
+    ["List records with GET", ["GET /v1/tables/{tableId}/records?pageSize=5&fields=Name in a browser-like client."], "Records and nextCursor; GET on …/records/query says to use POST (405).", "P2", "API"],
+    ["URL and header variants", ["Base URL ending in “/” (//v1/…), a trailing slash, a token without the word Bearer, a token in quotes."], "All work. A wrong path is refused with a message listing what tokens can call.", "P2", "API"],
+    ["Changes via API in history", ["Create or edit a record with a token; open the record’s history in TableOS."], "The entries are tagged “Via API”; edits made in the app are not.", "P2", "API"],
+    ["Help → API reference samples", ["Open Help → API reference; compare a sample with a real call."], "Every endpoint has request and response samples that match what the API returns (field names, error bodies).", "P3", "API"],
+  ],
+  M31: [
+    ["Product name", ["Look through pages, emails, API errors (the “type” link), webhooks’ User-Agent and downloaded files."], "Everything says TableOS; no other product name appears anywhere.", "P3", "UI"],
+  ],
+};
+for (const m of MODULES) m.cases.push(...(V2_CASES[m.id] ?? []));

@@ -20,7 +20,7 @@
 | Calendar start | 2026-11-02 (Phase 0) |
 | Velocity reality factor | Estimates are *engineering weeks of a squad* with 20% buffer already included; holidays not modeled |
 | Release train | Trunk-based, continuous deploy to staging; production deploys daily behind feature flags (`core.feature_flags`) from Phase 2 onward (internal dogfood org) |
-| Dogfooding | From end of Phase 2 the team runs its own planning in Tabula (bug tracker base) — strongest realtime/grid test we have |
+| Dogfooding | From end of Phase 2 the team runs its own planning in TableOS (bug tracker base) — strongest realtime/grid test we have |
 | Environments | Local + CI from week 1; staging from week 4; production (single region `us-east-1`, single data shard) from end of Phase 1 (internal only) |
 
 ## 54.2 Team topology (squads)
@@ -36,7 +36,7 @@ Squads are stable; phases move the *center of gravity*, not people. A phase "own
 
 ## 54.3 The skeleton-first rule (why some "late" capabilities start in Phase 0–1)
 
-A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", and permissions "when enterprise asks". For Tabula that ordering is a trap: these are **cross-cutting write-path concerns**. Every mutation path written before they exist must later be found, rewritten, and re-tested — and the bugs from missing one path are silent (a missed event = an automation that doesn't fire; a missed permission check = a data leak). We therefore build each as a **skeleton** early: the interface, the table, and the write-path hook, with the minimal implementation.
+A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", and permissions "when enterprise asks". For TableOS that ordering is a trap: these are **cross-cutting write-path concerns**. Every mutation path written before they exist must later be found, rewritten, and re-tested — and the bugs from missing one path are silent (a missed event = an automation that doesn't fire; a missed permission check = a data leak). We therefore build each as a **skeleton** early: the interface, the table, and the write-path hook, with the minimal implementation.
 
 | Capability | Skeleton in Phase 0/1 | Why retrofitting is costly |
 |---|---|---|
@@ -45,7 +45,7 @@ A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", a
 | **Permissions core (PermissionSnapshot, `perm_epoch`, `restrictions` columns)** | Snapshot compiler with org/workspace/base roles; every service method takes a `Principal` and calls `authorize(action, resource)`; `fields.restrictions`, `tables.restrictions` exist (empty) | Permission checks retrofitted into existing code are reliably incomplete; masking must apply to API, realtime, search, export, AI — channels built in Phases 2–9. Having `authorize()` and the canary tests (28 §52.6.11) from the start means each new channel is born compliant. |
 | **Field-type plugin registry** | `FieldTypeDefinition` interface with all hooks (validate, normalize, parse, format, sort key, sidecar, search text, CSV, conversion table) even if only 8 types exist | Each later subsystem (filter compiler, import, export, search, formula types, AI) dispatches on the registry. Without it, `switch(type)` statements metastasize across 15 modules and the conversion matrix becomes unmanageable. |
 | **Shard routing (1 shard) + control/data plane split** | `ShardRouter.forWorkspace(id)` used by every data-plane access, even with one shard; separate `core` and `data` connection pools; no cross-plane joins | Introducing sharding after launch requires finding every query that joins control-plane and data-plane tables and every place that assumes one pool; it's the classic multi-quarter migration. With one shard from day one the cost is a lookup and discipline. |
-| **UUIDv7 + public prefixed IDs** | `@tabula/types` (ID codec) at boundary from first endpoint | Changing public ID formats after the API is used breaks integrations; changing PKs requires table rewrites. |
+| **UUIDv7 + public prefixed IDs** | `@tableos/types` (ID codec) at boundary from first endpoint | Changing public ID formats after the API is used breaks integrations; changing PKs requires table rewrites. |
 | **Actor/via attribution & event envelope** | `actor{type,id,via}`, `correlationId`, `causationId`, `causationDepth` on `MutationContext` | Automations' loop guard, audit, revision history and "modified by" all need it; reconstructing provenance later is impossible. |
 | **Versioned config documents** | `views.config`, `fields.config`, interface layout, automation definitions carry `configVersion` + upgraders | Without versioning, every config shape change becomes a risky data migration. |
 | **RLS policies** | Every tenant table has RLS from creation; app role `NOBYPASSRLS` | Enabling RLS later reveals hundreds of queries missing context — at a time when a mistake means an outage. |
@@ -61,11 +61,11 @@ A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", a
 | Track | Work |
 |---|---|
 | Features (internal) | Sign-up/login (email+password, email verification), create org/workspace (default on signup), "hello base" create/list/rename, health pages |
-| Database | Migration framework (`packages/db/migrations/{core,data,audit}`), roles (`tabula_migrator`, `tabula_app`, `tabula_relay`), RLS helper functions, `core.organizations`, `organization_members`, `users`, `user_identities`, `sessions`, `workspaces`, `workspace_directory`, `base_directory`, `shards`, `access_grants`, `feature_flags`; `data.bases`, `base_runtime`, `base_changes` (daily partitions + maintenance), `outbox_events`, `idempotency_keys`; `audit.audit_events` (monthly partitions) |
-| Backend | Monorepo (pnpm + Turborepo), `@tabula/types` (branded IDs, UUIDv7, prefixed base62 codec), `@tabula/db` (Kysely, plane-aware pools, `ShardRouter`, `withTenant()`), `MutationContext` (change_seq allocation, base_changes, outbox, actor/via, correlation), `@tabula/events` (envelope, catalogue types, `EventBus` interface, BullMQ MVP profile), `relay` role (logical replication via `pgoutput`, slot lease, checkpointing), `@tabula/permissions` skeleton (`Principal`, `authorize()`, snapshot compile for org/workspace/base roles, `perm_epoch`), Fastify app scaffold with problem+json errors, `Idempotency-Key` middleware, OpenAPI generation from TypeBox, process role entrypoints (`api`, `realtime` stub, `worker`, `scheduler` with leader election, `relay`), session auth (opaque token, Argon2id) |
+| Database | Migration framework (`packages/db/migrations/{core,data,audit}`), roles (`tableos_migrator`, `tableos_app`, `tableos_relay`), RLS helper functions, `core.organizations`, `organization_members`, `users`, `user_identities`, `sessions`, `workspaces`, `workspace_directory`, `base_directory`, `shards`, `access_grants`, `feature_flags`; `data.bases`, `base_runtime`, `base_changes` (daily partitions + maintenance), `outbox_events`, `idempotency_keys`; `audit.audit_events` (monthly partitions) |
+| Backend | Monorepo (pnpm + Turborepo), `@tableos/types` (branded IDs, UUIDv7, prefixed base62 codec), `@tableos/db` (Kysely, plane-aware pools, `ShardRouter`, `withTenant()`), `MutationContext` (change_seq allocation, base_changes, outbox, actor/via, correlation), `@tableos/events` (envelope, catalogue types, `EventBus` interface, BullMQ MVP profile), `relay` role (logical replication via `pgoutput`, slot lease, checkpointing), `@tableos/permissions` skeleton (`Principal`, `authorize()`, snapshot compile for org/workspace/base roles, `perm_epoch`), Fastify app scaffold with problem+json errors, `Idempotency-Key` middleware, OpenAPI generation from TypeBox, process role entrypoints (`api`, `realtime` stub, `worker`, `scheduler` with leader election, `relay`), session auth (opaque token, Argon2id) |
 | Frontend | Vite + React 19 SPA shell, TanStack Router/Query, auth pages, design-system foundations (tokens, Radix primitives wrapper), API client generated from OpenAPI |
 | Infra | Terraform modules (VPC, RDS ×2 with `wal_level=logical`, ElastiCache ×2 (cache, BullMQ AOF), S3 buckets per spine §11, ECR), ECS Fargate (MVP choice per D23) or EKS dev cluster, GitHub Actions CI pipeline (28 §52.8), OpenTelemetry collector → Grafana stack, Sentry, structured logging, secrets in AWS Secrets Manager, KMS keys |
-| Testing | `@tabula/testing` (PG harness with template DBs + 2 shards + RLS roles, builders v0, FakeClock), RLS-coverage test, outbox-atomicity helper, query budgets |
+| Testing | `@tableos/testing` (PG harness with template DBs + 2 shards + RLS roles, builders v0, FakeClock), RLS-coverage test, outbox-atomicity helper, query budgets |
 | Dependencies | None |
 | **Definition of done** | (1) A base created via API produces `base_changes` + `outbox_events` in one txn, relay publishes to BullMQ, a test consumer receives it; (2) RLS coverage test green; (3) cross-tenant 404 test green; (4) deploy to staging via pipeline; (5) traces span api → db → relay → worker; (6) ADRs 001–031 accepted |
 
@@ -77,7 +77,7 @@ A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", a
 |---|---|
 | Features | Invite to workspace/base (email), roles (workspace & base), tables CRUD, fields CRUD for core types (`text`, `long_text` plain, `number`, `currency`, `percent`, `checkbox`, `date`, `datetime`, `single_select`, `multi_select`, `email`, `url`, `phone`, `rating`, `collaborator`, `autonumber`, `created_time`, `modified_time`, `created_by`, `modified_by`), records CRUD (single + batch ≤ 1000), primary field rules, record expand view (basic), undo/redo of cell edits (server inverse ops), trash for records/fields/tables (`deletion_batches`), plan limits enforcement skeleton |
 | Database | `data.tables`, `fields` (slot, config, restrictions), `records` (hash-partitioned by `table_id`, `cells`, `computed`, `cell_meta`, `version`), `deletion_batches`, `long_operations`, `record_revisions` (monthly partitions); `core.invitations`, `teams`, `team_members`, `plans`, `subscriptions` (stub), `usage_counters`, `user_preferences` |
-| Backend | `@tabula/fields` registry + conformance suite + 20 core types; schema service (table/field CRUD, slot allocation, rename, reorder via fractional keys); record service (validate/normalize via registry, `cell_meta`, `version`, revisions writer); undo service (inverse ops from `base_changes`, per-session stacks); trash service; schema snapshot cache (`schema:{baseId}:{schemaVersion}`); permission snapshot gains table/field restrictions (no UI yet); invitations + email (`email` queue, SES); public-shape REST endpoints for bases/tables/fields/records (first-party consumption, not yet GA) |
+| Backend | `@tableos/fields` registry + conformance suite + 20 core types; schema service (table/field CRUD, slot allocation, rename, reorder via fractional keys); record service (validate/normalize via registry, `cell_meta`, `version`, revisions writer); undo service (inverse ops from `base_changes`, per-session stacks); trash service; schema snapshot cache (`schema:{baseId}:{schemaVersion}`); permission snapshot gains table/field restrictions (no UI yet); invitations + email (`email` queue, SES); public-shape REST endpoints for bases/tables/fields/records (first-party consumption, not yet GA) |
 | Frontend | Workspace/base home, table tabs, **simple DOM grid v0** (≤ 1k rows, for dogfood only — replaced in Phase 2), field config dialogs per type, record expand modal, invite/share dialogs |
 | Infra | Production account (internal-only org allowlist), RDS backups/PITR, staging data refresh, Redis namespaces |
 | Testing | Field conformance for 20 types, conversion matrix scaffold (pairs declared), undo model tests, permission matrix v0 (roles × base actions) with reference model, Playwright smoke (sign up → create base → edit cells) |
@@ -92,12 +92,12 @@ A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", a
 |---|---|
 | Features | Grid view (canvas): virtualized rows/columns, frozen columns, column resize/reorder, keyboard navigation, copy/paste (TSV), fill handle, row height; views CRUD (collaborative/personal/locked), view sections; filter builder (AND/OR groups), multi-sort, grouping (≤ 3 levels) with aggregates; hide/reorder fields per view; record counts; **realtime co-editing** (cell ops, presence avatars, live record create/delete, live schema changes), offline indicator, reconnect & catch-up |
 | Database | `data.views`, `view_sections`, `view_user_state`, `record_index_num`, `record_index_text`, `record_index_time` (+ maintenance of sidecars on write), ICU collation migration (`und-u-ks-level2`), indexes for keyset pagination |
-| Backend | `@tabula/filter` (AST, validator, **SQL compiler** JSONB + sidecar paths, **in-memory evaluator**), sort/group compiler, keyset cursor codec, view query endpoint (`records:query` internal), sidecar auto-enable at `INDEX_SIDECAR_THRESHOLD` (backfill as long_operation); **realtime gateway** (`realtime` role): WS auth via session, subscribe(base), fan-out from relay stream of `base_changes`, per-subscriber permission masking, presence in Redis, `resync_required`; client op IDs dedupe |
+| Backend | `@tableos/filter` (AST, validator, **SQL compiler** JSONB + sidecar paths, **in-memory evaluator**), sort/group compiler, keyset cursor codec, view query endpoint (`records:query` internal), sidecar auto-enable at `INDEX_SIDECAR_THRESHOLD` (backfill as long_operation); **realtime gateway** (`realtime` role): WS auth via session, subscribe(base), fan-out from relay stream of `base_changes`, per-subscriber permission masking, presence in Redis, `resync_required`; client op IDs dedupe |
 | Frontend | Canvas grid (Glide-inspired, own implementation), RecordStore (normalized, `useSyncExternalStore`), optimistic ops + rebase, view toolbar, filter/sort/group UI, presence UI, ARIA grid mirror (a11y baseline) |
 | Infra | Realtime role deployment (sticky-less, ALB WebSocket), Redis presence keyspace, Grafana dashboards for WS |
 | Testing | **Filter/sort/group equivalence properties** (TC-01, TC-02) on PR; realtime simulation harness (TC-15); Playwright multi-context realtime E2E; grid perf trace on 100k rows; L1 at 100k rows |
 | Dependencies | Phase 1 (records, field registry); Phase 0 relay |
-| **Definition of done** | Team dogfoods its tracker in Tabula; 3-user concurrent editing with zero convergence bugs for 2 weeks; filter equivalence at 20k nightly runs green for 7 consecutive nights; grid scroll 60 fps at 100k rows |
+| **Definition of done** | Team dogfoods its tracker in TableOS; 3-user concurrent editing with zero convergence bugs for 2 weeks; filter equivalence at 20k nightly runs green for 7 consecutive nights; grid scroll 60 fps at 100k rows |
 
 ### Phase 3 — Links, lookups, rollups, formulas, compute engine (weeks 21–32)
 
@@ -107,7 +107,7 @@ A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", a
 |---|---|
 | Features | Link fields (single/multi, inverse field, self-links), linked-record picker & expanded linked records, lookup, rollup (SUM/AVG/MIN/MAX/COUNT/ARRAYJOIN/…), count, formula field with editor (autocomplete, inline errors, preview), ~120 formula functions, field type conversion (full matrix with preview), `button` field (open URL only) |
 | Database | `data.link_relations`, `record_links` (hash-partitioned by `relation_id`), `field_dependencies`, `computed_stale` |
-| Backend | `@tabula/formula` (lexer, Pratt parser, type checker, compiler, function library, isomorphic build), **Compute Engine** (`@tabula/compute`: field graph, cycle detection, sync recompute in txn, fan-out bounded by `COMPUTE_SYNC_FANOUT_LIMIT`, deferred `compute` queue, volatile buckets in `scheduler`), link service (set-semantics ops), conversion executor (long_operation, chunked, resumable), filter compiler extended to computed/lookup values |
+| Backend | `@tableos/formula` (lexer, Pratt parser, type checker, compiler, function library, isomorphic build), **Compute Engine** (`@tableos/compute`: field graph, cycle detection, sync recompute in txn, fan-out bounded by `COMPUTE_SYNC_FANOUT_LIMIT`, deferred `compute` queue, volatile buckets in `scheduler`), link service (set-semantics ops), conversion executor (long_operation, chunked, resumable), filter compiler extended to computed/lookup values |
 | Frontend | Formula editor (CodeMirror 6 with our language mode), link picker, linked record cards, conversion preview dialog, stale-value indicators |
 | Infra | `compute` worker pool autoscaling on queue depth |
 | Testing | Formula golden tests per function; parser roundtrip & robustness; client/server equivalence; **incremental = full recompute** model test (TC-03); link symmetry; conversion matrix properties (TC-11); L6 compute fan-out |
@@ -197,7 +197,7 @@ A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", a
 |---|---|
 | Features | AI field (`ai_generated`: summarize, classify, extract, translate, custom prompt), AI formula assistant, AI automation action, natural-language filter/view builder, base/table generation from prompt, AI credits & policy controls |
 | Database | `data.ai_prompt_templates`, `ai_invocations` (monthly partitions) |
-| Backend | `@tabula/ai` provider abstraction (Anthropic default per D22; routing by task), AI gateway module (templates, metering, caching `ai:cache:*`, policy enforcement, prompt assembly with permission-filtered context), `ai` queue runner with per-workspace concurrency, evaluation harness (offline eval sets per template) |
+| Backend | `@tableos/ai` provider abstraction (Anthropic default per D22; routing by task), AI gateway module (templates, metering, caching `ai:cache:*`, policy enforcement, prompt assembly with permission-filtered context), `ai` queue runner with per-workspace concurrency, evaluation harness (offline eval sets per template) |
 | Frontend | AI field config, generation status per cell, assistant panels |
 | Infra | Provider secrets, egress allowlist for providers, cost dashboards |
 | Testing | TC-43, prompt-injection suite, eval regression gates (template change must not reduce eval score > 2%), FakeLlmProvider-based integration tests |
@@ -212,7 +212,7 @@ A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", a
 |---|---|
 | Features | SAML/OIDC SSO (Jackson), SCIM 2.0 (users & groups → teams), domain verification & enforcement, enterprise admin console (users, workspaces, bases inventory, sharing controls), audit log UI + SIEM streaming, data retention policies, field hiding & Enterprise row policies, **dedicated shards**, **BYOK** (per-org KMS key, envelope encryption of sensitive columns/objects), **data residency** (EU region cell), IP allowlists, support access grants, extended trash retention (≤ 180 days), legal hold |
 | Database | `core.organization_domains`, `organization_policies`, `sso_connections`, `scim_directories`, `scim_group_mappings`, `support_access_grants`; `audit.audit_exports`; `tables.restrictions.row_policies` activated |
-| Backend | `SsoProvider` (Jackson adapter), SCIM server, policy engine hooks (sharing, AI, export), audit writer consumer + SIEM exporter (`tabula.audit.v1`), dedicated shard provisioning automation, BYOK key hierarchy, region-aware routing in control plane (directory → region) |
+| Backend | `SsoProvider` (Jackson adapter), SCIM server, policy engine hooks (sharing, AI, export), audit writer consumer + SIEM exporter (`tableos.audit.v1`), dedicated shard provisioning automation, BYOK key hierarchy, region-aware routing in control plane (directory → region) |
 | Frontend | Admin console, SSO/SCIM setup wizards, audit log explorer |
 | Infra | EU region deployment (separate data plane + regional control-plane replica for routing), per-org KMS integration, Object Lock for audit archive |
 | Testing | TC-26, SCIM conformance (Okta/Entra validators), row-policy canary suite, residency tests (no EU data in US buckets/logs), BYOK revoke (E140) |
@@ -235,7 +235,7 @@ A naive feature roadmap would add realtime in "Phase 8", events in "Phase 10", a
 
 ```mermaid
 gantt
-    title Tabula delivery plan (calendar weeks from 2026-11-02)
+    title TableOS delivery plan (calendar weeks from 2026-11-02)
     dateFormat  YYYY-MM-DD
     axisFormat  %b %y
     section Platform
@@ -264,7 +264,7 @@ gantt
 
 ## 54.7 Critical path and dependency notes
 
-1. **P0 MutationContext → P1 record service → P2 filter compiler & realtime → P3 compute → P5 import/search → P6 automations → P8 API GA.** Any slip in `@tabula/filter` (P2) slips compute (P3, computed values must be filterable/sortable), automations (conditions use the in-memory evaluator) and interfaces.
+1. **P0 MutationContext → P1 record service → P2 filter compiler & realtime → P3 compute → P5 import/search → P6 automations → P8 API GA.** Any slip in `@tableos/filter` (P2) slips compute (P3, computed values must be filterable/sortable), automations (conditions use the in-memory evaluator) and interfaces.
 2. **Canvas grid** is the highest-uncertainty client item; mitigated by a DOM grid v0 in P1 and a grid spike in P0 (see 34 spikes S-07/S-08).
 3. **Logical replication relay** must be production-hardened before P6 (automations depend on event completeness). Its failover drill (TC-29) is a P5 exit item.
 4. **Permissions** grow every phase; the reference model and canary suite grow with them (each phase's DoD includes "new channels added to canary suite").
@@ -313,7 +313,7 @@ Legend: ✅ in · ⛔ out · 🧩 hook only (architecture present, feature off/h
 | Automations | ⛔ (Phase 6, public beta) | 🧩 events/outbox, causation fields in envelope, `actor.type=automation` |
 | Interfaces | ⛔ | 🧩 `access_grants.resource_type='interface'` enum value, `interface_only` role in vocabulary |
 | Public API | 🧩 first-party REST (same API, undocumented, PAT creation off) | ⛔ public docs, OAuth apps, webhooks |
-| AI | ⛔ | 🧩 `actor.type=ai` enum, `@tabula/ai` interface (no implementation) |
+| AI | ⛔ | 🧩 `actor.type=ai` enum, `@tableos/ai` interface (no implementation) |
 | Billing | ✅ Free + Team plans, Stripe, limits enforcement, over-limit states | ⛔ usage-based AI credits, invoicing |
 | Enterprise | ⛔ | 🧩 `organization_policies` table, `restrictions` columns, audit store writes for security events |
 | Platform | ✅ single region, one data shard, BullMQ event profile, ECS Fargate (or EKS), SLO 99.9% | ⛔ multi-region, Kafka, dedicated shards |
@@ -327,7 +327,7 @@ Legend: ✅ in · ⛔ out · 🧩 hook only (architecture present, feature off/h
 | Automations | ✅ full builder, triggers & actions in Phase 6, scripts (sandbox), Slack/Gmail/Outlook/HTTP connectors, run history, quotas |
 | Interfaces | ✅ designer, elements, interface-only users, publish/versioning |
 | Public API | ✅ GA with docs portal, PATs (scoped), service accounts, OAuth 2.1 apps, webhooks, rate limits per plan |
-| Integrations | ✅ sync tables (Sheets, Salesforce, HubSpot, another Tabula base), Zapier/Make apps |
+| Integrations | ✅ sync tables (Sheets, Salesforce, HubSpot, another TableOS base), Zapier/Make apps |
 | Search | ✅ OpenSearch, field-aware, permission-filtered |
 | Collaboration | ✅ rich text (Yjs), cell/field comments, Slack notifications, WebAuthn |
 | Views | ✅ timeline, list view, conditional coloring |
@@ -358,16 +358,16 @@ Legend: ✅ in · ⛔ out · 🧩 hook only (architecture present, feature off/h
 
 | # | Hook | Where | Why it must exist in MVP | Feature that later uses it |
 |---|---|---|---|---|
-| H1 | **Shard routing with one shard** — `ShardRouter`, `core.workspace_directory`, `core.base_directory`, `core.shards` | `@tabula/db` | Every data-plane query routed; no cross-plane joins can creep in | Multi-shard (V1), dedicated shards & residency (Ent) |
+| H1 | **Shard routing with one shard** — `ShardRouter`, `core.workspace_directory`, `core.base_directory`, `core.shards` | `@tableos/db` | Every data-plane query routed; no cross-plane joins can creep in | Multi-shard (V1), dedicated shards & residency (Ent) |
 | H2 | **Transactional outbox + relay (BullMQ profile)** | `outbox_events`, `relay` role | All side effects event-driven from day one | Kafka profile (V1), automations, webhooks, audit, search |
 | H3 | **`base_changes` + `change_seq`** with forward & inverse ops | `MutationContext` | Realtime, undo, catch-up | Webhook cursors, sync, revision coalescing |
-| H4 | **Event envelope** with `actor{type,id,via}`, `correlationId`, `causationId`, `causationDepth`, `schemaVersion` | `@tabula/events` | Provenance cannot be backfilled | Automation loop guard, audit, AI attribution |
-| H5 | **Permission snapshot + `perm_epoch`** with restriction overlays evaluated (empty) | `@tabula/permissions` | Every channel born permission-aware | Field hiding, row policies, interfaces, OAuth scopes |
+| H4 | **Event envelope** with `actor{type,id,via}`, `correlationId`, `causationId`, `causationDepth`, `schemaVersion` | `@tableos/events` | Provenance cannot be backfilled | Automation loop guard, audit, AI attribution |
+| H5 | **Permission snapshot + `perm_epoch`** with restriction overlays evaluated (empty) | `@tableos/permissions` | Every channel born permission-aware | Field hiding, row policies, interfaces, OAuth scopes |
 | H6 | **`restrictions jsonb` columns** on `tables` and `fields`; `views.visibility` incl. `locked` | `data` schema | Avoids table rewrites on hot tables later | Enterprise field hiding, row policies |
 | H7 | **Field slot JSONB keys** (`next_field_slot`, never reused) | record storage | Rename/delete without rewriting records; no dynamic DDL | Every field feature |
 | H8 | **Typed index sidecars** (tables + write maintenance code), auto-enable threshold | record storage | Large-table performance without schema change | Enterprise 2M–10M record bases |
 | H9 | **Versioned config docs** (`configVersion` + upgraders) for `fields.config`, `views.config`, interface layouts, automation definitions | each module | Safe evolution of JSON configs | Interfaces, automations, view types |
-| H10 | **UUIDv7 PKs + prefixed public IDs** (incl. prefixes for not-yet-built entities, e.g., `itf`, `aut`, `aij`) | `@tabula/types` (ID codec) | Stable public contract | Public API GA |
+| H10 | **UUIDv7 PKs + prefixed public IDs** (incl. prefixes for not-yet-built entities, e.g., `itf`, `aut`, `aij`) | `@tableos/types` (ID codec) | Stable public contract | Public API GA |
 | H11 | **`access_grants` generic resource/principal** incl. `team`, `service_account`, `interface` | `core` | No migration when adding principal/resource types | Teams/SCIM, service accounts, interfaces |
 | H12 | **Idempotency keys** on all mutating endpoints | API middleware + `idempotency_keys` | Retries safe from day one (failover, flaky networks) | Public API, automations, webhooks |
 | H13 | **`HttpEgress` port + egress proxy** (even if only used by avatars/email) | platform | One SSRF chokepoint before any user-controlled URL exists | Webhooks, HTTP actions, attach-from-URL, AI tools |

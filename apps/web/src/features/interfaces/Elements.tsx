@@ -1,5 +1,5 @@
 import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { cellValueToText } from "@tabula/field-ui";
+import { cellValueToText } from "@tableos/field-ui";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Dialog } from "../../app/ui.tsx";
 import { ApiProblemError, type FieldDto, type TableDto } from "../../lib/api.ts";

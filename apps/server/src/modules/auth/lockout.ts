@@ -1,5 +1,5 @@
-import { hashSessionToken, SESSION_COOKIE_NAME } from "@tabula/auth";
-import type { TabulaDb } from "@tabula/db";
+import { hashSessionToken, SESSION_COOKIE_NAME } from "@tableos/auth";
+import type { TableOSDb } from "@tableos/db";
 import type { FastifyRequest } from "fastify";
 import { sql } from "kysely";
 import { sendEmail } from "../automations/mailer.js";
@@ -71,7 +71,7 @@ export function attemptMeta(o: AttemptOutcome): Record<string, unknown> | undefi
  * Whether the policy covers this account, and whose owners to alert: the orgs
  * the user belongs to without owning. Accounts that only own orgs are exempt.
  */
-export async function lockoutPolicy(db: TabulaDb, userId: string): Promise<{ applies: boolean; orgIds: string[] }> {
+export async function lockoutPolicy(db: TableOSDb, userId: string): Promise<{ applies: boolean; orgIds: string[] }> {
   const r = await sql<{ org_id: string; role: string }>`
     SELECT org_id, role FROM core.organization_members
     WHERE user_id = ${userId} AND status = 'active'
@@ -82,7 +82,7 @@ export async function lockoutPolicy(db: TabulaDb, userId: string): Promise<{ app
 }
 
 /** The signed-in user behind a public request's session cookie, if any. */
-export async function sessionVisitor(db: TabulaDb, request: FastifyRequest): Promise<{ id: string; email: string } | null> {
+export async function sessionVisitor(db: TableOSDb, request: FastifyRequest): Promise<{ id: string; email: string } | null> {
   const token = request.cookies?.[SESSION_COOKIE_NAME];
   if (!token) return null;
   const r = await sql<{ id: string; email: string }>`
@@ -93,7 +93,7 @@ export async function sessionVisitor(db: TabulaDb, request: FastifyRequest): Pro
   return r.rows[0] ?? null;
 }
 
-export async function isOrgOwner(db: TabulaDb, userId: string, orgId: string): Promise<boolean> {
+export async function isOrgOwner(db: TableOSDb, userId: string, orgId: string): Promise<boolean> {
   const r = await sql<{ n: number }>`
     SELECT 1 AS n FROM core.organization_members
     WHERE user_id = ${userId} AND org_id = ${orgId} AND role = 'owner' AND status = 'active' LIMIT 1
@@ -108,7 +108,7 @@ interface OwnerRow {
   org_name: string;
 }
 
-async function ownersOf(db: TabulaDb, orgIds: string[], exceptUserId?: string | null): Promise<OwnerRow[]> {
+async function ownersOf(db: TableOSDb, orgIds: string[], exceptUserId?: string | null): Promise<OwnerRow[]> {
   if (orgIds.length === 0) return [];
   const r = await sql<OwnerRow>`
     SELECT m.user_id, u.email, m.org_id, o.name AS org_name
@@ -135,7 +135,7 @@ export interface FailedAttemptAlert {
 }
 
 /** Tell the owners right away; failures here never block the response. */
-export async function alertOwners(db: TabulaDb, a: FailedAttemptAlert): Promise<void> {
+export async function alertOwners(db: TableOSDb, a: FailedAttemptAlert): Promise<void> {
   try {
     const owners = await ownersOf(db, a.orgIds, a.targetUserId);
     if (owners.length === 0) return;

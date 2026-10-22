@@ -1,4 +1,4 @@
-import { RealtimeClient, type RealtimePresenceState } from "@tabula/realtime-client";
+import { RealtimeClient, type RealtimePresenceState } from "@tableos/realtime-client";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { readBaseLocation } from "../../lib/base-url.ts";
 import {

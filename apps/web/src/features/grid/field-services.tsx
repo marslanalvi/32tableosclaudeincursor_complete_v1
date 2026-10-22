@@ -11,7 +11,7 @@ import {
   type FieldUiServices,
   type SelectOption,
   type TableLike,
-} from "@tabula/field-ui";
+} from "@tableos/field-ui";
 import { api, request, type BaseDetail } from "../../lib/api.ts";
 import { fieldsApi, listBaseCollaborators } from "../../lib/api-areas/fields.ts";
 import { recordsApi } from "../../lib/api-areas/records.ts";
@@ -135,7 +135,20 @@ export function useFieldServices(baseId: string): FieldUiServices {
           const q = query.toLowerCase();
           rows = rows.filter((r) => recordTitle(t, r).toLowerCase().includes(q) || JSON.stringify(r.fields).toLowerCase().includes(q));
         }
-        return rows.map((r) => ({ id: r.id, name: t ? recordTitle(t, r) : r.id }));
+        return rows.map((r) => {
+          const name = t ? recordTitle(t, r) : r.id;
+          // When the primary field is just the Record ID, show other values so records can be told apart.
+          const detail = t
+            ? t.fields
+                .filter((f) => f.id !== t.primaryFieldId && !["record_id", "attachment", "link", "contact", "button"].includes(f.type))
+                .map((f) => [f.name, cellValueToText(f as never, r.fields[f.id])] as const)
+                .filter(([, v]) => v.trim() !== "")
+                .slice(0, 3)
+                .map(([k, v]) => `${k}: ${v.length > 40 ? `${v.slice(0, 40)}…` : v}`)
+                .join(" · ")
+            : "";
+          return detail ? { id: r.id, name, detail } : { id: r.id, name };
+        });
       },
       async createRecord(tableId, name) {
         const t = tableById(tableId);

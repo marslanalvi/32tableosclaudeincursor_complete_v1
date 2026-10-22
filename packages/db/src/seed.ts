@@ -1,4 +1,4 @@
-import { generateUuidV7 } from "@tabula/types";
+import { generateUuidV7 } from "@tableos/types";
 import pg from "pg";
 
 const { Client } = pg;

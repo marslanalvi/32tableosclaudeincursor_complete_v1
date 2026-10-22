@@ -3,9 +3,9 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
-  font-family: var(--tabula-font-sans);
-  color: var(--tabula-color-text);
-  font-size: var(--tabula-font-size-md);
+  font-family: var(--tableos-font-sans);
+  color: var(--tableos-color-text);
+  font-size: var(--tableos-font-size-md);
 }
 
 .scroll {
@@ -21,8 +21,8 @@
 .dock {
   flex: none;
   padding: 10px 16px 12px;
-  border-top: 1px solid var(--tabula-color-border);
-  background: var(--tabula-color-bg-elevated);
+  border-top: 1px solid var(--tableos-color-border);
+  background: var(--tableos-color-bg-elevated);
 }
 
 .dock > .error,
@@ -48,14 +48,14 @@
 
 .threadResolved {
   padding: 8px;
-  border-radius: var(--tabula-radius-md);
-  background: var(--tabula-color-bg-subtle);
+  border-radius: var(--tableos-radius-md);
+  background: var(--tableos-color-bg-subtle);
   opacity: 0.85;
 }
 
 .resolvedBar {
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-success, #1e7b45);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-success, #1e7b45);
   font-weight: 500;
 }
 
@@ -65,9 +65,9 @@
   justify-content: space-between;
   gap: 6px;
   padding: 4px 4px 4px 10px;
-  border-radius: var(--tabula-radius-sm);
-  background: var(--tabula-color-accent-subtle);
-  font-size: var(--tabula-font-size-xs);
+  border-radius: var(--tableos-radius-sm);
+  background: var(--tableos-color-accent-subtle);
+  font-size: var(--tableos-font-size-xs);
 }
 
 .targetChip {
@@ -77,10 +77,10 @@
   max-width: 100%;
   margin-top: 4px;
   padding: 2px 8px 2px 2px;
-  border: 1px solid var(--tabula-color-border);
+  border: 1px solid var(--tableos-color-border);
   border-radius: 999px;
-  color: var(--tabula-color-text-body);
-  font-size: var(--tabula-font-size-xs);
+  color: var(--tableos-color-text-body);
+  font-size: var(--tableos-font-size-xs);
   text-decoration: none;
   overflow: hidden;
   white-space: nowrap;
@@ -102,26 +102,26 @@
   max-width: 150px;
   height: 28px;
   padding: 0 4px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-sm);
-  background: var(--tabula-color-bg-elevated);
-  color: var(--tabula-color-text-body);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-sm);
+  background: var(--tableos-color-bg-elevated);
+  color: var(--tableos-color-text-body);
   font: inherit;
-  font-size: var(--tabula-font-size-xs);
+  font-size: var(--tableos-font-size-xs);
 }
 
 .toolBtn {
   width: 28px;
   height: 28px;
   border: 0;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   background: none;
   font-size: 15px;
   cursor: pointer;
 }
 
 .toolBtn:hover {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .toolBtn:disabled {
@@ -145,14 +145,14 @@
   gap: 6px;
   max-width: 220px;
   padding: 2px 4px 2px 8px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-sm);
-  font-size: var(--tabula-font-size-xs);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-sm);
+  font-size: var(--tableos-font-size-xs);
 }
 
 .pendingFileError {
-  border-color: var(--tabula-color-danger);
-  color: var(--tabula-color-danger);
+  border-color: var(--tableos-color-danger);
+  color: var(--tableos-color-danger);
 }
 
 .pendingName {
@@ -163,14 +163,14 @@
 
 .pendingState {
   flex: none;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 .pendingRemove {
   flex: none;
   border: 0;
   background: none;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
 }
 
@@ -185,8 +185,8 @@
   display: block;
   width: 72px;
   height: 72px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-sm);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-sm);
   object-fit: cover;
 }
 
@@ -196,15 +196,15 @@
   gap: 6px;
   max-width: 100%;
   padding: 4px 8px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-sm);
-  color: var(--tabula-color-text-body);
-  font-size: var(--tabula-font-size-xs);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-sm);
+  color: var(--tableos-color-text-body);
+  font-size: var(--tableos-font-size-xs);
   text-decoration: none;
 }
 
 .fileChip:hover {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .fileName {
@@ -215,7 +215,7 @@
 
 .fileSize {
   flex: none;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 .comment,
@@ -228,7 +228,7 @@
 .thread {
   margin-left: 38px;
   padding-left: 12px;
-  border-left: 2px solid var(--tabula-color-border);
+  border-left: 2px solid var(--tableos-color-border);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -245,7 +245,7 @@
   justify-content: center;
   font-size: 11px;
   font-weight: 500;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .avatarSm {
@@ -271,21 +271,21 @@
 }
 
 .time {
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-text-muted);
 }
 
 .body {
   margin-top: 2px;
-  color: var(--tabula-color-text-body);
+  color: var(--tableos-color-text-body);
   line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .mention {
-  color: var(--tabula-color-link);
-  background: var(--tabula-color-accent-subtle);
+  color: var(--tableos-color-link);
+  background: var(--tableos-color-accent-subtle);
   border-radius: 4px;
   padding: 0 3px;
   font-weight: 500;
@@ -304,20 +304,20 @@
   border: 0;
   background: none;
   padding: 2px 6px;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   font: inherit;
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
 }
 
 .actionBtn:hover,
 .actionBtnDanger:hover {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .actionBtnDanger {
-  color: var(--tabula-color-danger);
+  color: var(--tableos-color-danger);
 }
 
 .actionBtn:disabled {
@@ -333,16 +333,16 @@
   height: 24px;
   padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid var(--tabula-color-border);
-  background: var(--tabula-color-bg-elevated);
+  border: 1px solid var(--tableos-color-border);
+  background: var(--tableos-color-bg-elevated);
   font: inherit;
-  font-size: var(--tabula-font-size-xs);
+  font-size: var(--tableos-font-size-xs);
   cursor: pointer;
 }
 
 .reactionMine {
-  border-color: var(--tabula-color-info-border);
-  background: var(--tabula-color-accent-subtle);
+  border-color: var(--tableos-color-info-border);
+  background: var(--tableos-color-accent-subtle);
 }
 
 .pickerWrap {
@@ -357,10 +357,10 @@
   display: flex;
   gap: 2px;
   padding: 4px;
-  background: var(--tabula-color-bg-elevated);
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
-  box-shadow: var(--tabula-shadow-md);
+  background: var(--tableos-color-bg-elevated);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
+  box-shadow: var(--tableos-shadow-md);
 }
 
 .pickerBtn {
@@ -369,12 +369,12 @@
   font-size: 16px;
   width: 30px;
   height: 30px;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   cursor: pointer;
 }
 
 .pickerBtn:hover {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .composer {
@@ -389,20 +389,20 @@
   min-height: 64px;
   padding: 10px 12px;
   font: inherit;
-  font-size: var(--tabula-font-size-md);
+  font-size: var(--tableos-font-size-md);
   line-height: 1.4;
-  color: var(--tabula-color-text);
-  background: var(--tabula-color-bg-elevated);
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-sm);
+  color: var(--tableos-color-text);
+  background: var(--tableos-color-bg-elevated);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-sm);
   resize: vertical;
   box-sizing: border-box;
 }
 
 .textarea:focus {
   outline: none;
-  border-color: var(--tabula-color-info-border);
-  box-shadow: 0 0 0 2px var(--tabula-color-focus-ring);
+  border-color: var(--tableos-color-info-border);
+  box-shadow: 0 0 0 2px var(--tableos-color-focus-ring);
 }
 
 .composerActions {
@@ -414,25 +414,25 @@
 
 .hint {
   flex: 1;
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-text-muted);
 }
 
 .btnPrimary,
 .btnGhost {
   min-height: 32px;
   padding: 4px 14px;
-  border-radius: var(--tabula-radius-lg);
+  border-radius: var(--tableos-radius-lg);
   font: inherit;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   font-weight: 500;
   cursor: pointer;
 }
 
 .btnPrimary {
-  background: var(--tabula-color-primary);
-  color: var(--tabula-color-on-primary);
-  border: 1px solid var(--tabula-color-primary);
+  background: var(--tableos-color-primary);
+  color: var(--tableos-color-on-primary);
+  border: 1px solid var(--tableos-color-primary);
 }
 
 .btnPrimary:disabled {
@@ -441,9 +441,9 @@
 }
 
 .btnGhost {
-  background: var(--tabula-color-bg-elevated);
-  color: var(--tabula-color-text);
-  border: 1px solid var(--tabula-color-border);
+  background: var(--tableos-color-bg-elevated);
+  color: var(--tableos-color-text);
+  border: 1px solid var(--tableos-color-border);
 }
 
 .mentionMenu {
@@ -455,10 +455,10 @@
   margin: 0;
   padding: 4px;
   width: min(280px, 100%);
-  background: var(--tabula-color-bg-elevated);
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
-  box-shadow: var(--tabula-shadow-md);
+  background: var(--tableos-color-bg-elevated);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
+  box-shadow: var(--tableos-shadow-md);
 }
 
 .mentionOption,
@@ -467,37 +467,37 @@
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   cursor: pointer;
 }
 
 .mentionOptionActive {
-  background: var(--tabula-color-accent-subtle);
+  background: var(--tableos-color-accent-subtle);
 }
 
 .mentionName {
   display: block;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   font-weight: 500;
 }
 
 .mentionEmail {
   display: block;
-  font-size: var(--tabula-font-size-xs);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-xs);
+  color: var(--tableos-color-text-muted);
 }
 
 .empty {
   margin: 0;
-  color: var(--tabula-color-text-muted);
-  font-size: var(--tabula-font-size-sm);
+  color: var(--tableos-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
 }
 
 .error {
   margin: 0;
   padding: 8px 10px;
-  border-radius: var(--tabula-radius-sm);
-  background: var(--tabula-color-danger-subtle);
-  color: var(--tabula-color-danger);
-  font-size: var(--tabula-font-size-sm);
+  border-radius: var(--tableos-radius-sm);
+  background: var(--tableos-color-danger-subtle);
+  color: var(--tableos-color-danger);
+  font-size: var(--tableos-font-size-sm);
 }

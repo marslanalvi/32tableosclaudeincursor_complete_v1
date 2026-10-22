@@ -10,7 +10,7 @@
 
 ## 0. Summary
 
-**[Ours]** `@tabula/formula` is an isomorphic TypeScript package: **hand-written lexer → Pratt parser → AST → name resolution → static type checker → compiler to JS closures**. It never uses `eval`/`new Function`, never executes user JavaScript, and every function is pure (the clock is injected). The server is authoritative and **materializes** results into `records.computed` (D7); the browser uses the same package for editor validation, type display and instant preview.
+**[Ours]** `@tableos/formula` is an isomorphic TypeScript package: **hand-written lexer → Pratt parser → AST → name resolution → static type checker → compiler to JS closures**. It never uses `eval`/`new Function`, never executes user JavaScript, and every function is pure (the clock is injected). The server is authoritative and **materializes** results into `records.computed` (D7); the browser uses the same package for editor validation, type display and instant preview.
 
 Formulas reference fields **by field id** in stored form (`{fld_7Hk…}`), and by **name** only in the editor, so renames never break formulas. A **field-level dependency graph** (`field_dependencies`) drives cycle detection, topological recomputation order and record-level propagation through links.
 
@@ -148,7 +148,7 @@ export function toEditor(canonical: string, schema: TableSchemaView): string {
 | 11 | postfix `[ ]`, call `( )` | left | 90 | |
 
 ```ts
-// @tabula/formula/src/parser.ts (core loop)
+// @tableos/formula/src/parser.ts (core loop)
 function parseExpr(p: Parser, minBp: number): Node {
   let tok = p.next();
   let lhs = nud(p, tok);                               // prefix position: literal, ref, call, (, [, unary
@@ -283,7 +283,7 @@ export type FType =
 export type FValue =
   | number | Decimal | string | boolean | Temporal.PlainDate | Temporal.Instant
   | { dur: number } | FValue[] | { ref: Uuid; title: string } | typeof BLANK | FError;
-export const BLANK: unique symbol = Symbol.for('tabula.formula.blank');
+export const BLANK: unique symbol = Symbol.for('tableos.formula.blank');
 export class FError { constructor(readonly code: ErrorCode, readonly detail?: string) {} }
 ```
 
@@ -798,7 +798,7 @@ Security properties:
 
 ## 13. Isomorphic client preview
 
-* The formula editor (in `@tabula/field-ui`) uses `@tabula/formula` to lex/parse on every keystroke (debounced 50 ms), producing syntax highlighting from tokens, diagnostics with spans, autocomplete (field names from the schema snapshot, functions with signature help), and the inferred **result type** and default format.
+* The formula editor (in `@tableos/field-ui`) uses `@tableos/formula` to lex/parse on every keystroke (debounced 50 ms), producing syntax highlighting from tokens, diagnostics with spans, autocomplete (field names from the schema snapshot, functions with signature help), and the inferred **result type** and default format.
 * **Preview values**: evaluated client-side against the records currently loaded in the grid window (first 20), using the same compiled closures. Lookups/rollups use link data already in the client `RecordStore` when complete; otherwise the editor calls `POST /v1/bases/{baseId}/tables/{tableId}/fields:previewFormula` (`{ expression, sampleRecordIds?: [], timeZone }` → `{ resultType, values: [{recordId, value | error}] }`), which evaluates server-side on ≤ 20 records without saving.
 * On save, the server re-parses, re-checks and re-compiles from the canonical text (the client's AST is never trusted).
 
@@ -845,4 +845,4 @@ Table *Order lines*: `Price` (currency USD, scale 2, slot 3), `Quantity` (number
 | Endpoint | `POST /v1/bases/{baseId}/tables/{tableId}/fields:previewFormula` | server-side preview on sample records (§13) |
 | Constants | `MAX_FORMULA_LENGTH = 16000`, `FORMULA_STEP_BUDGET = 100000`, `FORMULA_RECORD_TIME_BUDGET_MS = 10`, `VOLATILE_MINUTE_BUCKET = 15 min` | §12, §11.6 |
 | Field config | `fields.config.invalid` (`{ code, message }`) for formulas/lookups broken by schema changes | §5.4 |
-| Packages | `@tabula/formula` (isomorphic); runtime deps `decimal.js`, `@js-temporal/polyfill`, `re2` (server), `re2js` (browser) | §6–7 |
+| Packages | `@tableos/formula` (isomorphic); runtime deps `decimal.js`, `@js-temporal/polyfill`, `re2` (server), `re2js` (browser) | §6–7 |

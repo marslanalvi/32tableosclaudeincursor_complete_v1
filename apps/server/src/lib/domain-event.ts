@@ -1,9 +1,9 @@
-import { generateUuidV7 } from "@tabula/types";
+import { generateUuidV7 } from "@tableos/types";
 import {
   DOMAIN_EVENTS_TOPIC,
   type DomainEvent,
   type EventBus,
-} from "@tabula/events";
+} from "@tableos/events";
 
 export async function publishDomainEvent(
   eventBus: EventBus,

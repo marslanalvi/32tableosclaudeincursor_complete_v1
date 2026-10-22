@@ -16,11 +16,11 @@
 
 .dialog {
   width: min(560px, 100%);
-  background: var(--tabula-color-bg-elevated);
-  color: var(--tabula-color-text);
-  border-radius: var(--tabula-radius-lg);
-  box-shadow: var(--tabula-shadow-lg);
-  font-family: var(--tabula-font-sans);
+  background: var(--tableos-color-bg-elevated);
+  color: var(--tableos-color-text);
+  border-radius: var(--tableos-radius-lg);
+  box-shadow: var(--tableos-shadow-lg);
+  font-family: var(--tableos-font-sans);
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 96px);
@@ -40,7 +40,7 @@
 
 .title {
   margin: 0;
-  font-size: var(--tabula-font-size-xl);
+  font-size: var(--tableos-font-size-xl);
   font-weight: 500;
   line-height: 1.3;
   flex: 1;
@@ -48,18 +48,18 @@
 
 .subtitle {
   margin: 4px 0 0;
-  color: var(--tabula-color-text-muted);
-  font-size: var(--tabula-font-size-md);
+  color: var(--tableos-color-text-muted);
+  font-size: var(--tableos-font-size-md);
   line-height: 1.4;
 }
 
 .close {
   width: 32px;
   height: 32px;
-  border-radius: var(--tabula-radius-full);
-  border: 1px solid var(--tabula-color-border);
-  background: var(--tabula-color-bg-elevated);
-  color: var(--tabula-color-text);
+  border-radius: var(--tableos-radius-full);
+  border: 1px solid var(--tableos-color-border);
+  background: var(--tableos-color-bg-elevated);
+  color: var(--tableos-color-text);
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
@@ -80,7 +80,7 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 16px 24px 24px;
-  border-top: 1px solid var(--tabula-color-border);
+  border-top: 1px solid var(--tableos-color-border);
 }
 
 .footerSpacer {
@@ -90,7 +90,7 @@
 .tabs {
   display: flex;
   gap: 4px;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
   padding: 0 24px;
 }
 
@@ -101,17 +101,17 @@
   padding: 10px 4px;
   margin-right: 16px;
   font: inherit;
-  font-size: var(--tabula-font-size-md);
+  font-size: var(--tableos-font-size-md);
   font-weight: 500;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   border-bottom: 2px solid transparent;
   cursor: pointer;
 }
 
 .tabActive {
   composes: tab;
-  color: var(--tabula-color-text);
-  border-bottom-color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
+  border-bottom-color: var(--tableos-color-text);
 }
 
 .btnPrimary,
@@ -124,9 +124,9 @@
   gap: 6px;
   min-height: 40px;
   padding: 8px 20px;
-  border-radius: var(--tabula-radius-lg);
+  border-radius: var(--tableos-radius-lg);
   font: inherit;
-  font-size: var(--tabula-font-size-md);
+  font-size: var(--tableos-font-size-md);
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -134,29 +134,29 @@
 }
 
 .btnPrimary {
-  background: var(--tabula-color-primary);
-  color: var(--tabula-color-on-primary);
-  border: 1px solid var(--tabula-color-primary);
+  background: var(--tableos-color-primary);
+  color: var(--tableos-color-on-primary);
+  border: 1px solid var(--tableos-color-primary);
 }
 
 .btnPrimary:active:not(:disabled) {
-  background: var(--tabula-color-primary-active);
+  background: var(--tableos-color-primary-active);
 }
 
 .btnSecondary {
-  background: var(--tabula-color-bg-elevated);
-  color: var(--tabula-color-text);
-  border: 1px solid var(--tabula-color-border);
+  background: var(--tableos-color-bg-elevated);
+  color: var(--tableos-color-text);
+  border: 1px solid var(--tableos-color-border);
 }
 
 .btnSecondary:active:not(:disabled) {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .btnDanger {
-  background: var(--tabula-color-bg-elevated);
-  color: var(--tabula-color-danger);
-  border: 1px solid var(--tabula-color-border);
+  background: var(--tableos-color-bg-elevated);
+  color: var(--tableos-color-danger);
+  border: 1px solid var(--tableos-color-border);
 }
 
 .btnText {
@@ -164,14 +164,14 @@
   border: 0;
   padding: 8px 4px;
   min-height: 32px;
-  color: var(--tabula-color-link);
+  color: var(--tableos-color-link);
 }
 
 .btnSmall {
   min-height: 32px;
   padding: 4px 12px;
-  border-radius: var(--tabula-radius-sm);
-  font-size: var(--tabula-font-size-sm);
+  border-radius: var(--tableos-radius-sm);
+  font-size: var(--tableos-font-size-sm);
 }
 
 .btnPrimary:disabled,
@@ -188,7 +188,7 @@
 .btnText:focus-visible,
 .close:focus-visible,
 .tab:focus-visible {
-  outline: 2px solid var(--tabula-color-info-border);
+  outline: 2px solid var(--tableos-color-info-border);
   outline-offset: 2px;
 }
 
@@ -199,11 +199,11 @@
   height: 40px;
   padding: 0 12px;
   font: inherit;
-  font-size: var(--tabula-font-size-md);
-  color: var(--tabula-color-text);
-  background: var(--tabula-color-bg-elevated);
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-sm);
+  font-size: var(--tableos-font-size-md);
+  color: var(--tableos-color-text);
+  background: var(--tableos-color-bg-elevated);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-sm);
   box-sizing: border-box;
 }
 
@@ -219,42 +219,42 @@
 .select:focus,
 .textarea:focus {
   outline: none;
-  border-color: var(--tabula-color-info-border);
-  box-shadow: 0 0 0 2px var(--tabula-color-focus-ring);
+  border-color: var(--tableos-color-info-border);
+  box-shadow: 0 0 0 2px var(--tableos-color-focus-ring);
 }
 
 .label {
   display: block;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   font-weight: 500;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
   margin-bottom: 6px;
 }
 
 .hint {
   margin: 0;
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-muted);
   line-height: 1.4;
 }
 
 .error {
   margin: 0;
   padding: 10px 12px;
-  border-radius: var(--tabula-radius-sm);
-  background: var(--tabula-color-danger-subtle);
-  color: var(--tabula-color-danger);
-  font-size: var(--tabula-font-size-sm);
+  border-radius: var(--tableos-radius-sm);
+  background: var(--tableos-color-danger-subtle);
+  color: var(--tableos-color-danger);
+  font-size: var(--tableos-font-size-sm);
   line-height: 1.4;
 }
 
 .success {
   margin: 0;
   padding: 10px 12px;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   background: #eef8ef;
-  color: var(--tabula-color-success);
-  font-size: var(--tabula-font-size-sm);
+  color: var(--tableos-color-success);
+  font-size: var(--tableos-font-size-sm);
 }
 
 .row {
@@ -264,8 +264,8 @@
 }
 
 .card {
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -274,7 +274,7 @@
 
 .cardSoft {
   composes: card;
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .settingRow {
@@ -282,7 +282,7 @@
   align-items: flex-start;
   gap: 12px;
   padding: 12px 0;
-  border-top: 1px solid var(--tabula-color-border);
+  border-top: 1px solid var(--tableos-color-border);
 }
 
 .settingRow:first-child {
@@ -295,7 +295,7 @@
 }
 
 .settingTitle {
-  font-size: var(--tabula-font-size-md);
+  font-size: var(--tableos-font-size-md);
   font-weight: 500;
 }
 
@@ -306,7 +306,7 @@
   flex: none;
   border-radius: 999px;
   border: 0;
-  background: var(--tabula-color-bg-strong);
+  background: var(--tableos-color-bg-strong);
   cursor: pointer;
   margin-top: 2px;
   transition: background 120ms ease;
@@ -327,7 +327,7 @@
 
 .switchOn {
   composes: switch;
-  background: var(--tabula-color-success-border);
+  background: var(--tableos-color-success-border);
 }
 
 .switchOn::after {
@@ -348,8 +348,8 @@
 .linkInput {
   composes: input;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--tabula-font-size-sm);
-  background: var(--tabula-color-bg-subtle);
+  font-size: var(--tableos-font-size-sm);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .badge {
@@ -358,25 +358,25 @@
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: var(--tabula-font-size-xs);
+  font-size: var(--tableos-font-size-xs);
   font-weight: 500;
-  background: var(--tabula-color-bg-subtle);
-  border: 1px solid var(--tabula-color-border);
-  color: var(--tabula-color-text-muted);
+  background: var(--tableos-color-bg-subtle);
+  border: 1px solid var(--tableos-color-border);
+  color: var(--tableos-color-text-muted);
 }
 
 .muted {
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 /* Import: columns whose name matches a field already in the table. */
 .matchBanner {
   padding: 10px 12px;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   border: 1px solid #f0c27a;
   background: #fff8eb;
   color: #6b3f00;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   line-height: 1.45;
 }
 
@@ -405,7 +405,7 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
   cursor: pointer;
 }
 
@@ -414,33 +414,33 @@
 }
 
 .matchOption[data-disabled] {
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   cursor: not-allowed;
 }
 
 .matchWhy {
   font-size: 12px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--tabula-font-size-sm);
+  font-size: var(--tableos-font-size-sm);
 }
 
 .table th,
 .table td {
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
   vertical-align: middle;
 }
 
 .table th {
   font-weight: 500;
-  color: var(--tabula-color-text-muted);
-  background: var(--tabula-color-bg-subtle);
+  color: var(--tableos-color-text-muted);
+  background: var(--tableos-color-bg-subtle);
   position: sticky;
   top: 0;
 }
@@ -448,37 +448,37 @@
 .progressTrack {
   height: 6px;
   border-radius: 999px;
-  background: var(--tabula-color-bg-strong);
+  background: var(--tableos-color-bg-strong);
   overflow: hidden;
 }
 
 .progressBar {
   height: 100%;
-  background: var(--tabula-color-primary);
+  background: var(--tableos-color-primary);
   transition: width 200ms ease;
 }
 
 .dropzone {
-  border: 1px dashed var(--tabula-color-border-strong);
-  border-radius: var(--tabula-radius-md);
+  border: 1px dashed var(--tableos-color-border-strong);
+  border-radius: var(--tableos-radius-md);
   padding: 32px 16px;
   text-align: center;
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
   cursor: pointer;
 }
 
 .dropzoneActive {
   composes: dropzone;
-  border-color: var(--tabula-color-info-border);
-  background: var(--tabula-color-accent-subtle);
+  border-color: var(--tableos-color-info-border);
+  background: var(--tableos-color-accent-subtle);
 }
 
 .steps {
   display: flex;
   gap: 8px;
   padding: 0 24px 8px;
-  font-size: var(--tabula-font-size-sm);
-  color: var(--tabula-color-text-muted);
+  font-size: var(--tableos-font-size-sm);
+  color: var(--tableos-color-text-muted);
 }
 
 .step {
@@ -494,19 +494,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--tabula-color-border);
+  border: 1px solid var(--tableos-color-border);
   font-size: 11px;
 }
 
 .stepActive {
   composes: step;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
   font-weight: 500;
 }
 
 .stepActive .stepNum {
-  background: var(--tabula-color-primary);
-  border-color: var(--tabula-color-primary);
+  background: var(--tableos-color-primary);
+  border-color: var(--tableos-color-primary);
   color: #fff;
 }
 
@@ -515,15 +515,15 @@
   gap: 10px;
   align-items: flex-start;
   padding: 12px;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-md);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-md);
   cursor: pointer;
 }
 
 .radioCardActive {
   composes: radioCard;
-  border-color: var(--tabula-color-text);
-  box-shadow: inset 0 0 0 1px var(--tabula-color-text);
+  border-color: var(--tableos-color-text);
+  box-shadow: inset 0 0 0 1px var(--tableos-color-text);
 }
 
 @media (max-width: 600px) {

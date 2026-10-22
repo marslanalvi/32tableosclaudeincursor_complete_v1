@@ -1,7 +1,7 @@
 # 34 — Self-Review, Risk Register & Recommended Build Order
 
 > **Status:** Proposed · **Owner:** Platform Architecture + Engineering Management · **Date:** 2026-10-03
-> Conforms to [`00-canonical-decisions.md`](./00-canonical-decisions.md). Module and package names follow [`26-architecture-style-stack-repo-services.md`](./26-architecture-style-stack-repo-services.md) (`apps/server/src/kernel`, `apps/server/src/modules/<module>`, `packages/<pkg>` published as `@tabula/<pkg>`). Phases refer to [`29-roadmap-and-scope.md`](./29-roadmap-and-scope.md); ADRs to [`33-architecture-decision-records.md`](./33-architecture-decision-records.md); tests to [`28-testing-and-edge-cases.md`](./28-testing-and-edge-cases.md).
+> Conforms to [`00-canonical-decisions.md`](./00-canonical-decisions.md). Module and package names follow [`26-architecture-style-stack-repo-services.md`](./26-architecture-style-stack-repo-services.md) (`apps/server/src/kernel`, `apps/server/src/modules/<module>`, `packages/<pkg>` published as `@tableos/<pkg>`). Phases refer to [`29-roadmap-and-scope.md`](./29-roadmap-and-scope.md); ADRs to [`33-architecture-decision-records.md`](./33-architecture-decision-records.md); tests to [`28-testing-and-edge-cases.md`](./28-testing-and-edge-cases.md).
 
 **Sections covered**
 
@@ -80,7 +80,7 @@ Each spike is time-boxed, produces a short written result (appended to the relev
 |---|---|---|---|---|---|---|
 | S-01 | **JSONB filter performance on 1M rows per partition** | At what size do JSONB-path filters/sorts on `records.cells` stop meeting the targets, and do sidecars fix it? What hash partition count should `records` use? | Synthetic table: 40 fields, 1M/5M/10M rows; compare (a) expression GIN/B-tree on `cells->'5'`, (b) sidecar join, (c) seq scan; for `=`, range, `contains`, sort+limit 200 with keyset; partitions 16/64/128 | Sidecar path p95 < 100 ms for filter + sort + first page at 1M rows; documented threshold where JSONB path exceeds 250 ms | 2 wks | Phase 0–1 |
 | S-02 | **Base `change_seq` contention benchmark** | Max sustainable write rate per base; lock hold time distribution | pgbench custom script: N concurrent txns doing record update + `UPDATE base_runtime SET change_seq = change_seq + 1 RETURNING` placed last; vary N (50–1000), txn size, fsync on | ≥ 1,000 writes/s per base with p99 lock wait < 20 ms; HOT update ratio > 90% | 1 wk | Phase 0 |
-| S-03 | **Compute fan-out cost** | Cost of sync propagation at 100/500/2000 dependents; deferred throughput | Bench `@tabula/compute` + SQL batch updates of `computed` | 500-record sync fan-out adds < 120 ms p95 to the write; deferred ≥ 5k records/s per worker | 1 wk | Phase 3 start |
+| S-03 | **Compute fan-out cost** | Cost of sync propagation at 100/500/2000 dependents; deferred throughput | Bench `@tableos/compute` + SQL batch updates of `computed` | 500-record sync fan-out adds < 120 ms p95 to the write; deferred ≥ 5k records/s per worker | 1 wk | Phase 3 start |
 | S-04 | **Logical replication relay failover** | What happens to slots on RDS Multi-AZ failover, Aurora failover, and minor version upgrade? Recovery time? | Staging clusters, relay under load, forced failovers ×10 each; test PG16/17 failover slot sync (`sync_replication_slots`) where available | No silent gaps: either the slot survives, or the relay detects loss and backfills from durable rows within 2 min; documented runbook | 2 wks | Phase 1 |
 | S-05 | **Multi-node realtime fan-out ordering** | Can N gateway nodes consuming the bus deliver per-base ordered streams with < 300 ms p95 at 250 ops/s per base, 10k bases? | Prototype gateway + Redpanda partitions keyed by base | Ordering preserved; p95 < 300 ms; reconnect resume works | 1.5 wks | Phase 2 |
 | S-06 | **ICU collation parity** | Does Postgres ICU collation match `Intl.Collator` across browsers for our sort keys? | Generate 1M random strings (multi-script); compare orders; pin ICU versions | 100% agreement, or a byte-sort-key approach (`toSortKey` computed in the app and stored in sidecars) adopted | 1 wk | Phase 1 |
@@ -103,7 +103,7 @@ Each spike is time-boxed, produces a short written result (appended to the relev
 
 These dependencies are not obvious from feature lists. Each one has caused re-sequencing on similar products.
 
-1. **Automations depend on the filter in-memory evaluator** ("when record matches conditions"). Any filter semantic change must ship to the trigger matcher at the same time; otherwise automations fire inconsistently with views. → One package (`@tabula/filter`) and one equivalence suite.
+1. **Automations depend on the filter in-memory evaluator** ("when record matches conditions"). Any filter semantic change must ship to the trigger matcher at the same time; otherwise automations fire inconsistently with views. → One package (`@tableos/filter`) and one equivalence suite.
 2. **Interfaces depend on permission row-scoping**, which depends on the filter SQL compiler accepting principal-bound macros (`$me`). → Built in Phase 2, not Phase 7.
 3. **Undo depends on every module producing correct inverse ops**, including schema changes and conversions. → Inverse-op property test is part of the kernel op registry contract.
 4. **Webhooks depend on `base_changes` retention** (cursor validity), and so does realtime catch-up. Changing `BASE_CHANGES_RETENTION` is a product/API contract change.
@@ -161,7 +161,7 @@ These dependencies are not obvious from feature lists. Each one has caused re-se
 ## 62.6 Automation loop risks
 
 * Direct loops (A → A) and indirect loops (A → B → A) are stopped by `causationDepth` ≤ 8.
-* **Loops that break the causation chain:** automation → outbound webhook → external system → API write back. External writes arrive with a fresh causation chain. *Mitigation:* per-automation hourly budgets (`ratebudget:automation:*`), anomaly detection (runs/min > 10× the 7-day baseline pauses the automation with `automation.disabled_by_system`), and an optional `X-Tabula-Causation` header that our webhooks emit and our API honors.
+* **Loops that break the causation chain:** automation → outbound webhook → external system → API write back. External writes arrive with a fresh causation chain. *Mitigation:* per-automation hourly budgets (`ratebudget:automation:*`), anomaly detection (runs/min > 10× the 7-day baseline pauses the automation with `automation.disabled_by_system`), and an optional `X-TableOS-Causation` header that our webhooks emit and our API honors.
 * Scheduled automations that create records which trigger other automations at scale: monthly quotas plus per-workspace queue fairness.
 * Formula volatility + "when record updated" triggers: volatile recompute must **not** emit user-level `record.updated` for trigger purposes (`actor.type=system`, `via` = compute, excluded by default from triggers).
 
@@ -210,7 +210,7 @@ Severity = impact if it happens (Critical / High / Medium / Low). Probability ov
 |---|---|---|---|---|---|---|
 | R-01 | Cross-tenant data leak through a missing tenant predicate or cache key | Critical | Low | Breach, legal exposure, loss of trust | RLS on every tenant table (ADR-004), RLS coverage test, tenant-fuzz nightly, cache keys include tenant/base, 404-not-403 policy | Platform · any tenant-fuzz failure |
 | R-02 | Hidden-field content leaks via a secondary channel (search, export, AI, webhooks, notifications, formula text) | Critical | Medium | Enterprise trust; contractual breach | Canary suite across all channels (28 §52.6.11); every new channel registered; security review per phase | Security · new channel without canary test |
-| R-03 | SQL filter compiler and in-memory evaluator disagree | High | High | Records vanish or reappear; automations misfire; interface scope bypass | One `@tabula/filter` package; equivalence properties at 20k runs nightly; regression corpus | Data Engine · any counterexample |
+| R-03 | SQL filter compiler and in-memory evaluator disagree | High | High | Records vanish or reappear; automations misfire; interface scope bypass | One `@tableos/filter` package; equivalence properties at 20k runs nightly; regression corpus | Data Engine · any counterexample |
 | R-04 | Incremental compute diverges from full recompute | High | Medium | Wrong lookups and rollups silently persisted | Model-based test (TC-03); production sampling verifier (0.1%/day); repair job | Data Engine · verifier mismatch > 0 |
 | R-05 | Logical replication slot lost on failover → event gap | High | Medium | Missed automations, webhooks, realtime catch-up gaps | S-04; recovery mode from durable rows + `data.relay_checkpoints`; alert; chaos C1/C2 | Platform · slot loss in staging |
 | R-06 | WAL bloat from a stalled relay fills shard disk | High | Medium | Shard outage | `max_slot_wal_keep_size`; lag alerts at 1 GB / 10 GB; standby relay; runbook to drop & recover slot | Platform · lag > 10 min |
@@ -268,7 +268,7 @@ Rules: (1) a step starts only when its dependencies are done to their own DoD; (
 | 3 | Core shared types | `p/types` (branded IDs, UUIDv7 generator via `IdGenerator` port, prefixed base62 codec, `Result`, error catalogue skeleton) | 1 |
 | 4 | Config & observability | `p/config` (Zod env, per-role config), `p/observability` (OTel, pino, metrics) | 1 |
 | 5 | Infra baseline | `infra/terraform` modules: VPC, RDS control + 1 data shard (`wal_level=logical`, `max_slot_wal_keep_size`), ElastiCache ×2, S3 buckets (spine §11), KMS, ECR, ECS/EKS dev | 1 |
-| 6 | DB package & migration runner | `p/db` (Kysely, per-plane pools, migration runner, `migrations/{core,data,audit}`), DB roles `tabula_migrator`/`tabula_app`/`tabula_relay`, RLS helper fn `data.current_workspace_id()` | 3, 4 |
+| 6 | DB package & migration runner | `p/db` (Kysely, per-plane pools, migration runner, `migrations/{core,data,audit}`), DB roles `tableos_migrator`/`tableos_app`/`tableos_relay`, RLS helper fn `data.current_workspace_id()` | 3, 4 |
 | 7 | Test harness | `p/testing` (Testcontainers PG with template DBs, 2 shards, RLS roles, FakeClock, query budgets, builders v0), RLS-coverage test | 6 |
 | 8 | Control-plane identity tables | `core.organizations`, `organization_members`, `users`, `user_identities`, `sessions`, `user_preferences`, `feature_flags` | 6 |
 | 9 | Routing tables & ShardRouter | `core.shards`, `workspace_directory`, `base_directory`; `k/` shard routing + `withTenant()`; routing cache in Redis | 6, 8 |

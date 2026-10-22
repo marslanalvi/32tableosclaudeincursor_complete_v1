@@ -1,4 +1,4 @@
-import { cellValueToText } from "@tabula/field-ui";
+import { cellValueToText } from "@tableos/field-ui";
 import { useState } from "react";
 import type { FieldDto } from "../../lib/api.ts";
 import type { ChartConfig, ChartPoint, DateBucket, DateRange, InterfaceElement, Measure } from "../../lib/api-areas/interfaces.ts";
@@ -465,14 +465,14 @@ function PieChart({ data, donut }: { data: ChartData; donut: boolean }) {
             ? `M ${pt(-Math.PI / 2, R2)} A ${R2} ${R2} 0 1 1 ${pt(-Math.PI / 2 - 0.0001, R2)} Z`
             : `M ${pt(g.a0, R2)} A ${R2} ${R2} 0 ${g.large} 1 ${pt(g.a1, R2)} L ${r ? pt(g.a1, r) : "100,100"} ${r ? `A ${r} ${r} 0 ${g.large} 0 ${pt(g.a0, r)}` : ""} Z`;
           return (
-            <path key={i} d={d} fill={x.color} stroke="var(--tabula-color-bg)" strokeWidth={1} onMouseEnter={() => setHover(i)}>
+            <path key={i} d={d} fill={x.color} stroke="var(--tableos-color-bg)" strokeWidth={1} onMouseEnter={() => setHover(i)}>
               <title>{`${x.label}: ${fmtValue(x.value)} (${pct(x.value)})`}</title>
             </path>
           );
         })}
         {donut ? (
           <>
-            <circle cx={100} cy={100} r={r} fill="var(--tabula-color-bg)" pointerEvents="none" />
+            <circle cx={100} cy={100} r={r} fill="var(--tableos-color-bg)" pointerEvents="none" />
             <text x={100} y={100} textAnchor="middle" className={styles.donutValue}>
               {fmtValue(focus ? focus.value : total)}
             </text>

@@ -14,7 +14,7 @@ Related: [`11-filter-sort-group.md`](./11-filter-sort-group.md) (filter AST — 
 1. Scope and design principles
 2. Protocol decision: REST vs GraphQL vs gRPC vs tRPC
 3. Resource model, URL grammar, custom methods
-4. Versioning: `/v1` + dated `Tabula-Version`
+4. Versioning: `/v1` + dated `TableOS-Version`
 5. Authentication methods and token formats
 6. OAuth scopes catalogue
 7. Authorization middleware pipeline
@@ -41,7 +41,7 @@ Related: [`11-filter-sort-group.md`](./11-filter-sort-group.md) (filter AST — 
 
 ## 1. Scope and design principles
 
-The Tabula API is **one API** consumed by three audiences:
+The TableOS API is **one API** consumed by three audiences:
 
 | Audience | Transport | Auth | Notes |
 |---|---|---|---|
@@ -85,7 +85,7 @@ The Tabula API is **one API** consumed by three audiences:
 ### 2.2 Decision **[Ours]** (ADR-016 in `33-…`)
 
 * **Public: REST/JSON over HTTPS, `/v1`, OpenAPI 3.1 contract.**
-* **Internal (SPA): the same REST API + the WebSocket protocol** for realtime ops/presence. The SPA uses the generated TS client (`@tabula/api-client`) plus TanStack Query.
+* **Internal (SPA): the same REST API + the WebSocket protocol** for realtime ops/presence. The SPA uses the generated TS client (`@tableos/api-client`) plus TanStack Query.
 * **Service-to-service:** in-process module calls (modular monolith, D1). When a module is extracted (e.g. realtime gateway, file processing), it talks via the event log or a small internal HTTP/JSON API with the same TypeBox contracts. **gRPC is not adopted** now; reconsider only if an extracted service needs high-QPS binary RPC (ADR re-open trigger: > 20k internal RPS on a single edge).
 * **No public GraphQL.** Reasons in priority order:
   1. *Dynamic user schemas* make static GraphQL types a liability; we'd ship `fields: JSON` and lose GraphQL's main benefit.
@@ -161,16 +161,16 @@ The colon form (borrowed from Google AIP-136 style, a public convention) keeps v
 | Option | Pros | Cons |
 |---|---|---|
 | Path major only (`/v1`, `/v2`) | Simple, visible | Every behavior fix is either breaking-in-place or a full new major |
-| Header date versions only (`Tabula-Version: 2026-10-01`) | Fine-grained evolution, per-client pinning | Invisible in URLs; harder for curl users; requires version-transform layer |
+| Header date versions only (`TableOS-Version: 2026-10-01`) | Fine-grained evolution, per-client pinning | Invisible in URLs; harder for curl users; requires version-transform layer |
 | **Hybrid: path major + dated minor header** | Big-bang changes rare & visible; small behavior changes pinned per client | Needs a transform layer (we accept the cost) |
 
 ### 4.2 Decision **[Ours]**
 
 * **Major in path:** `/v1`. A `/v2` is only cut for wholesale model changes (expect ≥ 3 years between majors). `/v1` supported ≥ 24 months after `/v2` GA.
-* **Dated minor versions** via request header `Tabula-Version: YYYY-MM-DD`.
+* **Dated minor versions** via request header `TableOS-Version: YYYY-MM-DD`.
   * Version dates are published in the changelog; only dates with behavior changes exist (e.g. `2026-10-01`, `2027-02-15`).
   * **Default resolution:** header → token's pinned version (set at token/OAuth-app creation to the then-current version, editable in the developer portal) → account default → oldest supported. This guarantees an integration that never sends the header never breaks silently.
-  * Response always echoes `Tabula-Version: <resolved>`.
+  * Response always echoes `TableOS-Version: <resolved>`.
   * Unknown date → `400 UNSUPPORTED_API_VERSION`.
 * **What needs a new dated version** (behavior-changing but not structural): changing a default (`pageSize`), changing an enum's default rendering, tightening validation, changing error code for a case, renaming a property (old kept in older versions).
 * **What never needs a version** (always-additive, clients MUST tolerate): new endpoints, new optional request params, new response properties, new enum values in *response* fields documented as open (`fieldType`, `event types`, `error codes`), new error codes under existing HTTP statuses, new headers.
@@ -198,7 +198,7 @@ Transforms are unit-tested with golden files per version; a transform is deleted
 
 | Method | Who | Where it's accepted | Storage | Lifetime |
 |---|---|---|---|---|
-| **Session cookie** `tabula_sid` | First-party SPA | `app.tabula.example` → `api.tabula.example` (same-site) | `core.sessions` (SHA-256 of token) + `sess:{tokenHash}` Redis | Idle 14 d / absolute 30 d; org policy may shorten; MFA level recorded |
+| **Session cookie** `tableos_sid` | First-party SPA | `app.tableos.example` → `api.tableos.example` (same-site) | `core.sessions` (SHA-256 of token) + `sess:{tokenHash}` Redis | Idle 14 d / absolute 30 d; org policy may shorten; MFA level recorded |
 | **Personal access token (PAT)** | A user, scripts | `Authorization: Bearer` | `core.api_tokens` (kind=`pat`) | Optional expiry (org policy may force ≤ 90 d) |
 | **Service account token** | Org-owned automation/integration | `Authorization: Bearer` | `core.api_tokens` (kind=`service_account`, principal = `core.service_accounts`) | Optional expiry; Business+ |
 | **OAuth 2.1 access token** | Third-party app on behalf of a user | `Authorization: Bearer` | `core.api_tokens` (kind=`oauth_access`, `oauth_grant_id`) — see Proposed additions | 1 h; refresh tokens rotate (family in `core.oauth_grants`) |
@@ -223,10 +223,10 @@ tort_<tokenId>_<secret>                                       OAuth refresh toke
 
 ### 5.3 Session cookie + CSRF (first-party)
 
-* Cookie: `tabula_sid`, `HttpOnly; Secure; SameSite=Lax; Domain=.tabula.example; Path=/`.
+* Cookie: `tableos_sid`, `HttpOnly; Secure; SameSite=Lax; Domain=.tableos.example; Path=/`.
 * CSRF: **double-submit token bound to the session** — `X-CSRF-Token` header must equal `HMAC(sessionSecret, "csrf")` (delivered in the `/v1/auth/session` bootstrap response and stored in memory by the SPA). Required on every non-GET request authenticated by cookie. Additionally the API enforces `Origin`/`Sec-Fetch-Site` allow-list for cookie-authenticated mutations (defense in depth).
 * **Bearer-authenticated requests ignore cookies entirely** (prevents confused-deputy when a browser sends both). A request with both `Authorization` and a session cookie is authenticated by the Bearer token only.
-* CORS: `api.tabula.example` allows credentialed CORS only from first-party origins. Bearer requests allow `*` origins without credentials (enables browser-based integrations using OAuth PKCE tokens).
+* CORS: `api.tableos.example` allows credentialed CORS only from first-party origins. Bearer requests allow `*` origins without credentials (enables browser-based integrations using OAuth PKCE tokens).
 
 ### 5.4 OAuth 2.1 for third-party apps (D19)
 
@@ -244,7 +244,7 @@ Service accounts (`svc_…`) are org-owned principals that receive **grants like
 
 | Situation | Status | Code |
 |---|---|---|
-| No credentials on a protected route | 401 | `UNAUTHENTICATED` (+ `WWW-Authenticate: Bearer realm="tabula"`) |
+| No credentials on a protected route | 401 | `UNAUTHENTICATED` (+ `WWW-Authenticate: Bearer realm="tableos"`) |
 | Malformed/unknown token | 401 | `INVALID_TOKEN` |
 | Expired token | 401 | `TOKEN_EXPIRED` |
 | Revoked token / deactivated user | 401 | `TOKEN_REVOKED` |
@@ -301,7 +301,7 @@ Every request passes the same ordered Fastify hook chain. Handlers never perform
 ```
  ┌──────────────┐  ┌───────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐
  │ 1 edge guard │→ │ 2 authenticate│→ │ 3 principal  │→ │ 4 rate limit │→ │ 5 version resolve│
- │ size, CT, IP │  │ cookie|bearer │  │ + org policy │  │ (token, IP)  │  │ Tabula-Version   │
+ │ size, CT, IP │  │ cookie|bearer │  │ + org policy │  │ (token, IP)  │  │ TableOS-Version   │
  └──────────────┘  └───────────────┘  └──────────────┘  └──────────────┘  └──────────────────┘
         ↓
  ┌──────────────┐  ┌───────────────┐  ┌───────────────────┐  ┌──────────────┐  ┌───────────────┐
@@ -323,13 +323,13 @@ Every request passes the same ordered Fastify hook chain. Handlers never perform
 | 4 | Coarse rate limit | Per token / per session user / per IP (anonymous) buckets — cheap check before any DB I/O | `429 RATE_LIMITED` |
 | 5 | Version | §4 | `400 UNSUPPORTED_API_VERSION` |
 | 6 | Validate | Compiled TypeBox validators (ajv) for path/query/headers/body; public ID decoding with prefix check | `400 INVALID_REQUEST` (+ `errors[]` with JSON pointers) |
-| 7 | Base routing | `baseId` → `base_directory` (Redis `basedir:{baseId}` 5 min TTL; invalidated on move) → shard pool → open transaction (read-only for safe methods; routed to a replica only for endpoints flagged replica-safe and when the caller sent `Tabula-Consistency: eventual`) → `SET LOCAL app.workspace_id = …` (RLS, D4). Checks token resource restrictions (base/workspace allow-list) | `404 BASE_NOT_FOUND` (also when restricted — no existence oracle), `503 BASE_UNAVAILABLE` (shard migration write-freeze) |
+| 7 | Base routing | `baseId` → `base_directory` (Redis `basedir:{baseId}` 5 min TTL; invalidated on move) → shard pool → open transaction (read-only for safe methods; routed to a replica only for endpoints flagged replica-safe and when the caller sent `TableOS-Consistency: eventual`) → `SET LOCAL app.workspace_id = …` (RLS, D4). Checks token resource restrictions (base/workspace allow-list) | `404 BASE_NOT_FOUND` (also when restricted — no existence oracle), `503 BASE_UNAVAILABLE` (shard migration write-freeze) |
 | 8 | PermissionSnapshot | `perm:{principalId}:{baseId}:{permEpoch}` from Redis; on miss compiled from `access_grants` (org → workspace → base, max role wins) + restrictions (`tables.restrictions`, `fields.restrictions`, view locks, row policies) — see `19-permissions-and-multitenancy.md`. `permEpoch` read from `base_runtime` in the same tx (1-row PK read) to avoid stale snapshots | `404 BASE_NOT_FOUND` if no access at all |
 | 9 | Action check | `allowed = scopeAllows(action) ∧ snapshot.allows(action, resource)`. Resource may be table/field/view. For record-level row policies, the check yields a **predicate** (filter AST) that is ANDed into the query plan rather than a boolean | `403 INSUFFICIENT_SCOPE` (scope missing — tells the developer which scope) vs `403 PERMISSION_DENIED` (role/restriction) |
 | 10 | Handler + masking | Reads: response projector drops fields not in `snapshot.readableFields(tableId)`; writes: `snapshot.writableFields(tableId)` checked per cell → `403 FIELD_NOT_EDITABLE` with pointer. Linked-record includes re-evaluate the snapshot for the target table | — |
 | 11 | Cost rate limit | Base-level and records-written budgets need the parsed body (record counts), so they run after validation (§15) | `429 RATE_LIMITED` |
 | 12 | Idempotency | Wraps the handler for unsafe methods with an `Idempotency-Key` (§10) | `409` / `422` |
-| 13 | Emit | Audit (security-relevant routes only), usage counters (`api_requests` metric), per-token analytics, OTel span attributes (`tabula.base_id`, `tabula.token_id`, `tabula.route`, `tabula.cost`) | — |
+| 13 | Emit | Audit (security-relevant routes only), usage counters (`api_requests` metric), per-token analytics, OTel span attributes (`tableos.base_id`, `tableos.token_id`, `tableos.route`, `tableos.cost`) | — |
 
 ### 7.2 Existence hiding (404 vs 403)
 
@@ -363,7 +363,7 @@ export const recordsUpdate = defineRoute({
 });
 ```
 
-`defineRoute` registers Fastify `onRequest` / `preValidation` / `preHandler` hooks and contributes the operation to the OpenAPI document (scopes → `security`, action → `x-tabula-permission`, cost → `x-tabula-cost`). A CI lint fails if a route lacks `scopes`, `action` or `auth`.
+`defineRoute` registers Fastify `onRequest` / `preValidation` / `preHandler` hooks and contributes the operation to the OpenAPI document (scopes → `security`, action → `x-tableos-permission`, cost → `x-tableos-cost`). A CI lint fails if a route lacks `scopes`, `action` or `auth`.
 
 ---
 
@@ -375,7 +375,7 @@ export const recordsUpdate = defineRoute({
 * Zod remains for internal module boundaries (D17); TypeBox is the API boundary. A lint rule forbids importing Zod into `apps/server/src/http/**`.
 * **OpenAPI build:** `pnpm api:openapi` walks the route registry → `openapi.public.json` (excludes `x-internal`) and `openapi.internal.json`. CI runs:
   1. **oasdiff** against the last released spec → fails on breaking changes not accompanied by a `VersionTransform` (§4).
-  2. A **Spectral** ruleset (our style guide: camelCase, `object` discriminator, problem responses on every operation, `operationId` present, every op has `x-tabula-permission`).
+  2. A **Spectral** ruleset (our style guide: camelCase, `object` discriminator, problem responses on every operation, `operationId` present, every op has `x-tableos-permission`).
   3. SDK generation smoke test (§20).
 * **Per-base dynamic OpenAPI:** `GET /v1/bases/{baseId}/openapi.json` (scope `schema:read`) produces a spec in which `values` is a concrete object schema with one property per field ID (with `x-field-name`, JSON types per Spine §4). Powers the developer portal "base API docs" and lets users generate a typed client for one base. Cached by `schemaVersion`; respects the caller's field visibility.
 
@@ -401,7 +401,7 @@ export const recordsUpdate = defineRoute({
     "fld_Company0000000000001": [ { "id": "rec_9Pq…", "displayValue": "Acme Holdings" } ],
     "fld_Files000000000000001": [
       { "id": "att_4Lm…", "filename": "contract.pdf", "mimeType": "application/pdf", "size": 482113,
-        "url": "https://files.tabula.example/…?Expires=…&Signature=…", "urlExpiresAt": "2026-10-03T16:05:00Z",
+        "url": "https://files.tableos.example/…?Expires=…&Signature=…", "urlExpiresAt": "2026-10-03T16:05:00Z",
         "thumbnails": { "small": { "url": "https://…", "width": 64, "height": 64 } } }
     ],
     "fld_Total000000000000001": 1350.5
@@ -468,7 +468,7 @@ The same coercion functions power imports (`20-…` §Import), so CSV import and
 * Honored on all `POST`, `PATCH`, `PUT`, `DELETE` (except `:query`, which is safe by contract).
 * Key scope: `(principal — token id or session user id, method, route template)`. Two tokens may use the same key independently.
 * Retention: **24 hours** from first request.
-* Request fingerprint: `SHA-256(method ‖ concrete path ‖ canonical JSON body ‖ Tabula-Version ‖ If-Match)`. Canonical JSON = recursively sorted keys, no insignificant whitespace.
+* Request fingerprint: `SHA-256(method ‖ concrete path ‖ canonical JSON body ‖ TableOS-Version ‖ If-Match)`. Canonical JSON = recursively sorted keys, no insignificant whitespace.
 
 | Situation | Response |
 |---|---|
@@ -619,7 +619,7 @@ Content-Type: application/problem+json
 X-Request-Id: 0192a6f2-11aa-7d3e-b1c8-5a0c7e9f2b31
 
 {
-  "type": "https://developers.tabula.example/errors/FIELD_VALIDATION_FAILED",
+  "type": "https://developers.tableos.example/errors/FIELD_VALIDATION_FAILED",
   "title": "One or more cell values are invalid.",
   "status": 422,
   "code": "FIELD_VALIDATION_FAILED",
@@ -632,7 +632,7 @@ X-Request-Id: 0192a6f2-11aa-7d3e-b1c8-5a0c7e9f2b31
     { "pointer": "/operations/3/values/fld_Status…", "code": "INVALID_SELECT_OPTION",
       "detail": "Option \"Urgentt\" does not exist. Use typecast=true to create it.", "fieldId": "fld_Status…" }
   ],
-  "docs": "https://developers.tabula.example/errors/FIELD_VALIDATION_FAILED"
+  "docs": "https://developers.tableos.example/errors/FIELD_VALIDATION_FAILED"
 }
 ```
 
@@ -670,7 +670,7 @@ Rules:
 | 17 | `INVALID_REQUEST` | 400 | Schema validation failure; `errors[]` |
 | 18 | `MALFORMED_JSON` | 400 | Body not parseable |
 | 19 | `INVALID_ID` | 400 | Bad public ID or wrong prefix for parameter |
-| 20 | `UNSUPPORTED_API_VERSION` | 400 | Unknown `Tabula-Version` |
+| 20 | `UNSUPPORTED_API_VERSION` | 400 | Unknown `TableOS-Version` |
 | 21 | `INVALID_SCOPE` | 400 | Unknown scope at token creation / OAuth |
 | 22 | `PAYLOAD_TOO_LARGE` | 413 | Body > limit; `maxBytes` |
 | 23 | `BATCH_TOO_LARGE` | 413 | > 1000 ops (or > 10,000 async); `max` |
@@ -792,7 +792,7 @@ The engine documents (06–22, 28) define error conditions specific to their sub
 
 **Not HTTP status codes** (appear inside `errors[]`, run/step logs, realtime frames or cell metadata only): cell sub-codes `TYPE_MISMATCH`, `INVALID_FORMAT`, `PRECISION_EXCEEDED`, `CURRENCY_MISMATCH`, `INVALID_NUMBER`, `INVALID_SELECT_OPTION`, `FILTER_INCOMPLETE_CONDITION`; realtime frame `ACCESS_REVOKED`; step errors `AI_REFUSED`, `AI_OUTPUT_INVALID`, `AI_OUTPUT_TRUNCATED`, `AI_RATE_LIMITED`, `AI_INVALID_REQUEST`, `STEP_BUDGET_EXCEEDED`, `LEASE_EXPIRED`, `SOURCE_EXPIRED`; formula error values `#ERR_*` ([08](08-formula-engine.md)).
 
-The catalogue lives in `packages/api-contract/src/errors.ts` as a `const` map (code → status, title, docs slug, extension schema); OpenAPI lists per-operation possible codes via `x-tabula-error-codes`. SDKs generate typed error classes (`TabulaVersionConflictError`, …).
+The catalogue lives in `packages/api-contract/src/errors.ts` as a `const` map (code → status, title, docs slug, extension schema); OpenAPI lists per-operation possible codes via `x-tableos-error-codes`. SDKs generate typed error classes (`TableOSVersionConflictError`, …).
 
 **Retry guidance (documented, implemented in SDKs):** retry with backoff on `429`, `502`, `503`, `504`, `409 IDEMPOTENCY_IN_PROGRESS`, `500` (only if an `Idempotency-Key` was sent or the method is safe). Never retry other 4xx.
 
@@ -869,7 +869,7 @@ HTTP/1.1 429 Too Many Requests
 Retry-After: 1
 Content-Type: application/problem+json
 
-{ "type": "https://developers.tabula.example/errors/RATE_LIMITED", "status": 429, "code": "RATE_LIMITED",
+{ "type": "https://developers.tableos.example/errors/RATE_LIMITED", "status": 429, "code": "RATE_LIMITED",
   "title": "Rate limit exceeded.", "detail": "Base bas_… exceeded 5000 records written per minute.",
   "limitScope": "records_written", "retryAfterMs": 840, "requestId": "…" }
 ```
@@ -931,7 +931,7 @@ ORDER BY ix.value DESC NULLS LAST, r.id ASC
 LIMIT $pageSize + 1;                                                                    -- +1 to compute hasMore
 ```
 
-The seek predicate is generated by `@tabula/query` from the sort spec (handles mixed directions & null ordering by expanding to an OR-chain). Details in `11-filter-sort-group.md`.
+The seek predicate is generated by `@tableos/query` from the sort spec (handles mixed directions & null ordering by expanding to an OR-chain). Details in `11-filter-sort-group.md`.
 
 Non-record collections (comments, runs, notifications, audit) use the same cursor envelope with `k = [createdAt]`, `id` tiebreaker.
 
@@ -966,7 +966,7 @@ A common first design is `GET /records?filter[status]=open&filter[amount][gt]=10
    * **Escalation rule (documented):** anything needing OR, nesting, > 10 conditions, search, includes, aggregations or relative dates → Tier B.
 2. **Tier B — canonical `POST …/records:query`** with a JSON body. Safe & idempotent by contract (cacheable by request hash internally; no `Idempotency-Key`). SDKs use Tier B exclusively.
 
-Both tiers produce a `RecordQuery` object → `QueryPlanner` (`@tabula/query`) → SQL. One security-reviewed compiler.
+Both tiers produce a `RecordQuery` object → `QueryPlanner` (`@tableos/query`) → SQL. One security-reviewed compiler.
 
 ### 17.3 Tier B request body
 
@@ -1129,7 +1129,7 @@ Cursors are interchangeable between tiers for the same logical query (same `q` h
 
 ```json
 {
-  "notificationUrl": "https://hooks.example.com/tabula",
+  "notificationUrl": "https://hooks.example.com/tableos",
   "description": "CRM sync",
   "spec": {
     "dataTypes": ["record", "schema"],
@@ -1156,7 +1156,7 @@ Cursors are interchangeable between tiers for the same logical query (same `q` h
 ```json
 {
   "object": "webhook", "id": "whk_2Qa…", "baseId": "bas_…", "status": "active",
-  "notificationUrl": "https://hooks.example.com/tabula",
+  "notificationUrl": "https://hooks.example.com/tableos",
   "secret": "whsec_7tQ…",                 
   "cursor": 182331,
   "createdAt": "2026-10-03T14:10:00Z", "expiresAt": null,
@@ -1169,12 +1169,12 @@ The `secret` is returned **only once** (stored envelope-encrypted in `webhook_su
 ### 18.3 Ping
 
 ```http
-POST https://hooks.example.com/tabula
+POST https://hooks.example.com/tableos
 Content-Type: application/json
-User-Agent: Tabula-Webhooks/1.0
-Tabula-Webhook-Id: whk_2Qa…
-Tabula-Delivery-Id: 0192a6f9-…
-Tabula-Signature: t=1791036600,v1=5f2b…c9,v1=91aa…02
+User-Agent: TableOS-Webhooks/1.0
+TableOS-Webhook-Id: whk_2Qa…
+TableOS-Delivery-Id: 0192a6f9-…
+TableOS-Signature: t=1791036600,v1=5f2b…c9,v1=91aa…02
 
 { "object": "webhook_notification", "webhookId": "whk_2Qa…", "baseId": "bas_…", "latestSeq": 182340, "timestamp": "2026-10-03T14:10:00.021Z" }
 ```
@@ -1222,7 +1222,7 @@ Consumer responds `2xx` within 10 s (body ignored), then pulls.
 
 ### 18.5 Signatures
 
-* Header `Tabula-Signature: t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + rawBody)>` — multiple `v1=` during rotation.
+* Header `TableOS-Signature: t=<unix>,v1=<hex HMAC-SHA256(secret, t + "." + rawBody)>` — multiple `v1=` during rotation.
 * Consumers must verify within ±5 min tolerance (replay protection) and use constant-time compare. SDKs ship `verifyWebhookSignature(rawBody, header, secrets[])`.
 * Rotation: `POST …/webhooks/{id}:rotate-secret` → new secret returned; old remains valid for 24 h (both signatures sent).
 
@@ -1243,7 +1243,7 @@ Consumer responds `2xx` within 10 s (body ignored), then pulls.
 
 ## 19. Relationship to realtime (WebSocket)
 
-* The SPA uses REST for reads/writes and the WebSocket (`16-realtime.md`) for **push** of `base_changes`, presence and long-operation progress. Writes from the SPA go via REST (`PATCH` record, `records:batch`) with an `X-Tabula-Client-Op-Id` header so the realtime layer can ack the optimistic op to the originating client.
+* The SPA uses REST for reads/writes and the WebSocket (`16-realtime.md`) for **push** of `base_changes`, presence and long-operation progress. Writes from the SPA go via REST (`PATCH` record, `records:batch`) with an `X-TableOS-Client-Op-Id` header so the realtime layer can ack the optimistic op to the originating client.
 * WS auth: `POST /v1/auth/ws-ticket` (cookie or bearer) → single-use 30 s ticket; WS connection validates ticket and binds principal.
 * Public realtime for third parties is **not** offered in V1; webhooks + `/changes` polling cover it. Reconsider (SSE `GET /v1/bases/{id}/changes:stream`) in V2.
 * `GET /v1/bases/{baseId}/changes?sinceSeq=&tableIds=&limit=` (scope `records:read`/`schema:read`) exposes the masked change feed for polling sync clients — same payload format as webhook pulls, without a subscription.
@@ -1254,14 +1254,14 @@ Consumer responds `2xx` within 10 s (body ignored), then pulls.
 
 | SDK | Generation | Hand-written layer |
 |---|---|---|
-| TypeScript `@tabula/sdk` (Node 18+, browsers, Deno, Bun) | `openapi-typescript` types + our own thin generator for operation functions (fetch-based, no axios) | Auto-pagination async iterators (`for await (const r of t.records.list(...))`), automatic `Idempotency-Key` (UUIDv7) on mutations, retry with jitter honoring `Retry-After` and §14 rules, typed errors, webhook signature verification, OAuth PKCE helper, `Table<T>` typed facade generated from per-base OpenAPI (`npx tabula codegen --base bas_…`) |
-| Python `tabula` (3.10+, sync + asyncio) | Our generator templates over the OpenAPI doc (httpx-based), Pydantic v2 models | Same features; `iter_records()`, `AsyncTabula` |
+| TypeScript `@tableos/sdk` (Node 18+, browsers, Deno, Bun) | `openapi-typescript` types + our own thin generator for operation functions (fetch-based, no axios) | Auto-pagination async iterators (`for await (const r of t.records.list(...))`), automatic `Idempotency-Key` (UUIDv7) on mutations, retry with jitter honoring `Retry-After` and §14 rules, typed errors, webhook signature verification, OAuth PKCE helper, `Table<T>` typed facade generated from per-base OpenAPI (`npx tableos codegen --base bas_…`) |
+| Python `tableos` (3.10+, sync + asyncio) | Our generator templates over the OpenAPI doc (httpx-based), Pydantic v2 models | Same features; `iter_records()`, `AsyncTableOS` |
 | Others (Go, Java, Ruby) | Community / OpenAPI Generator | Docs only |
 
 Rules:
 
-* SDKs are generated in CI from `openapi.public.json` on every release; semver-major SDK release only on API major or SDK API redesign. SDKs pin and send `Tabula-Version` (the version the SDK release was built against) — upgrading the SDK is how integrators adopt new dated versions.
-* SDK telemetry: `User-Agent: tabula-sdk-ts/2.3.1 node/22.4` (no other telemetry).
+* SDKs are generated in CI from `openapi.public.json` on every release; semver-major SDK release only on API major or SDK API redesign. SDKs pin and send `TableOS-Version` (the version the SDK release was built against) — upgrading the SDK is how integrators adopt new dated versions.
+* SDK telemetry: `User-Agent: tableos-sdk-ts/2.3.1 node/22.4` (no other telemetry).
 * Contract tests: SDK suites run against a **mock server** generated from the spec (Prism) and a nightly run against staging.
 
 ---
@@ -1271,7 +1271,7 @@ Rules:
 | Change class | Process | Minimum notice |
 |---|---|---|
 | Additive (new endpoint/field/enum value in open enums) | Ship anytime; changelog | 0 |
-| Behavior change | New dated `Tabula-Version`; old behavior preserved for pinned clients | Old version supported ≥ 18 months after the new date |
+| Behavior change | New dated `TableOS-Version`; old behavior preserved for pinned clients | Old version supported ≥ 18 months after the new date |
 | Deprecate endpoint/param | `Deprecation: @<unix-ts>` (RFC 9745) + `Sunset: <HTTP-date>` (RFC 8594) + `Link: <migration guide>; rel="deprecation"` headers; changelog; developer-portal banner; **email to owners of tokens/apps that called it in the last 90 days** (from per-token analytics) | 12 months to sunset (6 for security-motivated) |
 | Removal | **Brownouts** before sunset: 2 × 1 h at T-30 d, 2 × 4 h at T-14 d returning `410 ENDPOINT_REMOVED`; then removal | — |
 | Major version (`/v2`) | RFC + beta + migration guide | `/v1` ≥ 24 months after `/v2` GA |
@@ -1281,7 +1281,7 @@ Undocumented behavior is not covered, but any behavior we observe ≥ 5% of traf
 
 ---
 
-## 22. Developer portal (`developers.tabula.example`)
+## 22. Developer portal (`developers.tableos.example`)
 
 * **Reference docs** generated from `openapi.public.json` (Scalar or Redocly renderer), with per-language samples from SDK snippets, error catalogue pages (the `type` URIs of §14 resolve here), changelog per dated version, and a version diff viewer.
 * **Base-specific docs**: for a signed-in user, `/bases/{id}` renders docs from the per-base OpenAPI (field IDs, types, example values from the caller's own data are **not** shown — only synthetic examples, to avoid leaking data in screenshots).
@@ -1295,7 +1295,7 @@ Undocumented behavior is not covered, but any behavior we observe ≥ 5% of traf
 
 ## 23. API observability and per-token analytics
 
-* Every request emits a structured access log (pino → Loki/OTel logs): `requestId, traceId, route, operationId, status, durationMs, principalType, tokenId, orgId, baseId, cost, rateLimitScopeHit, tabulaVersion, sdk, deprecatedFeatures[]`.
+* Every request emits a structured access log (pino → Loki/OTel logs): `requestId, traceId, route, operationId, status, durationMs, principalType, tokenId, orgId, baseId, cost, rateLimitScopeHit, tableosVersion, sdk, deprecatedFeatures[]`.
 * RED metrics per `operationId` (Prometheus), p50/p95/p99 SLOs: reads p95 < 300 ms (≤ 100 records), writes p95 < 500 ms (single), `:query` with aggregations p95 < 1.5 s on ≤ 100k-record tables.
 * Per-token daily rollups (calls, errors, cost, deprecated usage, last used) feed the portal and deprecation emails; stored in `usage_events` (metric `api_request`, sampled 1:1 aggregated per minute) → `usage_counters`.
 * Security analytics: spikes in `401/403` per token or IP feed the abuse detector (`25-security-observability-infrastructure.md`).
@@ -1323,7 +1323,7 @@ sdk/typescript/, sdk/python/    generators + hand-written layers
 |---|---|---|
 | `core.idempotency_keys` | New table (control plane) | Idempotency for control-plane mutations (orgs, users, tokens, workspaces), mirroring `data.idempotency_keys` |
 | `core.api_tokens.kind` (`pat`/`service_account`/`oauth_access`) + `oauth_grant_id`, `pinned_api_version`, `last_used_at`, `last_used_ip` | Columns | Single opaque-token table for all bearer types (§5); version pinning (§4) |
-| `core.oauth_clients.pinned_api_version` | Column | Default `Tabula-Version` for OAuth apps |
+| `core.oauth_clients.pinned_api_version` | Column | Default `TableOS-Version` for OAuth apps |
 | `data.webhook_subscriptions` columns: `spec jsonb`, `delivery_mode`, `secret_enc`, `secret_prev_enc`, `secret_prev_expires_at`, `cursor bigint`, `last_pulled_at`, `failing_since`, `status` (`active`, `disabled_failing`, `disabled_inactive`, `suspended_permission`, `disabled_by_user`) | Columns | §18 |
 | `bases.settings.requireIfMatchForApiWrites` | Setting key | §11 |
 | `rl:*`, `idem:*`, `tok:{tokenId}`, `basedir:{baseId}`, `sem:heavy:{tokenId}` Redis keys | Redis namespaces | `tok:` and `basedir:` and `sem:` are new namespaces not in Spine §10 |

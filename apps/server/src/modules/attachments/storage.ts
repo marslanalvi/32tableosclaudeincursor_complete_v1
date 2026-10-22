@@ -1,23 +1,23 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { createLocalStorage, type TabulaStorage } from "@tabula/storage";
+import { createLocalStorage, type TableOSStorage } from "@tableos/storage";
 import type { AppContext } from "../../lib/app-context.js";
 import { createDbStorage } from "./db-storage.js";
 
 /**
  * Attachment storage selection for new uploads.
  *
- * `TABULA_STORAGE_DRIVER`:
+ * `TABLEOS_STORAGE_DRIVER`:
  *  - `db`     → bodies in Postgres (`data.attachment_blobs`), served by the API. Default.
- *  - `local`  → files under `<repo>/.data/uploads` (or `TABULA_UPLOAD_DIR`), served by the API.
+ *  - `local`  → files under `<repo>/.data/uploads` (or `TABLEOS_UPLOAD_DIR`), served by the API.
  *               Not for hosts that wipe the disk on deploy (Render, Heroku…).
  *  - `gcs`    → the GCS bucket configured via GCS_* env (ctx.storage).
  *  - `none`   → uploads disabled (503).
  */
-let cached: { key: string; storage: TabulaStorage | null } | null = null;
-let local: TabulaStorage | null = null;
-let dbStorage: TabulaStorage | null = null;
+let cached: { key: string; storage: TableOSStorage | null } | null = null;
+let local: TableOSStorage | null = null;
+let dbStorage: TableOSStorage | null = null;
 
 /** Drivers whose files are uploaded and downloaded through the API (no presigned URLs). */
 export function isProxiedDriver(driver: string): boolean {
@@ -25,7 +25,7 @@ export function isProxiedDriver(driver: string): boolean {
 }
 
 /** Storage holding an existing attachment (by its row's `storage_driver`). */
-export function storageForDriver(ctx: AppContext, driver: string): TabulaStorage | null {
+export function storageForDriver(ctx: AppContext, driver: string): TableOSStorage | null {
   if (driver === "local") {
     local ??= createLocalStorage(localUploadDir());
     return local;
@@ -49,17 +49,17 @@ function findRepoRoot(start: string): string {
 }
 
 export function localUploadDir(): string {
-  const configured = process.env["TABULA_UPLOAD_DIR"];
+  const configured = process.env["TABLEOS_UPLOAD_DIR"];
   if (configured) return path.resolve(configured);
   return path.join(findRepoRoot(process.cwd()), ".data", "uploads");
 }
 
-export function resolveAttachmentStorage(ctx: AppContext): TabulaStorage | null {
-  const requested = (process.env["TABULA_STORAGE_DRIVER"] ?? "").trim().toLowerCase();
+export function resolveAttachmentStorage(ctx: AppContext): TableOSStorage | null {
+  const requested = (process.env["TABLEOS_STORAGE_DRIVER"] ?? "").trim().toLowerCase();
   const key = `${requested}|${ctx.storage ? "gcs" : "none"}|${ctx.env.NODE_ENV}`;
   if (cached && cached.key === key) return cached.storage;
 
-  let storage: TabulaStorage | null;
+  let storage: TableOSStorage | null;
   if (requested === "none") {
     storage = null;
   } else if (requested === "gcs") {
@@ -75,7 +75,7 @@ export function resolveAttachmentStorage(ctx: AppContext): TabulaStorage | null 
 }
 
 export const MAX_UPLOAD_BYTES = Number(
-  process.env["TABULA_MAX_UPLOAD_BYTES"] ?? 100 * 1024 * 1024,
+  process.env["TABLEOS_MAX_UPLOAD_BYTES"] ?? 100 * 1024 * 1024,
 );
 /** Public (anonymous form) uploads are capped lower. */
 export const MAX_PUBLIC_UPLOAD_BYTES = Math.min(MAX_UPLOAD_BYTES, 20 * 1024 * 1024);

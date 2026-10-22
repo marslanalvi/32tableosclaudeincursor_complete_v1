@@ -9,7 +9,7 @@ import {
   validateFieldConfig,
   type FieldLike,
   type TableLike,
-} from "@tabula/field-ui";
+} from "@tableos/field-ui";
 import type { TableDto } from "../../lib/api.ts";
 import type { FieldWire } from "../../lib/api-areas/fields.ts";
 import { useBaseDetail, useFieldServices } from "../grid/field-services.tsx";

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { SqlParams, type SqlFieldInfo } from "@tabula/filter";
+import { SqlParams, type SqlFieldInfo } from "@tableos/filter";
 import {
   buildRecordPageSql,
   cursorPredicate,

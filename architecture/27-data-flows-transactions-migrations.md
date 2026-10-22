@@ -43,7 +43,7 @@ Every mutation of base content (records, links, fields, tables, views, interface
 | P4 | `api` · kernel routing | **Routing**: decode public IDs (D5); `base_directory` lookup (Redis-cached) → `shardId`, `workspaceId`; pick PgBouncer pool for the shard |
 | P5 | `api` · `access` | **AuthZ**: `PermissionSnapshot` for (principal, base) from Redis `perm:{principalId}:{baseId}:{permEpoch}` (compile on miss); evaluate action (`record.update`…) + table/field restrictions + row policy |
 | P6 | `api` · rate limit | Token, base and records-written/min buckets (`rl:*`), `RateLimit` headers |
-| P7 | `api` · module | **Validation**: TypeBox request schema; load `SchemaSnapshot` (`schema:{baseId}:{schemaVersion}`); normalize values through field codecs (`@tabula/fields`); compile formulas if needed; build the **write plan skeleton** |
+| P7 | `api` · module | **Validation**: TypeBox request schema; load `SchemaSnapshot` (`schema:{baseId}:{schemaVersion}`); normalize values through field codecs (`@tableos/fields`); compile formulas if needed; build the **write plan skeleton** |
 | P8 | `api` · kernel | **Idempotency fast path**: Redis `idem:{scope}:{key}` → return cached response if completed |
 | P9 | `api` · billing | Limit pre-check (cached plan limits; authoritative count re-checked in txn when relevant) |
 
@@ -135,7 +135,7 @@ COMMIT;
 |---|---|
 | A1 | `api` writes Redis `idem:{scope}:{key}` (fast path), returns response (includes `seq`, record `version`s, server-normalized values) |
 | A2 | Frontend reconciles: pending op with `clientMutationId` is confirmed; server values replace optimistic values |
-| A3 | `relay` (logical replication, D11) streams the committed `base_changes` + `outbox_events` rows in commit order → Kafka `tabula.base-changes.v1` (key `base_id`) and `tabula.domain-events.v1` (key `workspace_id`/`base_id`); audit-flagged events also → `tabula.audit.v1`; metering → `tabula.usage.v1`. MVP profile: relay → BullMQ queues |
+| A3 | `relay` (logical replication, D11) streams the committed `base_changes` + `outbox_events` rows in commit order → Kafka `tableos.base-changes.v1` (key `base_id`) and `tableos.domain-events.v1` (key `workspace_id`/`base_id`); audit-flagged events also → `tableos.audit.v1`; metering → `tableos.usage.v1`. MVP profile: relay → BullMQ queues |
 | A4 | Consumers (idempotent): realtime fan-out, automation trigger matcher, search indexer, notifications, webhooks, audit writer, usage meter, compute (AI fields, stale draining) |
 | A5 | Other clients receive the op via WebSocket ordered by `seq` and apply it to their RecordStore |
 
@@ -301,7 +301,7 @@ sequenceDiagram
 
 ### 49.4 Flow: create field
 
-1. **P1** Field config dialog validates with the shared Zod schema; formula fields are parsed and type-checked **client-side** with `@tabula/formula` against the cached `SchemaSnapshot` for instant diagnostics (server re-checks authoritatively).
+1. **P1** Field config dialog validates with the shared Zod schema; formula fields are parsed and type-checked **client-side** with `@tableos/formula` against the cached `SchemaSnapshot` for instant diagnostics (server re-checks authoritatively).
 2. **P5** AuthZ `field.create` (`base.manage_schema` for creators).
 3. **P7** `schema` validates config via the field type plugin; for `formula`/`lookup`/`rollup`/`count`: `formula.compile`, extract dependencies, `compute.validateNoCycle` (max chain `MAX_DEPENDENCY_CHAIN` = 32); for `link`: target table exists in the same base, inverse field name chosen; plan limit "fields per table" (500 hard).
 4. **Txn (schema op):**
@@ -371,7 +371,7 @@ Fast paths:
 
 Steps for the general case:
 
-1. **Preview** (`POST …/fields/{id}:previewTypeChange`): `schema` samples ≤ 200 records, runs the converter from `@tabula/fields` (pure), returns counts of values that will be lost/coerced (e.g., "37 values are not valid numbers and will be cleared"). No writes.
+1. **Preview** (`POST …/fields/{id}:previewTypeChange`): `schema` samples ≤ 200 records, runs the converter from `@tableos/fields` (pure), returns counts of values that will be lost/coerced (e.g., "37 values are not valid numbers and will be cleared"). No writes.
 2. **Start txn:** S1 (seq + `schema_version` bump) → allocate shadow slot (`UPDATE tables SET next_field_slot …`) → `INSERT long_operations (kind='field.convert', status='running', checkpoint='{"afterId":null}', params={fieldId, fromType, toType, toConfig, shadowSlot, oldSlot})` → `UPDATE fields SET config = config || '{"pendingConversion": {...}}'` → `base_changes` op `field.conversion_started` (not undoable; cancel instead) → outbox `long_operation.progressed`. From this point **every** write txn that touches the field (create, update, import, automation, undo) dual-writes `cells[shadowSlot] = convert(newValue)` in the same S4 statement. The field stays editable **with old-type semantics** until cutover.
 3. **Batches** (worker, `compute` or `maintenance` queue; one txn per batch of 1,000 records, `statement_timeout = 15s`):
    ```sql
@@ -454,9 +454,9 @@ sequenceDiagram
 Detail in [14](14-automation-engine.md); here the transactional skeleton.
 
 1. A committed write produced `record.updated` (S10) with `causationDepth = d`.
-2. `relay` → `tabula.domain-events.v1` (MVP: BullMQ `automation-trigger`).
-3. **Trigger matcher** (worker): looks up the per-base trigger index (cached by automation version); evaluates trigger conditions (field watched? record matches view/filter? — evaluated with `@tabula/filter` JS evaluator on the event's after-image; if the event payload is incomplete, it reads the record); rejects if `d + 1 > MAX_CAUSATION_DEPTH` (8) or hourly budget `ratebudget:automation:{id}:{hour}` exhausted.
-4. **Txn (control of run identity):** `INSERT INTO automation_runs (id, automation_id, automation_version_id, run_key, status='queued', trigger_event_id, causation_depth, trigger_payload, …) ON CONFLICT (run_key) DO NOTHING RETURNING id` with `run_key = automation_id || ':' || trigger_event_id` → if no row returned, the event is a duplicate delivery: ack and stop. Outbox `automation.triggered`. Usage metered via outbox → `tabula.usage.v1`.
+2. `relay` → `tableos.domain-events.v1` (MVP: BullMQ `automation-trigger`).
+3. **Trigger matcher** (worker): looks up the per-base trigger index (cached by automation version); evaluates trigger conditions (field watched? record matches view/filter? — evaluated with `@tableos/filter` JS evaluator on the event's after-image; if the event payload is incomplete, it reads the record); rejects if `d + 1 > MAX_CAUSATION_DEPTH` (8) or hourly budget `ratebudget:automation:{id}:{hour}` exhausted.
+4. **Txn (control of run identity):** `INSERT INTO automation_runs (id, automation_id, automation_version_id, run_key, status='queued', trigger_event_id, causation_depth, trigger_payload, …) ON CONFLICT (run_key) DO NOTHING RETURNING id` with `run_key = automation_id || ':' || trigger_event_id` → if no row returned, the event is a duplicate delivery: ack and stop. Outbox `automation.triggered`. Usage metered via outbox → `tableos.usage.v1`.
 5. Enqueue `automation-trigger` job (hint) → **planner** creates the first `automation_step_runs` row (`status='queued'`, `lease_until`) and enqueues `automation-step`.
 6. **Step executor** claims the step (`UPDATE automation_step_runs SET status='running', lease_until=now()+interval '60s', attempt = attempt + 1 WHERE id=$s AND status IN ('queued','retrying') RETURNING …`), executes:
    * **Record action** (`update_record`): calls `records.updateRecords` with actor `{type:'automation', id: aut_…}`, `correlationId = run id`, `causationId = trigger event id`, `causationDepth = d + 1`, `Idempotency-Key = step_run_id + ':' + attempt_group` → a normal base write txn (§49.2) — its own events may trigger further automations up to depth 8.
@@ -497,10 +497,10 @@ sequenceDiagram
 
 1. **P1** User drops a file in an attachment cell. Frontend calls `POST /v1/bases/{baseId}/attachments:upload` with `{filename, size, mime, checksum, tableId, fieldId}`.
 2. AuthZ: `record.update` on the field (or share-token scope for forms); plan checks: max file size, base storage quota (`billing.checkLimit`).
-3. **Control txn on shard** (no base lock — attachments are not change-log ops yet): `INSERT INTO attachments (id, workspace_id, base_id, object_key, filename, mime_declared, size, checksum, status='pending_upload', uploaded_by, …)`. Object key `{workspaceId}/{baseId}/{attachmentId}/original` in `tabula-uploads-quarantine`. Response: S3 multipart upload id + presigned part URLs (15-min expiry).
+3. **Control txn on shard** (no base lock — attachments are not change-log ops yet): `INSERT INTO attachments (id, workspace_id, base_id, object_key, filename, mime_declared, size, checksum, status='pending_upload', uploaded_by, …)`. Object key `{workspaceId}/{baseId}/{attachmentId}/original` in `tableos-uploads-quarantine`. Response: S3 multipart upload id + presigned part URLs (15-min expiry).
 4. Browser uploads parts **directly to S3**, then calls `…/attachments/{id}:complete` with part ETags → `api` completes the multipart upload, verifies size/checksum with `HeadObject` → txn: `UPDATE attachments SET status='uploaded'` + outbox `attachment.uploaded`.
 5. Frontend issues the **cell edit** (`PATCH record` with the new attachment id appended) — canonical pipeline §49.2; inside the txn `attachments.validateOwnershipInTx` checks the attachment belongs to this base, was uploaded by this principal (or share token), and is not `rejected`. The cell shows "processing" until variants exist; originals are not downloadable until clean.
-6. `attachment.uploaded` → `file-scan` job: stream from quarantine to ClamAV; sniff real MIME (magic bytes) vs declared; **clean** → `CopyObject` to `tabula-attachments` (SSE-KMS) → txn `UPDATE attachments SET status='clean', mime=…` + outbox `attachment.scanned`; **infected/mismatch** → `status='rejected'` + `attachment.rejected` (cell renders a blocked file; the user is notified).
+6. `attachment.uploaded` → `file-scan` job: stream from quarantine to ClamAV; sniff real MIME (magic bytes) vs declared; **clean** → `CopyObject` to `tableos-attachments` (SSE-KMS) → txn `UPDATE attachments SET status='clean', mime=…` + outbox `attachment.scanned`; **infected/mismatch** → `status='rejected'` + `attachment.rejected` (cell renders a blocked file; the user is notified).
 7. `attachment.scanned` → `file-process` job: libvips thumbnails (small/large), ffmpeg poster, PDF first page → `INSERT attachment_variants` → txn: `UPDATE attachments SET status='ready'` + a **system change**: S1 lock + `base_changes` op `attachment.ready {attachmentId, variants}` (non-undoable, actor `system`) so realtime clients replace the placeholder; outbox `attachment.processed`.
 8. Orphans (uploaded but never referenced within 24 h) are deleted by the purge job; quarantine bucket lifecycle (7 days) is the backstop.
 
@@ -535,7 +535,7 @@ sequenceDiagram
 
 ### 49.9 Flow: submit public form
 
-1. Anonymous user opens `https://share.tabula.example/f/{token}`: the `api` serves the HTML shell with bootstrap JSON (`share.resolve(token)` → form definition: visible fields, labels, required flags, conditions, field configs needed for editors — **no other data**). Share link status and form definition are cached in Redis by token + `schema_version`.
+1. Anonymous user opens `https://share.tableos.example/f/{token}`: the `api` serves the HTML shell with bootstrap JSON (`share.resolve(token)` → form definition: visible fields, labels, required flags, conditions, field configs needed for editors — **no other data**). Share link status and form definition are cached in Redis by token + `schema_version`.
 2. Attachments in the form: upload intents scoped to the share token (§49.8, quota counts against the base; stricter size limit; rate-limited per IP).
 3. Submit `POST /v1/public/forms/{token}:submit` with `{values, captchaToken, clientSubmissionId}`:
    1. Edge: WAF bot rules, per-IP and per-token rate limits (`rl:share:{token}`).
@@ -648,7 +648,7 @@ sequenceDiagram
 
 ### 49.12 Flow: import (CSV/XLSX)
 
-1. Upload file (presigned, `tabula-uploads-quarantine`, scanned like attachments) → `POST /v1/bases/{b}/imports` → `INSERT import_jobs (status='analyzing')` → `import` job streams the first 1,000 rows, infers types per column, proposes a mapping (new table or existing table, column → field, create-new-field suggestions, link resolution by primary value) → `status='awaiting_mapping'`.
+1. Upload file (presigned, `tableos-uploads-quarantine`, scanned like attachments) → `POST /v1/bases/{b}/imports` → `INSERT import_jobs (status='analyzing')` → `import` job streams the first 1,000 rows, infers types per column, proposes a mapping (new table or existing table, column → field, create-new-field suggestions, link resolution by primary value) → `status='awaiting_mapping'`.
 2. User confirms mapping → `startImport`:
    * Schema changes first (new table/fields) in a single schema txn (§49.4 rules).
    * `INSERT long_operations (kind='import', checkpoint={"rowOffset":0})`; `import_jobs.status='running'`.
@@ -731,27 +731,27 @@ flowchart LR
     TX -->|"INSERT"| BC[("base_changes")]
     OB --> WAL[["WAL"]]
     BC --> WAL
-    WAL --> SLOT["logical slot tabula_relay<br/>publication tabula_pub<br/>pgoutput"]
+    WAL --> SLOT["logical slot tableos_relay<br/>publication tableos_pub<br/>pgoutput"]
   end
   SLOT -->|"commit-ordered stream"| RL["relay (leader per shard)"]
-  RL -->|"idempotent producer, acks=all"| K1[["tabula.base-changes.v1<br/>key base_id"]]
-  RL --> K2[["tabula.domain-events.v1<br/>key workspace or base"]]
-  RL --> K3[["tabula.audit.v1"]]
-  RL --> K4[["tabula.usage.v1"]]
+  RL -->|"idempotent producer, acks=all"| K1[["tableos.base-changes.v1<br/>key base_id"]]
+  RL --> K2[["tableos.domain-events.v1<br/>key workspace or base"]]
+  RL --> K3[["tableos.audit.v1"]]
+  RL --> K4[["tableos.usage.v1"]]
   RL -->|"confirm flushed LSN after Kafka ack"| SLOT
 ```
 
 Mechanics:
 
-1. **Publication** `CREATE PUBLICATION tabula_pub FOR TABLE data.outbox_events, data.base_changes WITH (publish = 'insert');` — only inserts are streamed; purges (deletes/partition drops) are not.
-2. **Slot** `tabula_relay` per shard (pgoutput, protocol v2+, `streaming = off` — we want whole committed transactions, not in-progress chunks). The relay is a leader-elected process per shard (advisory lock on the shard; standby relay hot).
-3. **Ordering:** logical decoding emits transactions in **commit order**. Since every base write holds the base lock until commit (S1), commit order within a base equals `seq` order → `tabula.base-changes.v1` (keyed by `base_id`, so one partition per base) carries a **gap-free, ordered** seq stream per base. This is what realtime catch-up and webhook cursors rely on ([16](16-realtime.md)).
+1. **Publication** `CREATE PUBLICATION tableos_pub FOR TABLE data.outbox_events, data.base_changes WITH (publish = 'insert');` — only inserts are streamed; purges (deletes/partition drops) are not.
+2. **Slot** `tableos_relay` per shard (pgoutput, protocol v2+, `streaming = off` — we want whole committed transactions, not in-progress chunks). The relay is a leader-elected process per shard (advisory lock on the shard; standby relay hot).
+3. **Ordering:** logical decoding emits transactions in **commit order**. Since every base write holds the base lock until commit (S1), commit order within a base equals `seq` order → `tableos.base-changes.v1` (keyed by `base_id`, so one partition per base) carries a **gap-free, ordered** seq stream per base. This is what realtime catch-up and webhook cursors rely on ([16](16-realtime.md)).
 4. **Batching & ack:** the relay accumulates messages (≤ 5 ms or 1,000 rows), produces with the idempotent producer (`enable.idempotence=true`, `acks=all`), and only after **all** sends of a transaction are acknowledged does it send `StandbyStatusUpdate` with that transaction's end LSN as flushed. A crash between produce and confirm → the slot replays from the last confirmed LSN → duplicates (handled by idempotent consumers; event `id` is stable because it is the row id).
 5. **Routing:** `outbox_events.type` → topic (domain events, plus audit if `audit=true` flag in payload metadata, usage if metering flag); `base_changes` → base-changes topic. MVP profile: the same relay routes to BullMQ queues instead of Kafka (`EventBus` interface, D11).
 6. **Retention of the tables:** the rows are needed only until relayed — but we keep them for recovery: `outbox_events` 72 h (daily partitions, dropped by partition maintenance), `base_changes` 30 days (it is also the catch-up/undo log, D10).
 7. **Failover:** on PG16 RDS a logical slot does not survive failover to a standby. Recovery procedure (automated in the relay): on startup after failover, create a new slot (`EXPORT_SNAPSHOT`), then **backfill by table scan** of `outbox_events`/`base_changes` rows with `created_at > last_relayed_at − 5 min` (the relay persists `last_relayed_at` and last `(base_id, seq)` per base in Redis and periodically in `kernel` state), publish them (duplicates are fine), then switch to streaming from the new slot. With PG17+ failover slots (`failover = true` + `sync_replication_slots`) this fallback becomes rare but stays as the safety net.
 8. **Slot safety:** `max_slot_wal_keep_size` caps WAL retention (e.g., 50 GB) so a stuck relay cannot fill the disk; alert on slot lag > 30 s and > 5 GB; if the cap is hit the slot is invalidated and recovery uses step 7.
-9. **Why not poll the outbox table?** Polling by `id`/`created_at` misses rows from long transactions that commit later with smaller ids (visibility order ≠ id order), forcing "safety windows" and re-reads; it adds index scans on hot tables. Logical replication delivers exactly what committed, in commit order. **Alternative considered:** `pg_logical_emit_message(true, 'tabula', payload)` (transactional WAL messages with no table at all — less bloat), rejected for now because it leaves nothing to scan in the failover recovery path and nothing for operators to query; revisit if outbox write amplification becomes significant.
+9. **Why not poll the outbox table?** Polling by `id`/`created_at` misses rows from long transactions that commit later with smaller ids (visibility order ≠ id order), forcing "safety windows" and re-reads; it adds index scans on hot tables. Logical replication delivers exactly what committed, in commit order. **Alternative considered:** `pg_logical_emit_message(true, 'tableos', payload)` (transactional WAL messages with no table at all — less bloat), rejected for now because it leaves nothing to scan in the failover recovery path and nothing for operators to query; revisit if outbox write amplification becomes significant.
 
 ### 50.4 Idempotency
 
@@ -873,7 +873,7 @@ Kinds: `field.backfill`, `field.convert`, `field.convert_revert`, `compute.drain
 | Flyway/Liquibase | Mature, enterprise features | JVM; same orchestration gap |
 | Atlas (declarative) | Diff-based, lint for destructive changes | Declarative diffs hide operational intent (CONCURRENTLY, NOT VALID, batching); partitions/RLS support gaps |
 
-**Decision [Ours]: SQL-first migrations executed by a thin in-house runner built on Kysely's `Migrator` API (`@tabula/db/migrate`), orchestrated across shards by `tools/shard-migrate`.** Reasons: the hard part is *fleet orchestration and zero-downtime discipline*, which no tool above provides for N shards; Kysely's Migrator gives the ordered-ledger primitive; keeping TypeScript lets migrations reuse typed helpers (`createIndexConcurrently`, `addForeignKeyNotValid`, `batchedBackfill`). We add phase metadata, lock linting and the orchestrator ourselves (~1–2k LOC). graphile-migrate's dev loop is noted as an idea for local development (watch mode re-applying the working migration).
+**Decision [Ours]: SQL-first migrations executed by a thin in-house runner built on Kysely's `Migrator` API (`@tableos/db/migrate`), orchestrated across shards by `tools/shard-migrate`.** Reasons: the hard part is *fleet orchestration and zero-downtime discipline*, which no tool above provides for N shards; Kysely's Migrator gives the ordered-ledger primitive; keeping TypeScript lets migrations reuse typed helpers (`createIndexConcurrently`, `addForeignKeyNotValid`, `batchedBackfill`). We add phase metadata, lock linting and the orchestrator ourselves (~1–2k LOC). graphile-migrate's dev loop is noted as an idea for local development (watch mode re-applying the working migration).
 
 ### 51.2 Files, ledger, phases
 
@@ -929,7 +929,7 @@ sequenceDiagram
 Rules:
 
 * **Order:** control plane expand → data plane expand (canary shard → waves) → deploy app → backfills (long-running, throttled) → (next release, after soak) contract.
-* **Per-shard advisory lock** (`pg_advisory_lock(hashtext('tabula_migrate'))`) prevents two orchestrators on one shard.
+* **Per-shard advisory lock** (`pg_advisory_lock(hashtext('tableos_migrate'))`) prevents two orchestrators on one shard.
 * **Idempotent, resumable:** the ledger makes re-runs skip applied migrations; a failed shard stops its wave, others continue only if the failure is shard-specific (e.g., lock timeout) — the orchestrator retries up to 5 times with backoff; schema errors halt everything.
 * **New shards** are created from the latest baseline + migrations by the same tool before they enter the `shards` registry as `active`.
 * **Dedicated (enterprise) shards** are in later waves and may have customer maintenance windows recorded in `shards`.
@@ -961,7 +961,7 @@ SET statement_timeout = '0';      -- for CONCURRENTLY builds (session-scoped mig
 -- retried by the runner up to N times with backoff on 55P03
 ```
 
-Forbidden without explicit sign-off (`-- tabula:allow-lock` + ADR): table rewrites (`ALTER TYPE` with rewrite, `ADD COLUMN … DEFAULT volatile()`, `VACUUM FULL`, `CLUSTER`), non-concurrent index builds on tables > 10k rows, `ALTER TABLE … SET LOGGED`, dropping columns referenced by publications (`outbox_events`, `base_changes` — publication changes are coordinated with the relay version).
+Forbidden without explicit sign-off (`-- tableos:allow-lock` + ADR): table rewrites (`ALTER TYPE` with rewrite, `ADD COLUMN … DEFAULT volatile()`, `VACUUM FULL`, `CLUSTER`), non-concurrent index builds on tables > 10k rows, `ALTER TABLE … SET LOGGED`, dropping columns referenced by publications (`outbox_events`, `base_changes` — publication changes are coordinated with the relay version).
 
 Event and API compatibility follow the same expand/contract idea: new event fields are additive; breaking changes bump `schemaVersion` with consumers supporting both versions for one release ([15](15-events.md)).
 
@@ -982,7 +982,7 @@ Event and API compatibility follow the same expand/contract idea: new event fiel
 
 Configs stored as JSONB (`fields.config`, `views.config`, `interface_pages.layout`, `interface_versions`, `automation_versions.definition`, `tables.restrictions`, `bases.settings`) each carry a `schemaVersion` integer.
 
-1. **Upgrade on read:** every config type has an ordered chain of pure upgrader functions in its package (`@tabula/fields` for field configs, `@tabula/query` for view configs, `@tabula/automation-schema` for automations): `v1 → v2 → … → current`. Readers always pass configs through `upgrade()` (cheap, memoized by `(id, updated_at)`), so the app never sees an old shape. Upgraders are covered by fixture tests (every historical version has golden examples).
+1. **Upgrade on read:** every config type has an ordered chain of pure upgrader functions in its package (`@tableos/fields` for field configs, `@tableos/query` for view configs, `@tableos/automation-schema` for automations): `v1 → v2 → … → current`. Readers always pass configs through `upgrade()` (cheap, memoized by `(id, updated_at)`), so the app never sees an old shape. Upgraders are covered by fixture tests (every historical version has golden examples).
 2. **Write current:** any write persists the current version.
 3. **Background rewrite:** a `maintenance` long op per shard rewrites remaining old-version documents (keyset, throttled) so old upgraders can eventually be deleted (after two releases with zero old documents, verified by a query `WHERE (config->>'schemaVersion')::int < $current`).
 4. **Immutable documents** (`automation_versions`, `interface_versions`) are **never rewritten** — they are upgraded on read forever (or until the version is purged), preserving what was published.
@@ -994,7 +994,7 @@ Configs stored as JSONB (`fields.config`, `views.config`, `interface_pages.layou
 User-triggered type changes are data migrations performed by the product at runtime; they follow §49.5 (shadow slot, dual-write, version-checked batches, atomic cutover, rollback = discard shadow slot, undo = reverse conversion within retention). Operational guardrails:
 
 * Concurrency: at most 1 active conversion per table and 3 per shard (queued beyond).
-* Converters are pure functions in `@tabula/fields` with a declared loss profile (`lossless`, `lossy`, `metadata-only`) that drives the preview and the fast paths; every (from, to) pair has property tests (round-trip where lossless).
+* Converters are pure functions in `@tableos/fields` with a declared loss profile (`lossless`, `lossy`, `metadata-only`) that drives the preview and the fast paths; every (from, to) pair has property tests (round-trip where lossless).
 * Engine changes to a converter are versioned (`converterVersion` stored in the long op params) so a resumed conversion after a deploy keeps using the same converter semantics.
 * Platform-level migrations that must change **stored cell representation** for all customers (e.g., a new canonical currency encoding) reuse the same machinery as a system-initiated conversion per field, rather than a raw SQL backfill — so dual-write, cutover and undo semantics are identical.
 

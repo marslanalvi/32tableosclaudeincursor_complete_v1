@@ -11,7 +11,7 @@
 ## 7.0 How to use this file
 
 * The DDL is split into three **independent deployables**: §7.2–7.3 run on the **control plane** cluster, §7.4–7.14 run on **every data-plane shard**, §7.15 runs on the **audit** cluster; §7.16 contains helper SQL and query patterns. §7.1 (extensions, roles, helpers) runs on all three.
-* Execute as `tabula_migrator` (owner/BYPASSRLS). In production these blocks are split into numbered migration files ([27](27-data-flows-transactions-migrations.md)); here they are grouped by domain for reading.
+* Execute as `tableos_migrator` (owner/BYPASSRLS). In production these blocks are split into numbered migration files ([27](27-data-flows-transactions-migrations.md)); here they are grouped by domain for reading.
 * Target: **PostgreSQL 16** with `pg_partman` ≥ 5.0, `pg_trgm`, `btree_gin`, `pgcrypto`, ICU collations (all available on Amazon RDS / Aurora PostgreSQL 16).
 * Every `-- Q:` comment lists the **expected query patterns** the indexes on that table are designed for. If you add a query that is not listed, add (or justify the absence of) an index.
 
@@ -53,15 +53,15 @@ CREATE EXTENSION IF NOT EXISTS pg_partman SCHEMA partman;
 -- ============================================================================
 DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tabula_owner')    THEN CREATE ROLE tabula_owner NOLOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tabula_migrator') THEN CREATE ROLE tabula_migrator LOGIN BYPASSRLS IN ROLE tabula_owner; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tabula_partman')  THEN CREATE ROLE tabula_partman LOGIN IN ROLE tabula_owner; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tableos_owner')    THEN CREATE ROLE tableos_owner NOLOGIN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tableos_migrator') THEN CREATE ROLE tableos_migrator LOGIN BYPASSRLS IN ROLE tableos_owner; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tableos_partman')  THEN CREATE ROLE tableos_partman LOGIN IN ROLE tableos_owner; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_rw')          THEN CREATE ROLE app_rw LOGIN; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_admin')       THEN CREATE ROLE app_admin LOGIN; END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_readonly')    THEN CREATE ROLE app_readonly LOGIN; END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tabula_relay')    THEN CREATE ROLE tabula_relay LOGIN; END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tableos_relay')    THEN CREATE ROLE tableos_relay LOGIN; END IF;
 END $$;
--- On RDS: GRANT rds_replication TO tabula_relay;   (self-managed: ALTER ROLE tabula_relay REPLICATION;)
+-- On RDS: GRANT rds_replication TO tableos_relay;   (self-managed: ALTER ROLE tableos_relay REPLICATION;)
 
 ALTER ROLE app_rw       SET statement_timeout = '15s';
 ALTER ROLE app_rw       SET lock_timeout = '3s';
@@ -130,7 +130,7 @@ END $$;
 -- ============================================================================
 -- CONTROL PLANE (run on the control-plane cluster only)
 -- ============================================================================
-CREATE SCHEMA IF NOT EXISTS core AUTHORIZATION tabula_owner;
+CREATE SCHEMA IF NOT EXISTS core AUTHORIZATION tableos_owner;
 GRANT USAGE ON SCHEMA core TO app_rw, app_admin, app_readonly;
 
 CREATE OR REPLACE FUNCTION core.current_org_id() RETURNS uuid
@@ -715,7 +715,7 @@ CREATE TABLE core.sso_connections (
   protocol             text        NOT NULL CHECK (protocol IN ('saml','oidc')),
   display_name         text        NOT NULL DEFAULT 'SSO',
   jackson_tenant       text        NOT NULL,
-  jackson_product      text        NOT NULL DEFAULT 'tabula',
+  jackson_product      text        NOT NULL DEFAULT 'tableos',
   jackson_client_id    text,       -- Jackson connection client id (not a secret)
   status               text        NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','active','disabled')),
   enforce              boolean     NOT NULL DEFAULT false,      -- require SSO for verified-domain users
@@ -965,7 +965,7 @@ CREATE TABLE core.email_suppressions (
 
 ```sql
 -- ----------------------------------------------------------------------------
--- core.templates — template gallery metadata (+ snapshot in S3 'tabula-snapshots').
+-- core.templates — template gallery metadata (+ snapshot in S3 'tableos-snapshots').
 -- Q: public gallery by category (sorted by popularity); org-private templates; by slug.
 -- ----------------------------------------------------------------------------
 CREATE TABLE core.templates (
@@ -1111,7 +1111,7 @@ CREATE UNIQUE INDEX workspace_migrations_inflight_uq ON core.workspace_migration
 ### 7.3.10 Control plane — partitions, RLS, grants
 
 ```sql
--- Time partitions (pg_partman 5.x). Run as tabula_partman / tabula_migrator.
+-- Time partitions (pg_partman 5.x). Run as tableos_partman / tableos_migrator.
 SELECT partman.create_parent(p_parent_table := 'core.usage_events',            p_control := 'occurred_at', p_interval := '1 month', p_premake := 3);
 SELECT partman.create_parent(p_parent_table := 'core.notifications',           p_control := 'created_at',  p_interval := '1 month', p_premake := 3);
 SELECT partman.create_parent(p_parent_table := 'core.notification_deliveries', p_control := 'created_at',  p_interval := '1 month', p_premake := 3);
@@ -1181,8 +1181,8 @@ CALL public.apply_rls_policy('core.api_tokens',
 -- ============================================================================
 -- DATA PLANE (run on every data-plane shard)
 -- ============================================================================
-CREATE SCHEMA IF NOT EXISTS data AUTHORIZATION tabula_owner;
-GRANT USAGE ON SCHEMA data TO app_rw, app_admin, app_readonly, tabula_relay;
+CREATE SCHEMA IF NOT EXISTS data AUTHORIZATION tableos_owner;
+GRANT USAGE ON SCHEMA data TO app_rw, app_admin, app_readonly, tableos_relay;
 
 CREATE OR REPLACE FUNCTION data.current_workspace_id() RETURNS uuid
 LANGUAGE sql STABLE PARALLEL SAFE AS $$ SELECT nullif(current_setting('app.workspace_id', true), '')::uuid $$;
@@ -1929,7 +1929,7 @@ CREATE INDEX automation_schedules_due_idx ON data.automation_schedules (next_fir
 
 -- ----------------------------------------------------------------------------
 -- data.inbound_webhooks — endpoints that trigger automations (ihk_).
--- URL: https://hooks.tabula.example/v1/{token}; routed via core.public_link_directory (proposed).
+-- URL: https://hooks.tableos.example/v1/{token}; routed via core.public_link_directory (proposed).
 -- Q: by url_token_hash on every inbound request; by automation.
 -- ----------------------------------------------------------------------------
 CREATE TABLE data.inbound_webhooks (
@@ -2403,7 +2403,7 @@ CREATE TABLE data.outbox_events (
   base_id           uuid,
   event_type        text        NOT NULL CHECK (event_type ~ '^[a-z_]+\.[a-z_]+$'),
   schema_version    smallint    NOT NULL DEFAULT 1,
-  topic             text        NOT NULL DEFAULT 'tabula.domain-events.v1',
+  topic             text        NOT NULL DEFAULT 'tableos.domain-events.v1',
   partition_key     text        NOT NULL,                  -- workspace_id or base_id
   aggregate_type    text        NOT NULL,
   aggregate_id      uuid        NOT NULL,
@@ -2468,7 +2468,7 @@ CREATE INDEX deletion_batches_ws_idx    ON data.deletion_batches (workspace_id, 
 CREATE INDEX deletion_batches_purge_idx ON data.deletion_batches (purge_after) WHERE status = 'trashed';
 
 -- ----------------------------------------------------------------------------
--- data.base_snapshots — point-in-time snapshot metadata (data in S3 tabula-snapshots).
+-- data.base_snapshots — point-in-time snapshot metadata (data in S3 tableos-snapshots).
 -- Q: snapshots of a base newest first; expiry sweep.
 -- ----------------------------------------------------------------------------
 CREATE TABLE data.base_snapshots (
@@ -2537,7 +2537,7 @@ CREATE TABLE data.import_jobs (
   base_id              uuid        NOT NULL REFERENCES data.bases(id) ON DELETE CASCADE,
   table_id             uuid,       -- target (NULL until created when importing into a new table)
   long_operation_id    uuid        REFERENCES data.long_operations(id) ON DELETE SET NULL,
-  source_kind          text        NOT NULL CHECK (source_kind IN ('csv','tsv','xlsx','json','google_sheets','tabula_snapshot')),
+  source_kind          text        NOT NULL CHECK (source_kind IN ('csv','tsv','xlsx','json','google_sheets','tableos_snapshot')),
   source_object_key    text,
   source_filename      text,
   mapping              jsonb       NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(mapping) = 'object'),
@@ -2574,10 +2574,10 @@ CREATE TABLE data.export_jobs (
   table_id           uuid,
   view_id            uuid,
   long_operation_id  uuid        REFERENCES data.long_operations(id) ON DELETE SET NULL,
-  format             text        NOT NULL CHECK (format IN ('csv','xlsx','json','tabula_snapshot')),
+  format             text        NOT NULL CHECK (format IN ('csv','xlsx','json','tableos_snapshot')),
   options            jsonb       NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(options) = 'object'),
   status             text        NOT NULL DEFAULT 'queued' CHECK (status IN ('queued','running','succeeded','failed','expired')),
-  object_key         text,       -- tabula-exports (7-day lifecycle)
+  object_key         text,       -- tableos-exports (7-day lifecycle)
   size_bytes         bigint,
   row_count          bigint,
   requested_by       uuid,
@@ -2597,7 +2597,7 @@ CREATE TABLE data.sync_sources (
   workspace_id               uuid        NOT NULL,
   base_id                    uuid        NOT NULL REFERENCES data.bases(id) ON DELETE CASCADE,
   target_table_id            uuid        REFERENCES data.tables(id) ON DELETE SET NULL,
-  provider                   text        NOT NULL CHECK (provider ~ '^[a-z0-9_]{2,50}$'),   -- 'tabula_view','google_sheets','salesforce','jira','ical','csv_url'
+  provider                   text        NOT NULL CHECK (provider ~ '^[a-z0-9_]{2,50}$'),   -- 'tableos_view','google_sheets','salesforce','jira','ical','csv_url'
   integration_connection_id  uuid        REFERENCES data.integration_connections(id) ON DELETE SET NULL,
   config                     jsonb       NOT NULL CHECK (jsonb_typeof(config) = 'object'),
   config_schema_version      smallint    NOT NULL DEFAULT 1,
@@ -2833,7 +2833,7 @@ CREATE TABLE data.view_match_state (
 
 -- ----------------------------------------------------------------------------
 -- [PROPOSED, 15 §7.8] data.relay_checkpoints — one row per shard, written by the relay every 10 s.
--- Not tenant data: no workspace_id, no RLS; only tabula_relay / app_admin may access.
+-- Not tenant data: no workspace_id, no RLS; only tableos_relay / app_admin may access.
 -- ----------------------------------------------------------------------------
 CREATE TABLE data.relay_checkpoints (
   shard_id             text        PRIMARY KEY,
@@ -2892,7 +2892,7 @@ ALTER TABLE data.records ALTER COLUMN cells SET COMPRESSION lz4,
 
 -- ----------------------------------------------------------------------------
 -- 7.14.2 Time partitions (pg_partman 5.x). Maintenance: the scheduler role runs
---   CALL partman.run_maintenance_proc();   hourly, as tabula_partman.
+--   CALL partman.run_maintenance_proc();   hourly, as tableos_partman.
 -- Partition-level reloptions are applied by the same maintenance job right after creation.
 -- ----------------------------------------------------------------------------
 SELECT partman.create_parent(p_parent_table := 'data.base_changes',         p_control := 'created_at', p_interval := '1 day',   p_premake := 7);
@@ -2952,7 +2952,7 @@ CREATE POLICY tenant_delete ON data.ai_prompt_templates FOR DELETE TO app_rw
 
 -- relay_checkpoints is infrastructure state, not tenant data.
 REVOKE ALL ON data.relay_checkpoints FROM app_rw, app_readonly;
-GRANT SELECT, INSERT, UPDATE ON data.relay_checkpoints TO tabula_relay;
+GRANT SELECT, INSERT, UPDATE ON data.relay_checkpoints TO tableos_relay;
 
 -- Append-only tables: the request path may insert but never update/delete history.
 REVOKE UPDATE, DELETE ON data.base_changes, data.outbox_events, data.record_revisions FROM app_rw;
@@ -2960,12 +2960,12 @@ REVOKE UPDATE, DELETE ON data.base_changes, data.outbox_events, data.record_revi
 -- ----------------------------------------------------------------------------
 -- 7.14.4 Logical replication publication for the relay (D11).
 -- publish_via_partition_root: the relay sees one logical table regardless of daily partitions.
--- The relay creates its slot:  SELECT pg_create_logical_replication_slot('tabula_relay_<shard>', 'pgoutput');
+-- The relay creates its slot:  SELECT pg_create_logical_replication_slot('tableos_relay_<shard>', 'pgoutput');
 -- ----------------------------------------------------------------------------
-CREATE PUBLICATION tabula_relay_pub
+CREATE PUBLICATION tableos_relay_pub
   FOR TABLE data.outbox_events, data.base_changes
   WITH (publish = 'insert', publish_via_partition_root = true);
-GRANT SELECT ON data.outbox_events, data.base_changes TO tabula_relay;
+GRANT SELECT ON data.outbox_events, data.base_changes TO tableos_relay;
 ```
 
 ---
@@ -2976,7 +2976,7 @@ GRANT SELECT ON data.outbox_events, data.base_changes TO tabula_relay;
 -- ============================================================================
 -- AUDIT STORE (run on the audit cluster)
 -- ============================================================================
-CREATE SCHEMA IF NOT EXISTS audit AUTHORIZATION tabula_owner;
+CREATE SCHEMA IF NOT EXISTS audit AUTHORIZATION tableos_owner;
 GRANT USAGE ON SCHEMA audit TO app_rw, app_admin, app_readonly;
 
 CREATE OR REPLACE FUNCTION audit.current_org_id() RETURNS uuid
@@ -2984,8 +2984,8 @@ LANGUAGE sql STABLE PARALLEL SAFE AS $$ SELECT nullif(current_setting('app.org_i
 
 -- ----------------------------------------------------------------------------
 -- audit.audit_events — security & admin audit trail (monthly partitions on occurred_at).
--- Hot 90 days here; monthly export to S3 Parquet (tabula-audit-archive, Object Lock for Enterprise).
--- Written by the audit writer (app_admin) from tabula.audit.v1; at-least-once → dedupe on event_id.
+-- Hot 90 days here; monthly export to S3 Parquet (tableos-audit-archive, Object Lock for Enterprise).
+-- Written by the audit writer (app_admin) from tableos.audit.v1; at-least-once → dedupe on event_id.
 -- Q: org audit log newest first with filters (actor, event_type, resource), keyset on (occurred_at, id);
 --    SIEM export by occurred_at > checkpoint.
 -- ----------------------------------------------------------------------------
@@ -3227,7 +3227,7 @@ SELECT relname, n_tup_upd, n_tup_hot_upd, round(100.0 * n_tup_hot_upd / nullif(n
 
 -- Relay slot lag
 SELECT slot_name, pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), confirmed_flush_lsn)) AS lag
-  FROM pg_replication_slots WHERE slot_name LIKE 'tabula_relay_%';
+  FROM pg_replication_slots WHERE slot_name LIKE 'tableos_relay_%';
 
 -- Orphan link edges (nightly reconciliation sample; run per relation by app_admin)
 SELECT l.relation_id, l.a_record_id FROM data.record_links l
@@ -3262,7 +3262,7 @@ After all documents were drafted, the proposals listed under "Proposed additions
 
 -- [ADOPTED, 19/27/02] core.outbox_events — control-plane transactional outbox.
 -- Identity, tenancy, grant and billing changes publish events in their own transaction (D11).
--- Same shape as data.outbox_events; consumed by the control-plane relay via tabula_core_relay_pub.
+-- Same shape as data.outbox_events; consumed by the control-plane relay via tableos_core_relay_pub.
 CREATE TABLE core.outbox_events (
   id                uuid        NOT NULL,                  -- evt_ (app-generated)
   created_at        timestamptz NOT NULL DEFAULT now(),
@@ -3270,7 +3270,7 @@ CREATE TABLE core.outbox_events (
   workspace_id      uuid,
   event_type        text        NOT NULL CHECK (event_type ~ '^[a-z_]+\.[a-z_]+$'),
   schema_version    smallint    NOT NULL DEFAULT 1,
-  topic             text        NOT NULL DEFAULT 'tabula.domain-events.v1',
+  topic             text        NOT NULL DEFAULT 'tableos.domain-events.v1',
   partition_key     text        NOT NULL,                  -- org_id / workspace_id / user_id
   aggregate_type    text        NOT NULL,
   aggregate_id      uuid        NOT NULL,
@@ -3294,7 +3294,7 @@ CREATE TABLE core.relay_checkpoints (
   checkpoint_at  timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE PUBLICATION tabula_core_relay_pub
+CREATE PUBLICATION tableos_core_relay_pub
   FOR TABLE core.outbox_events
   WITH (publish = 'insert', publish_via_partition_root = true);
 
@@ -3340,7 +3340,7 @@ CREATE TABLE core.connectors (
   id               uuid        PRIMARY KEY DEFAULT public.uuidv7(),
   slug             text        NOT NULL UNIQUE CHECK (slug ~ '^[a-z0-9][a-z0-9-]{1,62}$'),
   display_name     text        NOT NULL,
-  publisher        text        NOT NULL,                 -- 'tabula' or verified publisher id
+  publisher        text        NOT NULL,                 -- 'tableos' or verified publisher id
   trust_tier       text        NOT NULL CHECK (trust_tier IN ('first_party','verified','community','private')),
   owner_org_id     uuid        REFERENCES core.organizations(id) ON DELETE CASCADE,   -- private connectors only
   status           text        NOT NULL DEFAULT 'active' CHECK (status IN ('active','deprecated','suspended')),

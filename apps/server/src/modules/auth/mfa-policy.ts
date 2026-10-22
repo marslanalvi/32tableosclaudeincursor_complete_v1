@@ -1,4 +1,4 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 
 /**
@@ -9,7 +9,7 @@ import { sql } from "kysely";
 const CACHE_MS = 5_000;
 let cached: { value: boolean; at: number } | null = null;
 
-export async function mfaRequired(db: TabulaDb): Promise<boolean> {
+export async function mfaRequired(db: TableOSDb): Promise<boolean> {
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.value;
   const r = await sql<{ value: unknown }>`SELECT value FROM core.platform_settings WHERE key = 'require_mfa'`
     .execute(db)

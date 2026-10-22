@@ -1,12 +1,12 @@
 import {
-  createTabulaError,
+  createTableOSError,
   generateUuidV7,
   keyBetween,
   keysBetween,
-  TabulaErrorCodes,
-} from "@tabula/types";
+  TableOSErrorCodes,
+} from "@tableos/types";
 import { sql, type Transaction } from "kysely";
-import type { Database, TabulaDb } from "@tabula/db";
+import type { Database, TableOSDb } from "@tableos/db";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { AppContext } from "../../lib/app-context.js";
@@ -15,7 +15,7 @@ import { forbidden, handleRouteError, notFound, sendProblem } from "../../http/e
 import { resolveTableContext } from "../access/helpers.js";
 import { compileForUser } from "../access/compile.js";
 import { assertCan } from "../access/assert.js";
-import type { PermissionSnapshot } from "@tabula/permissions";
+import type { PermissionSnapshot } from "@tableos/permissions";
 import { withBaseTx, type MutationActor } from "../../kernel/mutation.js";
 import {
   defaultConfigForType,
@@ -69,7 +69,7 @@ const VIEW_COLUMNS = sql`v.id, v.table_id, v.name, v.type, v.is_default, v.visib
   v.owner_user_id, v.created_by, v.config, v.order_key`;
 
 async function loadView(
-  db: TabulaDb | DbTrx,
+  db: TableOSDb | DbTrx,
   userId: string,
   tableId: string,
   viewId: string,
@@ -85,7 +85,7 @@ async function loadView(
   return res.rows[0] ?? null;
 }
 
-async function isBaseCreator(db: TabulaDb, userId: string, baseId: string): Promise<boolean> {
+async function isBaseCreator(db: TableOSDb, userId: string, baseId: string): Promise<boolean> {
   try {
     const snap = await compileForUser(db, userId, baseId);
     return snap.effectiveBaseRole === "creator";
@@ -104,7 +104,7 @@ async function rekey(trx: DbTrx, orderedIds: string[]): Promise<void> {
 }
 
 /** Order key after the last view of a table. */
-async function appendKey(db: TabulaDb | DbTrx, tableId: string): Promise<string> {
+async function appendKey(db: TableOSDb | DbTrx, tableId: string): Promise<string> {
   const last = await sql<{ order_key: string }>`
     SELECT order_key FROM data.views WHERE table_id = ${tableId}
     ORDER BY order_key DESC LIMIT 1
@@ -290,7 +290,7 @@ export async function registerViewsRoutes(
           sendProblem(
             reply,
             request,
-            createTabulaError(TabulaErrorCodes.FORBIDDEN, {
+            createTableOSError(TableOSErrorCodes.FORBIDDEN, {
               title: "The default Grid view stays shared",
               detail: "The default Grid view can't be made personal.",
               meta: { reason: "DEFAULT_VIEW" },
@@ -389,7 +389,7 @@ export async function registerViewsRoutes(
           sendProblem(
             reply,
             request,
-            createTabulaError(TabulaErrorCodes.FORBIDDEN, {
+            createTableOSError(TableOSErrorCodes.FORBIDDEN, {
               title: "The default Grid view can't be deleted",
               detail: "Every table keeps its default Grid view. You can rename it, filter or sort it, or create other views.",
               meta: { reason: "DEFAULT_VIEW" },
@@ -410,7 +410,7 @@ export async function registerViewsRoutes(
           sendProblem(
             reply,
             request,
-            createTabulaError(TabulaErrorCodes.VERSION_CONFLICT, {
+            createTableOSError(TableOSErrorCodes.VERSION_CONFLICT, {
               title: "Cannot delete the last view",
               detail: "A table must keep at least one shared view.",
               meta: { reason: "LAST_VIEW" },

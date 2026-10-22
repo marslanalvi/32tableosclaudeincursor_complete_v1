@@ -1,5 +1,5 @@
-import type { TabulaDb } from "@tabula/db";
-import type { TabulaStorage } from "@tabula/storage";
+import type { TableOSDb } from "@tableos/db";
+import type { TableOSStorage } from "@tableos/storage";
 import { sql } from "kysely";
 import { pid } from "../../lib/public-ids.js";
 import { serializeRecordsByIds } from "../records/serialize.js";
@@ -16,8 +16,8 @@ import { HubSpotClient, HubSpotError, parseHubSpotConfig, PushValueError, toHubS
 const MAX_ATTEMPTS = 20;
 
 export interface PushDeps {
-  db: TabulaDb;
-  storage?: TabulaStorage | null;
+  db: TableOSDb;
+  storage?: TableOSStorage | null;
   secretKey?: Buffer | null;
 }
 
@@ -41,7 +41,7 @@ export interface PushResult {
 
 const NOTHING: PushResult = { pushed: 0, failed: 0, error: null };
 
-async function markDone(db: TabulaDb, syncId: string, ids: string[], start: Date): Promise<void> {
+async function markDone(db: TableOSDb, syncId: string, ids: string[], start: Date): Promise<void> {
   if (!ids.length) return;
   // Edits made after `start` weren't part of this push and stay pending.
   await sql`
@@ -50,7 +50,7 @@ async function markDone(db: TabulaDb, syncId: string, ids: string[], start: Date
   `.execute(db);
 }
 
-async function markRejected(db: TabulaDb, syncId: string, rejected: Map<string, string>, start: Date): Promise<void> {
+async function markRejected(db: TableOSDb, syncId: string, rejected: Map<string, string>, start: Date): Promise<void> {
   for (const [id, message] of rejected) {
     await sql`
       UPDATE data.table_sync_pushes SET pushed_at = ${start}, attempts = attempts + 1, last_error = ${message.slice(0, 500)}
@@ -59,7 +59,7 @@ async function markRejected(db: TabulaDb, syncId: string, rejected: Map<string, 
   }
 }
 
-async function markRetry(db: TabulaDb, syncId: string, ids: string[], message: string): Promise<void> {
+async function markRetry(db: TableOSDb, syncId: string, ids: string[], message: string): Promise<void> {
   if (!ids.length) return;
   await sql`
     UPDATE data.table_sync_pushes SET attempts = attempts + 1, last_error = ${message.slice(0, 500)}
@@ -166,7 +166,7 @@ export async function pushHubSpotEdits(deps: PushDeps, sync: PushableSync): Prom
  * search can lag behind); a pull must not overwrite them. Rejected edits
  * aren't held, so HubSpot's value comes back on the next pull.
  */
-export async function heldRecordIds(db: TabulaDb, syncId: string): Promise<Set<string>> {
+export async function heldRecordIds(db: TableOSDb, syncId: string): Promise<Set<string>> {
   const r = await sql<{ dest_record_id: string }>`
     SELECT dest_record_id FROM data.table_sync_pushes
     WHERE sync_id = ${syncId}
@@ -177,7 +177,7 @@ export async function heldRecordIds(db: TabulaDb, syncId: string): Promise<Set<s
 }
 
 /** Whether the source refused any edit since `since`. */
-export async function hasRejectedPushes(db: TabulaDb, syncId: string, since: Date | string | null): Promise<boolean> {
+export async function hasRejectedPushes(db: TableOSDb, syncId: string, since: Date | string | null): Promise<boolean> {
   const r = await sql<{ one: number }>`
     SELECT 1 AS one FROM data.table_sync_pushes
     WHERE sync_id = ${syncId} AND last_error IS NOT NULL AND pushed_at >= edited_at
@@ -187,7 +187,7 @@ export async function hasRejectedPushes(db: TabulaDb, syncId: string, since: Dat
   return r.rows.length > 0;
 }
 
-export async function prunePushes(db: TabulaDb, syncId: string): Promise<void> {
+export async function prunePushes(db: TableOSDb, syncId: string): Promise<void> {
   await sql`
     DELETE FROM data.table_sync_pushes
     WHERE sync_id = ${syncId} AND edited_at < now() - interval '1 hour'

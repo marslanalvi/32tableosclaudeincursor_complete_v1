@@ -1,5 +1,5 @@
-import { hashPassword, verifyPassword } from "@tabula/auth";
-import { decodePublicId, generateUuidV7 } from "@tabula/types";
+import { hashPassword, verifyPassword } from "@tableos/auth";
+import { decodePublicId, generateUuidV7 } from "@tableos/types";
 import { sql } from "kysely";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -59,13 +59,13 @@ import {
   wrongPasswordMessage,
 } from "../auth/lockout.js";
 import { sendProblem } from "../../http/errors.js";
-import { createTabulaError, TabulaErrorCodes } from "@tabula/types";
+import { createTableOSError, TableOSErrorCodes } from "@tableos/types";
 
 function sharePasswordProblem(request: FastifyRequest, reply: FastifyReply, status: 401 | 423, detail: string, meta?: Record<string, unknown>): void {
   sendProblem(
     reply,
     request,
-    createTabulaError(TabulaErrorCodes.UNAUTHENTICATED, {
+    createTableOSError(TableOSErrorCodes.UNAUTHENTICATED, {
       status,
       title: status === 423 ? "Link locked" : "Incorrect password",
       detail,

@@ -1,6 +1,6 @@
-@import "@tabula/ui/tokens.css";
+@import "@tableos/ui/tokens.css";
 
-/* Fonts come from @tabula/ui tokens (Inter as the Haas substitute). */
+/* Fonts come from @tableos/ui tokens (Inter as the Haas substitute). */
 
 *,
 *::before,
@@ -16,30 +16,30 @@ body,
 }
 
 body {
-  font-family: var(--tabula-font-sans);
-  font-size: var(--tabula-font-size-md);
+  font-family: var(--tableos-font-sans);
+  font-size: var(--tableos-font-size-md);
   line-height: 1.35;
-  color: var(--tabula-color-text);
-  background: var(--tabula-color-bg);
+  color: var(--tableos-color-text);
+  background: var(--tableos-color-bg);
   -webkit-font-smoothing: antialiased;
 }
 
 a {
-  color: var(--tabula-color-accent);
+  color: var(--tableos-color-accent);
   text-decoration: none;
   font-weight: 500;
 }
 
 a:active {
-  color: var(--tabula-color-accent-hover);
+  color: var(--tableos-color-accent-hover);
 }
 
 h1,
 h2,
 h3 {
-  font-family: var(--tabula-font-display);
+  font-family: var(--tableos-font-display);
   font-weight: 500;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
   margin: 0;
 }
 
@@ -52,6 +52,6 @@ textarea {
 }
 
 :focus-visible {
-  outline: 2px solid var(--tabula-color-info-border);
+  outline: 2px solid var(--tableos-color-info-border);
   outline-offset: 1px;
 }

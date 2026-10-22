@@ -1,12 +1,12 @@
 import { loadDotEnvFile } from "./load-env-file.js";
-import { loadEnv } from "@tabula/config";
-import { createDb } from "@tabula/db";
+import { loadEnv } from "@tableos/config";
+import { createDb } from "@tableos/db";
 import {
   createEventBus,
   DOMAIN_EVENTS_TOPIC,
   type DomainEvent,
-} from "@tabula/events";
-import { createLogger } from "@tabula/observability";
+} from "@tableos/events";
+import { createLogger } from "@tableos/observability";
 import { sql } from "kysely";
 import { connectRedis } from "../lib/redis.js";
 
@@ -16,7 +16,7 @@ const BATCH = 50;
 async function main(): Promise<void> {
   loadDotEnvFile();
   const env = loadEnv();
-  const log = createLogger({ name: "tabula-relay", role: "relay" });
+  const log = createLogger({ name: "tableos-relay", role: "relay" });
   const db = createDb(env.DATABASE_URL);
   const redis = await connectRedis(env, log);
   const eventBus = createEventBus(redis);

@@ -1,5 +1,5 @@
-import type { Database } from "@tabula/db";
-import { generateUuidV7 } from "@tabula/types";
+import type { Database } from "@tableos/db";
+import { generateUuidV7 } from "@tableos/types";
 import { sql, type Transaction } from "kysely";
 
 type DbTrx = Transaction<Database>;

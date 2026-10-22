@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import type { AppContext } from "../../lib/app-context.js";
 import { LimitsService } from "../billing/limits-service.js";
@@ -34,7 +34,7 @@ export interface ResolvedApiToken {
  * Valid only while unrevoked, unexpired, and its creator is still an active Owner or Admin of
  * the org. It acts with the creator's own access (Admins: only what they've been given).
  */
-export async function resolveApiToken(db: TabulaDb, raw: string, ip: string | null): Promise<ResolvedApiToken | null> {
+export async function resolveApiToken(db: TableOSDb, raw: string, ip: string | null): Promise<ResolvedApiToken | null> {
   if (!raw.startsWith(API_TOKEN_PREFIX) || raw.length > 200) return null;
   const res = await sql<{
     id: string;

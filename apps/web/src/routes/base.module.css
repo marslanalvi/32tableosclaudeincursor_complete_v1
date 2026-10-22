@@ -5,7 +5,7 @@
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  background: var(--tabula-color-bg);
+  background: var(--tableos-color-bg);
 }
 
 .topBar {
@@ -15,8 +15,8 @@
   align-items: center;
   gap: 16px;
   padding: 0 16px;
-  background: var(--tabula-color-bg);
-  border-bottom: 1px solid var(--tabula-color-border);
+  background: var(--tableos-color-bg);
+  border-bottom: 1px solid var(--tableos-color-border);
 }
 
 .brand {
@@ -34,7 +34,7 @@
   width: 28px;
   height: 28px;
   border-radius: 8px;
-  background: var(--tabula-color-primary);
+  background: var(--tableos-color-primary);
   color: #fff;
   display: grid;
   place-items: center;
@@ -57,18 +57,18 @@
   border: none;
   background: transparent;
   padding: 6px 8px;
-  border-radius: var(--tabula-radius-sm);
+  border-radius: var(--tableos-radius-sm);
   cursor: pointer;
   min-width: 0;
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .baseTitleBtn:hover {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .baseTitle {
-  font-size: var(--tabula-font-size-lg);
+  font-size: var(--tableos-font-size-lg);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -78,7 +78,7 @@
 
 .caret {
   font-size: 11px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 .navTabs {
@@ -92,21 +92,21 @@
   border: none;
   background: transparent;
   padding: 0 12px;
-  font-size: var(--tabula-font-size-md);
+  font-size: var(--tableos-font-size-md);
   font-weight: 500;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   border-top: 2px solid transparent;
 }
 
 .navTab:hover {
-  color: var(--tabula-color-text);
+  color: var(--tableos-color-text);
 }
 
 .navTab[data-active="true"] {
-  color: var(--tabula-color-text);
-  border-bottom-color: var(--tabula-color-primary);
+  color: var(--tableos-color-text);
+  border-bottom-color: var(--tableos-color-primary);
 }
 
 .topActions {
@@ -118,8 +118,8 @@
 
 .undoGroup {
   display: inline-flex;
-  border: 1px solid var(--tabula-color-border);
-  border-radius: var(--tabula-radius-sm);
+  border: 1px solid var(--tableos-color-border);
+  border-radius: var(--tableos-radius-sm);
   overflow: hidden;
 }
 
@@ -127,22 +127,22 @@
   width: 32px;
   height: 30px;
   border: none;
-  background: var(--tabula-color-bg);
-  color: var(--tabula-color-text);
+  background: var(--tableos-color-bg);
+  color: var(--tableos-color-text);
   font-size: 16px;
   cursor: pointer;
 }
 
 .iconAction + .iconAction {
-  border-left: 1px solid var(--tabula-color-border);
+  border-left: 1px solid var(--tableos-color-border);
 }
 
 .iconAction:hover:not(:disabled) {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .iconAction:disabled {
-  color: var(--tabula-color-border-strong);
+  color: var(--tableos-color-border-strong);
   cursor: default;
 }
 
@@ -156,8 +156,8 @@
   min-width: 0;
   /* Visible so the Tools menu can drop below the bar; the tab strip clips itself. */
   overflow: visible;
-  border-bottom: 1px solid var(--tabula-color-border);
-  background: var(--tabula-color-bg-subtle);
+  border-bottom: 1px solid var(--tableos-color-border);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .tableBar > :last-child {
@@ -181,14 +181,14 @@
 
 .empty {
   padding: 24px;
-  color: var(--tabula-color-text-muted);
+  color: var(--tableos-color-text-muted);
 }
 
 .skel {
   display: block;
   flex: none;
   border-radius: 4px;
-  background: linear-gradient(90deg, var(--tabula-color-bg-subtle) 0%, var(--tabula-color-border) 50%, var(--tabula-color-bg-subtle) 100%);
+  background: linear-gradient(90deg, var(--tableos-color-bg-subtle) 0%, var(--tableos-color-border) 50%, var(--tableos-color-bg-subtle) 100%);
   background-size: 200% 100%;
   animation: skelShimmer 1.4s ease-in-out infinite;
 }
@@ -215,7 +215,7 @@
   flex-direction: column;
   gap: 14px;
   padding: 12px;
-  border-right: 1px solid var(--tabula-color-border);
+  border-right: 1px solid var(--tableos-color-border);
 }
 
 .skelToolbar {
@@ -224,7 +224,7 @@
   gap: 18px;
   height: 48px;
   padding: 0 16px;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
 }
 
 .skelGrid {
@@ -238,11 +238,11 @@
   gap: 40px;
   height: 32px;
   padding: 0 16px 0 52px;
-  border-bottom: 1px solid var(--tabula-color-border);
+  border-bottom: 1px solid var(--tableos-color-border);
 }
 
 .skelRow:first-child {
-  background: var(--tabula-color-bg-subtle);
+  background: var(--tableos-color-bg-subtle);
 }
 
 .errorState {
@@ -256,7 +256,7 @@
 }
 
 .errorState h1 {
-  font-size: var(--tabula-font-size-2xl);
+  font-size: var(--tableos-font-size-2xl);
   font-weight: 400;
 }
 
@@ -266,38 +266,38 @@
   align-items: flex-start;
   justify-content: center;
   padding: 96px 24px;
-  background: var(--tabula-color-bg);
+  background: var(--tableos-color-bg);
 }
 
 .comingSoonCard {
   max-width: 560px;
   padding: 48px;
-  border-radius: var(--tabula-radius-lg);
-  background: var(--tabula-color-signature-cream);
-  color: var(--tabula-color-text);
+  border-radius: var(--tableos-radius-lg);
+  background: var(--tableos-color-signature-cream);
+  color: var(--tableos-color-text);
 }
 
 .comingSoonCard h1 {
-  font-size: var(--tabula-font-size-3xl);
+  font-size: var(--tableos-font-size-3xl);
   font-weight: 400;
   margin: 12px 0 8px;
 }
 
 .comingSoonCard p {
-  color: var(--tabula-color-text-body);
+  color: var(--tableos-color-text-body);
   line-height: 1.5;
   margin: 0 0 24px;
 }
 
 .comingSoonBadge {
   display: inline-block;
-  font-size: var(--tabula-font-size-xs);
+  font-size: var(--tableos-font-size-xs);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 4px 8px;
-  border-radius: var(--tabula-radius-xs);
-  background: var(--tabula-color-primary);
+  border-radius: var(--tableos-radius-xs);
+  background: var(--tableos-color-primary);
   color: #fff;
 }
 

@@ -20,7 +20,7 @@ Related: [`05-sql-schema.md`](./05-sql-schema.md) (DDL), [`08-formula-engine.md`
 | Trigger-to-first-step latency (record events) | p50 < 1.5 s, p99 < 10 s (V1, Kafka profile) |
 | Scheduled trigger firing accuracy | within 60 s of `next_fire_at` (p99) |
 | Durability | No accepted trigger lost; every run ends in a terminal state (reconciler guarantees) |
-| Exactly-once *effects* inside Tabula | Yes for record actions (idempotent step keys + DB uniqueness) |
+| Exactly-once *effects* inside TableOS | Yes for record actions (idempotent step keys + DB uniqueness) |
 | Exactly-once *external* effects | Best effort: at-least-once delivery with idempotency key passed to the external system |
 | Isolation | One tenant's runaway automation cannot delay others by more than a bounded factor (fair queuing, §14) |
 | Throughput (V1 per region) | 2,000 step executions/s sustained, 10× burst absorbed in queue |
@@ -39,7 +39,7 @@ flowchart LR
     W1["inbound webhook endpoint (api role)"] --> OB["outbox_events"]
     OB --> R
   end
-  R -->|tabula.domain-events.v1| TM["Trigger Matcher (consumer group automation-trigger-matcher)"]
+  R -->|tableos.domain-events.v1| TM["Trigger Matcher (consumer group automation-trigger-matcher)"]
   TM -->|"lookup TriggerIndex (memory)"| IDX[("per-base trigger index cache")]
   TM -->|"INSERT automation_runs ON CONFLICT DO NOTHING"| PG[("data shard Postgres")]
   TM -->|enqueue| Q1["BullMQ automation-trigger"]
@@ -101,7 +101,7 @@ DDL lives in [`05-sql-schema.md`](./05-sql-schema.md); the columns this engine *
 
 ## 4. Automation definition schema
 
-### 4.1 TypeScript types (`@tabula/automation-schema`)
+### 4.1 TypeScript types (`@tableos/automation-schema`)
 
 ```ts
 // ---------- identifiers (internal UUIDs; public IDs at API boundary) ----------
@@ -196,7 +196,7 @@ type CompareOp = 'eq'|'neq'|'gt'|'gte'|'lt'|'lte'|'contains'|'not_contains'|'is_
 /** A string template with {{ ... }} tokens, or a single-token reference that preserves type. */
 export type TokenExpr = string;         // grammar in §5
 type JsonLiteral = string | number | boolean | null | JsonLiteral[] | { [k: string]: JsonLiteral };
-type FilterAst = import('@tabula/filter').FilterAst;
+type FilterAst = import('@tableos/filter').FilterAst;
 type JsonSchema = Record<string, unknown>;
 
 export interface RetryPolicy {
@@ -212,7 +212,7 @@ export interface RetryPolicy {
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.tabula.example/automation/definition/v1.json",
+  "$id": "https://schemas.tableos.example/automation/definition/v1.json",
   "type": "object",
   "required": ["schemaVersion", "trigger", "steps", "settings"],
   "additionalProperties": false,
@@ -336,7 +336,7 @@ filter     = "join(" string ")" | "default(" literal ")" | "json" | "urlencode" 
            | "date(" string ")" | "truncate(" integer ")" | "pluck(" ident ")" ;
 ```
 
-Advanced users can switch any input to **formula mode** (`{ "$formula": "IF({{trigger.record.fields.#…}} > 10, 'big', 'small')" }`), compiled by `@tabula/formula` ([`08-formula-engine.md`](./08-formula-engine.md)) with tokens bound as typed formula variables. No user JS outside `run_script`.
+Advanced users can switch any input to **formula mode** (`{ "$formula": "IF({{trigger.record.fields.#…}} > 10, 'big', 'small')" }`), compiled by `@tableos/formula` ([`08-formula-engine.md`](./08-formula-engine.md)) with tokens bound as typed formula variables. No user JS outside `run_script`.
 
 ### 5.2 Token roots
 
@@ -359,7 +359,7 @@ Publishing compiles the definition into `compiled` and refuses on any error. Alg
 ```ts
 function compile(def: AutomationDefinition, schema: BaseSchemaSnapshot): CompileResult {
   const errors: CompileError[] = [];
-  const scope = new TypeScope();                       // name -> TabulaType
+  const scope = new TypeScope();                       // name -> TableOSType
   scope.define('trigger', triggerOutputType(def.trigger, schema, errors));
   scope.define('run', RUN_TYPE); scope.define('automation', AUTOMATION_TYPE);
   walkBlock(def.steps, scope, /*path*/ []);
@@ -418,9 +418,9 @@ export interface ActionSpec<C extends { type: string }, O> {
   type: C['type'];
   class: ActionClass;                                  // drives retry/timeout/rate defaults (§12–13)
   sideEffect: 'internal' | 'external' | 'none';        // 'none' = pure read
-  inputs(config: C): Iterable<[string, { expr: unknown; expected: TabulaType }]>;
+  inputs(config: C): Iterable<[string, { expr: unknown; expected: TableOSType }]>;
   validateRefs(config: C, schema: BaseSchemaSnapshot, errors: CompileError[]): void;
-  outputType(config: C, schema: BaseSchemaSnapshot): TabulaType;
+  outputType(config: C, schema: BaseSchemaSnapshot): TableOSType;
   /** Must be idempotent w.r.t. ctx.idempotencyKey. Throws StepError (retryable | non_retryable). */
   execute(config: ResolvedConfig<C>, ctx: StepContext): Promise<O>;
   /** Used by test runs in "no side effects" mode. */
@@ -662,7 +662,7 @@ CREATE INDEX ON data.automation_step_runs (run_id);
 
 ### 8.4 Inbound webhooks, forms, buttons
 
-* **Inbound webhook** (`POST https://hooks.tabula.example/v1/ihk/{urlToken}`): served by the `api` role on a separate hostname with separate limits (5 rps per endpoint, 100 rps per org; body ≤ 1 MB, JSON or form-encoded). Optional HMAC verification (`X-Tabula-Signature: t=<unix>,v1=<hex hmac_sha256(secret, t + "." + body)>`, 5-minute tolerance). The handler writes one `outbox_events` row (`inbound_webhook.received`) in a small tx and returns `202 {"accepted": true, "eventId": "evt_…"}`. If the caller sends `Idempotency-Key`, the handler first consults `idempotency_keys` (scope `ihk:{endpointId}`) and returns the original `eventId` on replay, so retries produce one run. Payload > 1 MB → 413.
+* **Inbound webhook** (`POST https://hooks.tableos.example/v1/ihk/{urlToken}`): served by the `api` role on a separate hostname with separate limits (5 rps per endpoint, 100 rps per org; body ≤ 1 MB, JSON or form-encoded). Optional HMAC verification (`X-TableOS-Signature: t=<unix>,v1=<hex hmac_sha256(secret, t + "." + body)>`, 5-minute tolerance). The handler writes one `outbox_events` row (`inbound_webhook.received`) in a small tx and returns `202 {"accepted": true, "eventId": "evt_…"}`. If the caller sends `Idempotency-Key`, the handler first consults `idempotency_keys` (scope `ihk:{endpointId}`) and returns the original `eventId` on replay, so retries produce one run. Payload > 1 MB → 413.
 * **Form submitted:** `form.submitted` is emitted in the same tx as the record creation; `data.recordId` lets steps reference the record.
 * **Button clicked:** `POST /v1/bases/{baseId}/tables/{tableId}/records/{recordId}/buttons/{fieldId}:click` (or an interface element action) checks `automation.run` + record read permission of the clicking user and writes `button.clicked` to the outbox; run_key = event id. Double clicks within 2 s are coalesced by `idem:button:{userId}:{recordId}:{fieldId}`.
 
@@ -706,7 +706,7 @@ Because the run insert and the `next_fire_at` advance commit atomically, a crash
 
 ### 9.1 Matcher pipeline
 
-The **trigger matcher** is the Kafka consumer group `automation-trigger-matcher` on `tabula.domain-events.v1` (V1). In the MVP profile, the relay pushes domain events to the BullMQ `automation-trigger` queue as `match` jobs (see [`15-events.md`](./15-events.md) §11). Same handler behind the `EventBus` interface.
+The **trigger matcher** is the Kafka consumer group `automation-trigger-matcher` on `tableos.domain-events.v1` (V1). In the MVP profile, the relay pushes domain events to the BullMQ `automation-trigger` queue as `match` jobs (see [`15-events.md`](./15-events.md) §11). Same handler behind the `EventBus` interface.
 
 ```ts
 async function onDomainEvent(evt: DomainEvent) {
@@ -769,7 +769,7 @@ function matchTrigger(c: TriggerCandidate, evt: DomainEvent): MatchResult {
 }
 ```
 
-`evalFilter` is the **isomorphic in-memory filter evaluator** from `@tabula/filter` ([`11-filter-sort-group.md`](./11-filter-sort-group.md)), with the same semantics as the SQL compiler, guaranteed by a shared conformance suite (property tests evaluate each generated filter both in SQL and in memory over generated records). The evaluation instant is `evt.occurredAt` (so `is today` is evaluated as of the write and is deterministic on replay); the timezone is the automation's. Filters referencing the current user (`Assignee is me`) are rejected at publish — an event has no "me".
+`evalFilter` is the **isomorphic in-memory filter evaluator** from `@tableos/filter` ([`11-filter-sort-group.md`](./11-filter-sort-group.md)), with the same semantics as the SQL compiler, guaranteed by a shared conformance suite (property tests evaluate each generated filter both in SQL and in memory over generated records). The evaluation instant is `evt.occurredAt` (so `is today` is evaluated as of the write and is deterministic on replay); the timezone is the automation's. Filters referencing the current user (`Assignee is me`) are rejected at publish — an event has no "me".
 
 **Bulk events.** `records.bulk_changed` carries up to 1,000 record deltas per envelope. The matcher expands them; each matched record yields its own run with `run_key = evt.id + ':' + recordId`. A per-automation **bulk fan-out cap** (default 1,000 runs per bulk event) prevents an import from consuming a month's quota at once; the owner is notified ("bulk change touched 25,000 records; triggered for the first 1,000"). `record_created` triggers default to *not* firing on imports (`via = import`), configurable.
 
@@ -1094,9 +1094,9 @@ For automations the "dead-letter queue" is **not a separate queue**; it is the t
 
 * A step that exhausts retries → `failed`; if `errorMode = stop` and not `continueOnError`, the run → `failed`; outbox `automation.step_failed` and `automation.failed` (consumed by the notification router → owner/editors per `onErrorNotify`, deduplicated to ≤ 1 email per automation per hour).
 * **Manual retry** from the run history: "Retry from failed step" creates a *new run* with `run_key = 'retry:' || original_run_id || ':' || n`, same pinned version (or "latest version" by choice), copying the trigger payload and completed step outputs up to the failed step (marked `succeeded (copied)`), then resumes at the failed step. The original run is untouched (audit trail).
-* **Bulk replay** (ops tooling): `tabula automations replay --automation aut_… --status failed --since … --error-code HTTP_5XX` re-runs failed runs the same way, rate-limited.
+* **Bulk replay** (ops tooling): `tableos automations replay --automation aut_… --status failed --since … --error-code HTTP_5XX` re-runs failed runs the same way, rate-limited.
 * BullMQ's own "failed" set is used only for *infrastructure* failures of the job handler (e.g., shard unreachable); those jobs retry (BullMQ attempts = 10, exponential) and the reconciler eventually re-dispatches from Postgres anyway. BullMQ failed jobs are pruned after 24 h; they are not the source of truth.
-* Domain-event consumer DLQ (`tabula.domain-events.v1.dlq`) applies to the **matcher** only when an event cannot be processed at all (schema-invalid, poison). See [`15-events.md`](./15-events.md) §9.
+* Domain-event consumer DLQ (`tableos.domain-events.v1.dlq`) applies to the **matcher** only when an event cannot be processed at all (schema-invalid, poison). See [`15-events.md`](./15-events.md) §9.
 
 ---
 
@@ -1318,7 +1318,7 @@ Test runs: do not count toward monthly quota (capped 100 test runs/automation/da
   "views": ["0192…v9"], "connections": [], "secrets": ["0192…s1"] }
 ```
 
-A schema-impact consumer (`automation-schema-guard`, on `tabula.domain-events.v1`) reacts to `field.deleted`, `field.type_changed`, `field.updated` (restrictions), `table.deleted`, `view.deleted`, `view.updated` (filter change for enters_view), `link_relation.deleted`, `base.deleted`:
+A schema-impact consumer (`automation-schema-guard`, on `tableos.domain-events.v1`) reacts to `field.deleted`, `field.type_changed`, `field.updated` (restrictions), `table.deleted`, `view.deleted`, `view.updated` (filter change for enters_view), `link_relation.deleted`, `base.deleted`:
 
 | Change | Referenced as | Effect |
 |---|---|---|
@@ -1484,7 +1484,7 @@ sequenceDiagram
 
 | Concern | MVP | V1 |
 |---|---|---|
-| Event source for matcher | relay → BullMQ `automation-trigger` (`match` jobs) | Kafka `tabula.domain-events.v1` consumer group |
+| Event source for matcher | relay → BullMQ `automation-trigger` (`match` jobs) | Kafka `tableos.domain-events.v1` consumer group |
 | Trigger types | record created/updated/enters view/matches conditions, schedule, inbound webhook, form, button | + record deleted, integration events, time-window sweep |
 | Actions | record CRUD, find, linked records, email, notification, http, create task | + scripts (isolated-vm), AI action, connectors (Slack, Google Sheets, Microsoft Teams, Gmail/Outlook) |
 | Fairness | per-automation + per-org semaphores, single queue | DRR admission per shard |

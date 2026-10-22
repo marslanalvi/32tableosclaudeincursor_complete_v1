@@ -1,5 +1,5 @@
-import type { TabulaDb } from "@tabula/db";
-import type { SearchBackend } from "@tabula/search";
+import type { TableOSDb } from "@tableos/db";
+import type { SearchBackend } from "@tableos/search";
 import { sql } from "kysely";
 import { loadRecordNames } from "../records/serialize.js";
 
@@ -26,7 +26,7 @@ function cellsToSearchText(cells: unknown): string {
  * are removed from the index.
  */
 export async function indexRecordDocuments(
-  db: TabulaDb,
+  db: TableOSDb,
   search: SearchBackend,
   params: { workspaceId: string; baseId: string; tableId: string; recordIds: readonly string[] },
 ): Promise<number> {
@@ -64,7 +64,7 @@ export async function indexRecordDocuments(
 }
 
 export async function indexRecordDocument(
-  db: TabulaDb,
+  db: TableOSDb,
   search: SearchBackend,
   params: { workspaceId: string; baseId: string; tableId: string; recordId: string },
 ): Promise<void> {
@@ -73,7 +73,7 @@ export async function indexRecordDocument(
 
 /** Reindex every live record of a table and drop index rows for records that are gone. */
 export async function reindexTableRecords(
-  db: TabulaDb,
+  db: TableOSDb,
   search: SearchBackend,
   params: { workspaceId: string; baseId: string; tableId: string },
 ): Promise<number> {
@@ -103,7 +103,7 @@ export async function reindexTableRecords(
 
 /** One-off backfill: reindex every table of a base. */
 export async function reindexBaseRecords(
-  db: TabulaDb,
+  db: TableOSDb,
   search: SearchBackend,
   baseId: string,
 ): Promise<{ tables: number; records: number }> {

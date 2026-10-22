@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
-import type { Env } from "@tabula/config";
-import type { TabulaDb } from "@tabula/db";
+import type { Env } from "@tableos/config";
+import type { TableOSDb } from "@tableos/db";
 import {
   PROTOCOL_VERSION,
   safeParseClientMessage,
   type ServerMessage,
-} from "@tabula/realtime-protocol";
+} from "@tableos/realtime-protocol";
 import { sql } from "kysely";
 import type { Redis } from "ioredis";
 import type { Logger } from "pino";
@@ -168,7 +168,7 @@ async function releaseRedisChannel(
 }
 
 async function loadHeadSeq(
-  db: TabulaDb,
+  db: TableOSDb,
   baseId: string,
 ): Promise<number> {
   const row = await sql<{ change_seq: string }>`
@@ -178,7 +178,7 @@ async function loadHeadSeq(
 }
 
 async function sendCatchUpChanges(
-  db: TabulaDb,
+  db: TableOSDb,
   ws: WebSocket,
   baseId: string,
   afterSeq: number,
@@ -350,7 +350,7 @@ async function upsertConnectionPresence(
 }
 
 async function loadUserProfile(
-  db: TabulaDb,
+  db: TableOSDb,
   state: ConnectionState,
 ): Promise<void> {
   if (!state.userId) return;
@@ -370,7 +370,7 @@ async function loadUserProfile(
 
 async function handleSubscribe(
   ctx: {
-    db: TabulaDb;
+    db: TableOSDb;
     redis: Redis | null;
     sub: Redis | null;
     ws: WebSocket;
@@ -497,13 +497,13 @@ async function handleUnsubscribe(
 
 async function handleOp(
   ctx: {
-    db: TabulaDb;
+    db: TableOSDb;
     redis: Redis | null;
     ws: WebSocket;
     state: ConnectionState;
   },
   msg: Extract<
-    import("@tabula/realtime-protocol").ClientMessage,
+    import("@tableos/realtime-protocol").ClientMessage,
     { type: "op" }
   >,
 ): Promise<void> {
@@ -653,7 +653,7 @@ function cleanupConnection(
 
 export function attachRealtimeGateway(opts: {
   httpServer: Server;
-  db: TabulaDb;
+  db: TableOSDb;
   redis: Redis | null;
   env: Env;
   log: Logger;
@@ -689,7 +689,7 @@ export function attachRealtimeGateway(opts: {
   const wss = new WebSocketServer({
     noServer: true,
     handleProtocols: (protocols) =>
-      protocols.has("tabula.v1") ? "tabula.v1" : false,
+      protocols.has("tableos.v1") ? "tableos.v1" : false,
   });
 
   // Only `/v1/ws` upgrades are ours; other upgrade requests are left alone.
@@ -739,7 +739,7 @@ export function attachRealtimeGateway(opts: {
       sendMessage(ws, {
         type: "hello",
         connId,
-        protocol: "tabula.v1",
+        protocol: "tableos.v1",
         protocolVersion: PROTOCOL_VERSION,
         heartbeatSec: Math.round(HEARTBEAT_MS / 1000),
         serverTime: new Date().toISOString(),
@@ -814,7 +814,7 @@ export function attachRealtimeGateway(opts: {
             sendMessage(ws, {
               type: "hello",
               connId,
-              protocol: "tabula.v1",
+              protocol: "tableos.v1",
               protocolVersion: PROTOCOL_VERSION,
               heartbeatSec: Math.round(HEARTBEAT_MS / 1000),
               serverTime: new Date().toISOString(),

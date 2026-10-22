@@ -1,4 +1,4 @@
-import { generateUuidV7 } from "@tabula/types";
+import { generateUuidV7 } from "@tableos/types";
 import { sql } from "kysely";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";

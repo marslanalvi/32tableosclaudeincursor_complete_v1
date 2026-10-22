@@ -1,7 +1,7 @@
 # 21 — AI Architecture
 
 > **Status:** Proposed · **Owner:** Platform Architecture (AI) · **Date:** 2026-10-03
-> Conforms to [`00-canonical-decisions.md`](./00-canonical-decisions.md) — **D22** (`@tabula/ai` provider abstraction + AI gateway module; default provider Anthropic Claude: `claude-sonnet-5` default, `claude-haiku-4-5-20251001` high-volume, `claude-opus-5-5` agents/complex), D7 (computed fields; `ai_generated` is async computed), D12 (`ai` BullMQ queue), D20, D21, §4 (`ai_generated` stored shape), §5 (`ai_prompt_templates`, `ai_invocations`, `usage_events`, `organization_policies`), §6 (AI events), §10 (`ai:cache:{hash}`).
+> Conforms to [`00-canonical-decisions.md`](./00-canonical-decisions.md) — **D22** (`@tableos/ai` provider abstraction + AI gateway module; default provider Anthropic Claude: `claude-sonnet-5` default, `claude-haiku-4-5-20251001` high-volume, `claude-opus-5-5` agents/complex), D7 (computed fields; `ai_generated` is async computed), D12 (`ai` BullMQ queue), D20, D21, §4 (`ai_generated` stored shape), §5 (`ai_prompt_templates`, `ai_invocations`, `usage_events`, `organization_policies`), §6 (AI events), §10 (`ai:cache:{hash}`).
 
 **Sections covered:** Section 29 (AI) and Part 25 (AI deep-dive): capability map; AI fields (prompt templates with field references, output schema, auto-run vs manual, async status); AI actions in automations; AI agents (tool-using, permission-scoped tools, step/approval limits); enrichment, classification, summarization, extraction (attachments via file-process pipeline); provider abstraction (TypeScript interfaces, streaming, tools, structured output); model routing & fallback; prompt templates (versioning, binding, injection resistance); token/cost metering, budgets & hard caps; async execution on the `ai` queue with per-org concurrency; retries; caching; privacy (zero retention, org AI policy, field exclusion, region); data-access permissions; logs & observability; evaluation harness; cost-control math (1M-record classification).
 
@@ -59,7 +59,7 @@ flowchart TB
   F --> Q["BullMQ ai queue (priority lanes)"]
   A --> Q
   I -->|"interactive: direct call with streaming"| GWY
-  Q --> GWY["AI Gateway module (@tabula/ai)"]
+  Q --> GWY["AI Gateway module (@tableos/ai)"]
   subgraph GWY_IN["AI Gateway pipeline"]
     P1["1 Policy check: org AI policy, ai.use, model/region allowlists"] --> P2["2 Context builder: projectRecord(principal), exclusions, PII redaction"]
     P2 --> P3["3 Template render: versioned ai_prompt_templates, delimited data blocks"]
@@ -201,7 +201,7 @@ interface AiGenerateAction {
 
 ---
 
-## 6. Provider abstraction (`@tabula/ai`)
+## 6. Provider abstraction (`@tableos/ai`)
 
 ### 6.1 Interfaces
 
@@ -324,7 +324,7 @@ The **file-process pipeline** ([`18`](./18-search-attachments-collaboration.md);
 
 | Source | Processing | Output |
 |---|---|---|
-| PDF with text layer | `pdftotext`/pdf.js text extraction with page markers | `attachment_variants` row `variant = 'text'` (object `tabula-attachment-variants/{ws}/{base}/{att}/text.txt`, ≤ 5 MB) |
+| PDF with text layer | `pdftotext`/pdf.js text extraction with page markers | `attachment_variants` row `variant = 'text'` (object `tableos-attachment-variants/{ws}/{base}/{att}/text.txt`, ≤ 5 MB) |
 | Scanned PDF / images | OCR (V1+: Tesseract in worker, or AWS Textract by org policy) | same, `variant = 'text'`, `meta.ocr = true` |
 | DOCX/XLSX/PPTX/CSV/TXT | format-specific extractors | same |
 
@@ -575,10 +575,10 @@ CREATE INDEX ON data.ai_invocations (caller_type, caller_ref, created_at);
 
 ### 11.2 Pricing and credits
 
-* Prices live in code config `@tabula/ai/pricing.ts` with a `priceVersion` (e.g. `2026-10-01`) and are copied onto each invocation; list prices at the time of writing (USD per 1M tokens, input/output): **Haiku 4.5 $1/$5, Sonnet 5 $2/$10, Opus 5.5 $4/$20**; Message Batches −50 %; cache reads billed at a fraction of input. Values must be refreshed from the provider's pricing page on each update — never hard-code them in features.
+* Prices live in code config `@tableos/ai/pricing.ts` with a `priceVersion` (e.g. `2026-10-01`) and are copied onto each invocation; list prices at the time of writing (USD per 1M tokens, input/output): **Haiku 4.5 $1/$5, Sonnet 5 $2/$10, Opus 5.5 $4/$20**; Message Batches −50 %; cache reads billed at a fraction of input. Values must be refreshed from the provider's pricing page on each update — never hard-code them in features.
 * `cost_usd_micros = in × pIn + out × pOut + cacheRead × pCR + cacheWrite × pCW` (× batch discount).
 * **Credits** are the customer-facing unit: `credits = ceil(cost_usd × CREDITS_PER_USD × planMarkup)` with `CREDITS_PER_USD = 100` (1 credit = $0.01 cost basis before markup). Plans grant monthly credits (spine §12: "small trial / metered / contract").
-* `usage_events` (control plane, via `tabula.usage.v1`): one per invocation (`metric = ai_credits`, `quantity = credits`, `source_event_id = ai.invocation_completed id`) → aggregated into `usage_counters` → billing.
+* `usage_events` (control plane, via `tableos.usage.v1`): one per invocation (`metric = ai_credits`, `quantity = credits`, `source_event_id = ai.invocation_completed id`) → aggregated into `usage_counters` → billing.
 
 ### 11.3 Budgets and hard caps
 
@@ -727,7 +727,7 @@ Org `region` pins inference: Anthropic API with `inference_geo` where supported,
 ## 16. Logs and observability
 
 * **Invocation log:** `ai_invocations` (metadata always; `output` ≤ 64 KB kept 24 h for idempotent retries and debugging, then nulled unless policy keeps it; `prompt_redacted` only by policy). Retention of rows: 13 months (billing disputes), partition drop.
-* **Traces:** OTel spans following the GenAI semantic conventions (`gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.response.finish_reasons`) plus ours (`tabula.task_class`, `tabula.template`, `tabula.caller_type`, `tabula.cache_hit`, `tabula.routed_from`). No prompt or output content in spans.
+* **Traces:** OTel spans following the GenAI semantic conventions (`gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.response.finish_reasons`) plus ours (`tableos.task_class`, `tableos.template`, `tableos.caller_type`, `tableos.cache_hit`, `tableos.routed_from`). No prompt or output content in spans.
 * **Metrics:**
 
 | Metric | Labels | Alert |

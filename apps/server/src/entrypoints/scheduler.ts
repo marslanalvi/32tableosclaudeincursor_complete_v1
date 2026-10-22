@@ -1,6 +1,6 @@
-import { createLogger } from "@tabula/observability";
+import { createLogger } from "@tableos/observability";
 
-const log = createLogger({ name: "tabula-scheduler", role: "scheduler" });
+const log = createLogger({ name: "tableos-scheduler", role: "scheduler" });
 
 /** MVP stub — leader-elected cron (partition maintenance, reconciler) in Wave A step 20. */
 log.info("Scheduler role stub started");

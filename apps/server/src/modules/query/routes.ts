@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { isFilterError } from "@tabula/filter";
-import { InvalidCursorError } from "@tabula/query";
+import { isFilterError } from "@tableos/filter";
+import { InvalidCursorError } from "@tableos/query";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid } from "../../lib/public-ids.js";
 import { handleRouteError, notFound, sendApiError, validationProblem } from "../../http/errors.js";
@@ -185,7 +185,7 @@ export async function registerQueryRoutes(app: FastifyInstance, ctx: AppContext)
           storage: ctx.storage,
         });
         if (!record) {
-          notFound(request, reply, "Record not found");
+          notFound(request, reply, `Record ${request.params.recordId} not found in this table (it may have been deleted)`);
           return;
         }
         void reply.send({ record });

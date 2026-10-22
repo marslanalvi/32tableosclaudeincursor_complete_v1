@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
-import { toInputValue, type FieldLike } from "@tabula/field-ui";
+import { toInputValue, type FieldLike } from "@tableos/field-ui";
 import { ApiProblemError } from "../../lib/api.ts";
 import {
   errorMessage,

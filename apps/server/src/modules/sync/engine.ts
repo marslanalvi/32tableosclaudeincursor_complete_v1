@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import type { TabulaDb } from "@tabula/db";
-import type { TabulaStorage } from "@tabula/storage";
+import type { TableOSDb } from "@tableos/db";
+import type { TableOSStorage } from "@tableos/storage";
 import type { Redis } from "ioredis";
 import { sql } from "kysely";
 import { parsePid, pid } from "../../lib/public-ids.js";
@@ -15,7 +15,7 @@ import { loadConnection, openCredentials, type ConnectionRow } from "../integrat
 import { gmailSource, gmailTokenProvider, parseGmailConfig } from "../integrations/gmail.js";
 import { hubspotSource, parseHubSpotConfig, SearchTooLarge } from "../integrations/hubspot.js";
 import { hasRejectedPushes, heldRecordIds, prunePushes, pushHubSpotEdits } from "../integrations/hubspot-push.js";
-import { FieldValidationError, getFieldType, isFieldTypeKey, type FieldConfig } from "@tabula/fields";
+import { FieldValidationError, getFieldType, isFieldTypeKey, type FieldConfig } from "@tableos/fields";
 import { ApiError } from "../../http/errors.js";
 import { SyncBusyError, SyncCancelledError, SyncError, type Conv, type MappedField, type SourceField, type SyncSource } from "./source.js";
 
@@ -31,9 +31,9 @@ export { SyncBusyError, SyncCancelledError, SyncError, type MappedField, type So
  */
 
 export interface SyncDeps {
-  db: TabulaDb;
+  db: TableOSDb;
   redis?: Redis | null;
-  storage?: TabulaStorage | null;
+  storage?: TableOSStorage | null;
   /** Decrypts stored connection credentials (external sources). */
   secretKey?: Buffer | null;
   /** OAuth client used to refresh Gmail access. */
@@ -196,14 +196,14 @@ function convertValue(conv: Conv, v: unknown): unknown {
   }
 }
 
-export async function loadSync(db: TabulaDb, where: { id?: string; tableId?: string }): Promise<SyncRow | null> {
+export async function loadSync(db: TableOSDb, where: { id?: string; tableId?: string }): Promise<SyncRow | null> {
   const r = where.id
     ? await sql<SyncRow>`SELECT s.*, (SELECT count(*)::int FROM data.table_sync_issues i WHERE i.sync_id = s.id) AS issue_count, (s.locked_until > now()) AS running FROM data.table_syncs s WHERE s.id = ${where.id}`.execute(db)
     : await sql<SyncRow>`SELECT s.*, (SELECT count(*)::int FROM data.table_sync_issues i WHERE i.sync_id = s.id) AS issue_count, (s.locked_until > now()) AS running FROM data.table_syncs s WHERE s.table_id = ${where.tableId!}`.execute(db);
   return r.rows[0] ?? null;
 }
 
-async function orgOf(db: TabulaDb, baseId: string): Promise<string> {
+async function orgOf(db: TableOSDb, baseId: string): Promise<string> {
   const r = await sql<{ org_id: string }>`SELECT org_id FROM core.base_directory WHERE base_id = ${baseId}`.execute(db);
   const org = r.rows[0]?.org_id;
   if (!org) throw new SyncError("Base not found");
@@ -211,7 +211,7 @@ async function orgOf(db: TabulaDb, baseId: string): Promise<string> {
 }
 
 /** Fields of a source table in the order (and with the primary) the mirror uses. */
-export async function sourceFieldsInOrder(db: TabulaDb, sourceTableId: string): Promise<SerializeFieldRow[]> {
+export async function sourceFieldsInOrder(db: TableOSDb, sourceTableId: string): Promise<SerializeFieldRow[]> {
   const fields = await loadSerializeFields(db, sourceTableId);
   const p = await sql<{ primary_field_id: string | null }>`SELECT primary_field_id FROM data.tables WHERE id = ${sourceTableId}`.execute(db);
   const primary = p.rows[0]?.primary_field_id;
@@ -335,7 +335,7 @@ export function openSyncSource(deps: SyncDeps, sync: SyncRow, since: Date | null
 }
 
 /** Cheap read-only check so an unchanged schema doesn't open a mutation. */
-async function schemaNeedsWork(db: TabulaDb, sync: SyncRow, srcFields: SourceField[], fieldMap: Record<string, string>): Promise<boolean> {
+async function schemaNeedsWork(db: TableOSDb, sync: SyncRow, srcFields: SourceField[], fieldMap: Record<string, string>): Promise<boolean> {
   const destFields = await loadTableFieldRows(db, sync.table_id);
   const alive = new Map(destFields.map((f) => [f.id, f]));
   const wanted = new Set<string>();
@@ -459,7 +459,7 @@ export async function startTableSync(
 }
 
 /** Ask a running sync to stop at its next checkpoint (within one batch). */
-export async function requestSyncStop(db: TabulaDb, syncId: string): Promise<boolean> {
+export async function requestSyncStop(db: TableOSDb, syncId: string): Promise<boolean> {
   const r = await sql<{ id: string }>`
     UPDATE data.table_syncs SET cancel_requested = true WHERE id = ${syncId} AND locked_until > now() RETURNING id
   `.execute(db);
@@ -852,7 +852,7 @@ export function editableSyncedFieldIds(s: Pick<SyncRow, "two_way" | "writable_ke
 }
 
 /** Read-only destination field ids managed by syncs, per destination table. */
-export async function syncedFieldsByTable(db: TabulaDb, baseId: string): Promise<Map<string, { sync: SyncRow; fieldIds: Set<string> }>> {
+export async function syncedFieldsByTable(db: TableOSDb, baseId: string): Promise<Map<string, { sync: SyncRow; fieldIds: Set<string> }>> {
   const r = await sql<SyncRow>`SELECT s.*, (SELECT count(*)::int FROM data.table_sync_issues i WHERE i.sync_id = s.id) AS issue_count, (s.locked_until > now()) AS running FROM data.table_syncs s WHERE s.base_id = ${baseId}`.execute(db);
   return new Map(
     r.rows.map((s) => {
@@ -863,7 +863,7 @@ export async function syncedFieldsByTable(db: TabulaDb, baseId: string): Promise
 }
 
 /** Syncs that are due, or whose source table changed (`sourceTableIds`). */
-export async function dueSyncIds(db: TabulaDb, sourceTableIds?: string[]): Promise<string[]> {
+export async function dueSyncIds(db: TableOSDb, sourceTableIds?: string[]): Promise<string[]> {
   const r = sourceTableIds?.length
     ? await sql<{ id: string }>`
         SELECT id FROM data.table_syncs WHERE status <> 'paused' AND source_table_id = ANY(${sourceTableIds}::uuid[])

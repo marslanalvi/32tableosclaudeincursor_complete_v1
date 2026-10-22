@@ -1,4 +1,4 @@
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import {
   compileFilterToSql,
   compileSearchToSql,
@@ -12,7 +12,7 @@ import {
   SqlParams,
   tsExpr,
   type SqlFieldInfo,
-} from "@tabula/filter";
+} from "@tableos/filter";
 import { pid } from "../../lib/public-ids.js";
 import { executeRawQuery } from "./raw-sql.js";
 import { buildPlanContext, loadQueryFields, loadSqlFieldInfos, type UserQueryContext } from "./context.js";
@@ -91,7 +91,7 @@ function aggregateSql(op: AggregateOp, f: SqlFieldInfo | null, a: string, p: Sql
 }
 
 export async function executeGroupQuery(
-  db: TabulaDb,
+  db: TableOSDb,
   tableId: string,
   input: GroupQueryInput,
   opts: { user?: UserQueryContext | null } = {},

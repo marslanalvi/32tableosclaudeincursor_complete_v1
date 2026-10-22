@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { RealtimePresenceEntry } from "@tabula/realtime-client";
+import type { RealtimePresenceEntry } from "@tableos/realtime-client";
 
 /**
  * Presence for the open base (workstream F). `peers` is the full list from

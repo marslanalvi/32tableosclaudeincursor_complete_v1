@@ -4,9 +4,9 @@ import type { Database } from "./database.js";
 
 const { Pool } = pg;
 
-export type TabulaDb = Kysely<Database>;
+export type TableOSDb = Kysely<Database>;
 
-export function createDb(connectionString: string): TabulaDb {
+export function createDb(connectionString: string): TableOSDb {
   const pool = new Pool({ connectionString });
   // An idle connection dropped by the server (restart, network blip) is emitted here;
   // without a listener Node treats it as unhandled and exits. The pool replaces it.

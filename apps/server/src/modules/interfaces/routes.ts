@@ -1,9 +1,9 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { sql } from "kysely";
 import { z } from "zod";
-import { authorize, type PermissionSnapshot } from "@tabula/permissions";
-import { isFilterError } from "@tabula/filter";
-import { generateUuidV7, keyBetween } from "@tabula/types";
+import { authorize, type PermissionSnapshot } from "@tableos/permissions";
+import { isFilterError } from "@tableos/filter";
+import { generateUuidV7, keyBetween } from "@tableos/types";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import { ApiError, handleRouteError, notFound, validationProblem } from "../../http/errors.js";

@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { Env } from "@tabula/config";
-import type { TabulaDb } from "@tabula/db";
+import type { Env } from "@tableos/config";
+import type { TableOSDb } from "@tableos/db";
 import { sql } from "kysely";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { pid } from "../../lib/public-ids.js";
@@ -88,7 +88,7 @@ export function invalidateDeviceCache(userId?: string): void {
  * they can never lock themselves out).
  */
 export async function blockedOrgsForDevice(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   deviceKey: string,
   meta: { ip: string | null; userAgent: string | null },
@@ -141,7 +141,7 @@ export async function blockedOrgsForDevice(
 
 /** Bell notification to the org Owners and Admins (who approve devices); never blocks the request. */
 async function notifyDeviceRequest(
-  db: TabulaDb,
+  db: TableOSDb,
   orgId: string,
   userId: string,
   deviceId: string,

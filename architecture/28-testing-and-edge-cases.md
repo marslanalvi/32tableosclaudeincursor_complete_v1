@@ -14,17 +14,17 @@
 
 ## 52.1 Principles
 
-1. **Test the invariants, not just the examples.** Tabula's hardest bugs are *equivalence* bugs (SQL filter ≠ in-memory filter, incremental compute ≠ full recompute, client formula ≠ server formula, realtime replica ≠ server state). Every one of those pairs gets a **property-based differential test** with `fast-check`, with shrinking and a persisted seed corpus.
-2. **Real infrastructure for anything stateful.** No mocked Postgres. Integration tests run against real Postgres 16 with **RLS enabled and the application connecting as the non-superuser, non-`BYPASSRLS` role** (`tabula_app`), exactly as in production. Redis, Redpanda (Kafka API), MinIO (S3 API) run in Testcontainers.
+1. **Test the invariants, not just the examples.** TableOS's hardest bugs are *equivalence* bugs (SQL filter ≠ in-memory filter, incremental compute ≠ full recompute, client formula ≠ server formula, realtime replica ≠ server state). Every one of those pairs gets a **property-based differential test** with `fast-check`, with shrinking and a persisted seed corpus.
+2. **Real infrastructure for anything stateful.** No mocked Postgres. Integration tests run against real Postgres 16 with **RLS enabled and the application connecting as the non-superuser, non-`BYPASSRLS` role** (`tableos_app`), exactly as in production. Redis, Redpanda (Kafka API), MinIO (S3 API) run in Testcontainers.
 3. **Determinism is a feature of the code, not of the tests.** Clock (`Clock` port), ID generation (`IdGenerator` port, UUIDv7 with injectable time + randomness), randomness (`Rng` port), and outbound HTTP (`HttpEgress` port) are injected everywhere. Tests never `sleep()`; they advance a `FakeClock`.
-4. **One fixture vocabulary.** `@tabula/testing` provides builders, arbitraries, fake connectors, and harnesses used by unit, integration, E2E seeding, and load-test seeding. A test that hand-writes SQL inserts for records is a review smell.
+4. **One fixture vocabulary.** `@tableos/testing` provides builders, arbitraries, fake connectors, and harnesses used by unit, integration, E2E seeding, and load-test seeding. A test that hand-writes SQL inserts for records is a review smell.
 5. **Security properties are tests.** Tenant isolation, field masking, and SSRF protections are encoded as executable suites that block merges — not as checklists.
 6. **Every production incident adds a test.** Post-incident review is not closed until a regression test (or an edge case below with a linked test ID) exists.
 7. **Budgets are enforced.** PR pipeline p50 ≤ 12 min, p95 ≤ 20 min wall-clock. Tests that blow their per-suite budget fail with a budget error rather than silently slowing CI.
 
-## 52.2 Test pyramid for Tabula
+## 52.2 Test pyramid for TableOS
 
-Tabula's pyramid is wider than usual in the **middle** (integration + property) because so much correctness lives in SQL, RLS, triggers on ordering, and transactional outbox behavior that a pure-unit layer cannot see.
+TableOS's pyramid is wider than usual in the **middle** (integration + property) because so much correctness lives in SQL, RLS, triggers on ordering, and transactional outbox behavior that a pure-unit layer cannot see.
 
 ```
                       ▲  Manual exploratory / bug bash (per release)
@@ -56,7 +56,7 @@ Tabula's pyramid is wider than usual in the **middle** (integration + property) 
 | Property testing | **fast-check** | Mature shrinking, model-based testing (`fc.commands`) for realtime/undo state machines, replayable seeds (`seed`, `path`). |
 | Containers | **Testcontainers (Node)** | Postgres 16 (with `pg_trgm`, `btree_gin`, logical replication `wal_level=logical`), Redis 7, **Redpanda** (Kafka API; faster startup than Kafka), MinIO, ClamAV (nightly only), Toxiproxy. Reuse mode (`TESTCONTAINERS_REUSE_ENABLE`) locally; per-shard-job containers in CI. |
 | E2E | **Playwright** | Multi-context (true multi-user realtime tests in one test), trace viewer, network interception, screenshot diffs for the canvas grid, `axe-core` integration. Cypress rejected (single-tab, weak multi-user). |
-| Load | **k6** (+ `xk6-websockets`) | JS scripting reuses our payload builders (via bundled `@tabula/testing/load`), WebSocket support, Prometheus remote-write output to Grafana. Gatling/Locust rejected for language mismatch. |
+| Load | **k6** (+ `xk6-websockets`) | JS scripting reuses our payload builders (via bundled `@tableos/testing/load`), WebSocket support, Prometheus remote-write output to Grafana. Gatling/Locust rejected for language mismatch. |
 | API contract | **OpenAPI 3.1 conformance** (generated from TypeBox) + **Schemathesis** (stateful fuzzing from the spec) + **oasdiff** (breaking-change detection vs last released spec) | See Pact decision below. |
 | Pact (consumer-driven contracts) | **Not adopted** (revisit trigger: ≥ 2 separately deployed internal services with independent release cadence) | Our consumers are (a) our own SPA in the same monorepo — shared generated types make drift a compile error; (b) third parties we don't control — they can't publish Pact files to us. The provider-side OpenAPI spec is the contract; oasdiff blocks breaking changes; Schemathesis verifies the implementation matches the spec. Webhook/event payloads are covered by JSON Schema snapshot tests of the event catalogue. When the realtime gateway or AI gateway is extracted (D1), we re-evaluate Pact for those internal boundaries. |
 | Chaos | **Toxiproxy** (integration level: latency, resets, partitions between app ↔ PG/Redis/Kafka); **Chaos Mesh** on staging EKS (pod kill, network partition, IO latency); AWS FIS for RDS failover and AZ impairment | Layered: deterministic chaos in CI, real chaos in staging. |
@@ -64,16 +64,16 @@ Tabula's pyramid is wider than usual in the **middle** (integration + property) 
 | SAST / deps | Semgrep (custom rules: raw SQL concat, missing `withTenant`, `fetch` bypassing `HttpEgress`), CodeQL, `npm audit`/OSV-Scanner, Trivy (images), gitleaks | PR gates. |
 | Visual regression | Playwright screenshot assertions (grid canvas, interfaces) with per-platform baselines in a container | Fonts pinned in the CI image for stable rasterization. |
 | Accessibility | `@axe-core/playwright` + custom grid a11y assertions (ARIA grid mirror) | PR gate for changed pages. |
-| Mutation testing | **Stryker** on `@tabula/formula`, `@tabula/filter`, `@tabula/permissions` | Weekly; mutation score ≥ 80% enforced on these three packages. |
+| Mutation testing | **Stryker** on `@tableos/formula`, `@tableos/filter`, `@tableos/permissions` | Weekly; mutation score ≥ 80% enforced on these three packages. |
 | Benchmarks | `vitest bench` + `tinybench`, pgbench custom scripts for DB micro-benchmarks | Nightly; regression > 15% opens an issue automatically. |
 
 ## 52.4 Test infrastructure
 
-### 52.4.1 Postgres test harness (`@tabula/testing/pg`)
+### 52.4.1 Postgres test harness (`@tableos/testing/pg`)
 
-* **One container per CI job**, started once in Vitest `globalSetup`. Migrations (control plane `core`, data plane `data`, `audit`) applied **once** to a template database `tabula_tpl`.
-* Each test file gets its own database via `CREATE DATABASE t_<worker>_<n> TEMPLATE tabula_tpl` (≈ 40–80 ms) — isolation without per-test migration cost. Within a file, each test runs inside a **savepoint-wrapped transaction** only when it does not exercise commit-dependent behavior (outbox/relay, logical replication, `SKIP LOCKED` contention). Tests that need real commits opt into `useCommittedDb()` which truncates touched tables in `afterEach`.
-* **Roles mirror production:** migrations run as `tabula_migrator`; the app connects as `tabula_app` (`NOBYPASSRLS`, not table owner); the relay connects as `tabula_relay` (`REPLICATION`). A global `afterAll` asserts that no test connected as superuser except the harness.
+* **One container per CI job**, started once in Vitest `globalSetup`. Migrations (control plane `core`, data plane `data`, `audit`) applied **once** to a template database `tableos_tpl`.
+* Each test file gets its own database via `CREATE DATABASE t_<worker>_<n> TEMPLATE tableos_tpl` (≈ 40–80 ms) — isolation without per-test migration cost. Within a file, each test runs inside a **savepoint-wrapped transaction** only when it does not exercise commit-dependent behavior (outbox/relay, logical replication, `SKIP LOCKED` contention). Tests that need real commits opt into `useCommittedDb()` which truncates touched tables in `afterEach`.
+* **Roles mirror production:** migrations run as `tableos_migrator`; the app connects as `tableos_app` (`NOBYPASSRLS`, not table owner); the relay connects as `tableos_relay` (`REPLICATION`). A global `afterAll` asserts that no test connected as superuser except the harness.
 * **Two-plane topology in tests:** the harness provisions `core` in one database and **two data-plane shards** (`shard_a`, `shard_b`) as separate databases. Every integration test of cross-plane flows therefore exercises the shard router with ≥ 2 shards, even though production MVP runs one (catches "accidentally assumes single shard" bugs from day one).
 * `pg_stat_statements` enabled; a `queryBudget(n)` helper fails tests whose request path executes more than *n* statements (N+1 guard on hot endpoints: record list, record update, view load).
 
@@ -97,7 +97,7 @@ Tabula's pyramid is wider than usual in the **middle** (integration + property) 
 
 `Clock` exposes `now()`, `monotonic()`, `setTimeout`-like `schedule()`. `FakeClock.advance(ms)` fires scheduled callbacks in order. BullMQ delays in tests are driven through a `QueueClock` adapter (tests call `testkit.jobs.drain({ advanceClock: true })` which repeatedly advances to the next delayed job and processes queues until quiescent). This makes retry/backoff schedules, scheduled triggers, volatile formula buckets, lease reconciliation and trash purge testable in milliseconds.
 
-## 52.5 Test data factories & generators (`@tabula/testing`)
+## 52.5 Test data factories & generators (`@tableos/testing`)
 
 ### 52.5.1 Builders (example-based)
 
@@ -146,9 +146,9 @@ Generators are **seeded per CI run** (`FC_SEED` printed in the log; failures pri
 
 ### 52.6.1 Unit tests
 
-* **Field type plugins** (`@tabula/fields`): for every type — `validate`, `normalize`, `parseInput` (paste/CSV/API), `format` (locale), `toSortKey`, `toIndexSidecar`, `toSearchText`, `toCsv`, `fromCsv`, `compare`, `isEmpty`. Shared conformance suite `fieldTypeConformance(def)` is run for every registered plugin; a new plugin cannot be registered without passing it (test discovers plugins from the registry).
+* **Field type plugins** (`@tableos/fields`): for every type — `validate`, `normalize`, `parseInput` (paste/CSV/API), `format` (locale), `toSortKey`, `toIndexSidecar`, `toSearchText`, `toCsv`, `fromCsv`, `compare`, `isEmpty`. Shared conformance suite `fieldTypeConformance(def)` is run for every registered plugin; a new plugin cannot be registered without passing it (test discovers plugins from the registry).
   * Laws: `normalize(normalize(x)) == normalize(x)`; `parseInput(format(x)) == x` for lossless types; `compare` is a total preorder consistent with `toSortKey` (byte order of sort keys == compare order); `isEmpty(x) ⇔ key absent after write`.
-* **IDs** (`@tabula/types` (ID codec)): base62 encode/decode roundtrip, prefix mismatch rejection, UUIDv7 monotonicity under same-millisecond generation, fixed-width 22 chars.
+* **IDs** (`@tableos/types` (ID codec)): base62 encode/decode roundtrip, prefix mismatch rejection, UUIDv7 monotonicity under same-millisecond generation, fixed-width 22 chars.
 * **Fractional index**: `between(a,b)` strictly between, key length growth bounded under 10k adversarial inserts at the same position (rebalance trigger fires).
 * **Permission evaluator** (pure): snapshot compile from grants + restrictions; see 52.6.11.
 * **Frontend**: RecordStore reducers (apply server op, optimistic op, rebase), grid layout math (row heights, frozen columns, hit testing), keyboard navigation state machine, clipboard TSV parse/serialize.
@@ -180,7 +180,7 @@ Scope: one module through its public service interface + its repositories + real
 * **Down migrations are not used in production** (forward-fix policy); tests do not require them. Data backfills are jobs (`maintenance` queue) with their own idempotency tests.
 * **Partition maintenance**: `base_changes` daily and `*_runs` monthly partition creation/drop jobs tested with `FakeClock` across month/year boundaries; asserts partitions exist ≥ 7 days ahead.
 
-### 52.6.5 Formula engine tests (`@tabula/formula`)
+### 52.6.5 Formula engine tests (`@tableos/formula`)
 
 | Test type | Description |
 |---|---|
@@ -224,7 +224,7 @@ Required coverage dimensions (the generator is weighted to hit these):
 
 **Property `pageStability`:** paginating a sorted+filtered view with cursor size k ∈ {1, 7, 200} yields exactly the full ordered result, no duplicates/omissions, including while concurrent updates move records across the cursor boundary (keyset cursor includes the full sort tuple + id).
 
-These properties run at `numRuns=200` on PR (when `@tabula/filter`, `@tabula/fields` or `data` migrations change) and `numRuns=20_000` nightly with fresh seeds.
+These properties run at `numRuns=200` on PR (when `@tableos/filter`, `@tableos/fields` or `data` migrations change) and `numRuns=20_000` nightly with fresh seeds.
 
 ### 52.6.7 Field conversion matrix tests
 
@@ -236,7 +236,7 @@ These properties run at `numRuns=200` on PR (when `@tabula/filter`, `@tabula/fie
   * All conversions: undo restores original values bit-exactly (inverse ops store original cells), dependent formulas are re-typechecked (become `invalid` with a clear error if the type no longer fits), filters referencing the field are migrated or flagged (`view.config` filter conditions with now-invalid operators are **disabled, not dropped**), sidecar index entries rebuilt.
 * Large conversion (≥ 10k records) runs as a `long_operation`; tests assert chunked progress, resumability after worker kill mid-way (idempotent per chunk), and that edits made **during** conversion to the field are either rejected with `FIELD_CONVERSION_IN_PROGRESS` or applied post-conversion — never lost.
 
-### 52.6.8 Compute engine tests (`@tabula/compute`)
+### 52.6.8 Compute engine tests (`@tableos/compute`)
 
 * **Incremental = full recompute (model-based):** `fc.commands` with operations: create/update/delete record, add/remove link, change formula, convert field type, delete/restore field, delete/restore record. After each command, the materialized `records.computed` for all records equals `fullRecompute(schema, cells, links)`. Runs with `COMPUTE_SYNC_FANOUT_LIMIT` set to tiny values (1, 3) to force the deferred path, then drains `compute` queue before comparing.
 * **Cycle detection**: random DAG + one random back-edge → schema change rejected with `FORMULA_CIRCULAR_REFERENCE` listing the cycle path; graph unchanged.
@@ -472,11 +472,11 @@ pre-release→ full k6, 72 h soak (pre-GA), DR verification (quarterly cadence)
 
 * **Timing-balanced shards:** a `test-timings.json` artifact from the latest main run feeds a custom Vitest sequencer that bin-packs files so shard wall times differ < 15%.
 * **Integration shards** start their own Postgres/Redis/Redpanda; the template DB is built once per shard (~10 s). Containers run on `tmpfs` with `fsync=off, synchronous_commit=off, full_page_writes=off` — **except** the `durability` suite (relay, logical replication, failover simulation) which uses production settings.
-* **Playwright** shards (4 on PR / 8 on main); each shard seeds isolated orgs via `/internal/testing/seed`, an endpoint compiled out of production images (build flag `TABULA_TESTING_ENDPOINTS` + startup assertion that it is false when `NODE_ENV=production`).
+* **Playwright** shards (4 on PR / 8 on main); each shard seeds isolated orgs via `/internal/testing/seed`, an endpoint compiled out of production images (build flag `TABLEOS_TESTING_ENDPOINTS` + startup assertion that it is false when `NODE_ENV=production`).
 
 ### 52.8.3 Affected-test selection
 
-Turborepo's graph selects affected packages. **Global triggers** force full runs: `packages/db/migrations/**`, `@tabula/fields`, `@tabula/filter`, `@tabula/permissions`, `@tabula/events`, `@tabula/formula`, CI config, lockfile. Main always runs everything.
+Turborepo's graph selects affected packages. **Global triggers** force full runs: `packages/db/migrations/**`, `@tableos/fields`, `@tableos/filter`, `@tableos/permissions`, `@tableos/events`, `@tableos/formula`, CI config, lockfile. Main always runs everything.
 
 ### 52.8.4 Flaky test policy & quarantine
 
@@ -484,7 +484,7 @@ Turborepo's graph selects affected packages. **Global triggers** force full runs
 * **Quarantine:** ≥ 2 flakes in 7 days auto-opens a PR adding the test to `quarantine.json` (test ID, owning team from CODEOWNERS, issue link, expiry +14 days). Quarantined tests still run (non-blocking) so fixes are visible.
 * **Non-quarantinable suites:** security, tenant isolation, permission matrix, equivalence properties, RLS coverage. A flake there is a P1 bug.
 * **Budgets:** expired entries fail the owning team's packages; > 5 entries per team requires EM sign-off on that team's PRs.
-* **Prevention lint:** no `sleep`/`setTimeout` in tests, no `Date.now()`/`new Date()` in domain code (use `Clock`), no array-equality assertions on SQL results without `ORDER BY`, no Playwright `waitForTimeout`. Grid exposes a non-production `window.__tabulaGrid` inspection API (cell at (row,col), visible range) so E2E never pixel-hunts.
+* **Prevention lint:** no `sleep`/`setTimeout` in tests, no `Date.now()`/`new Date()` in domain code (use `Clock`), no array-equality assertions on SQL results without `ORDER BY`, no Playwright `waitForTimeout`. Grid exposes a non-production `window.__tableosGrid` inspection API (cell at (row,col), visible range) so E2E never pixel-hunts.
 * **Property failures are never "flaky":** a fresh-seed failure is a counterexample; the seed is stored in `__regressions__` and an issue opened automatically.
 
 ### 52.8.5 Test data management

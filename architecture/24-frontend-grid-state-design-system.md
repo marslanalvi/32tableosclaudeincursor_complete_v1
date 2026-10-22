@@ -13,7 +13,7 @@
 | §40 | Parts 36–37 | State management map & anti-patterns; component architecture (responsibilities, props contracts, dependency graph) |
 | §41 | Part 38 | Design system: tokens, components, density, theming, a11y (WCAG 2.2 AA), implementation choice, Storybook & visual regression |
 
-Related documents: [`07-field-engine.md`](./07-field-engine.md) (FieldTypeDefinition; `@tabula/field-ui` renderers/editors), [`10-view-engine.md`](./10-view-engine.md) (view configs, filter AST, query hashing), [`13-interface-builder.md`](./13-interface-builder.md), [`16-realtime.md`](./16-realtime.md) (WS protocol: `clientMutationId`, `op_ack`, change `seq`), [`17-api-architecture.md`](./17-api-architecture.md), [`19-permissions-and-multitenancy.md`](./19-permissions-and-multitenancy.md), [`25-security-observability-infrastructure.md`](./25-security-observability-infrastructure.md), [`26-architecture-style-stack-repo-services.md`](./26-architecture-style-stack-repo-services.md) (monorepo layout, tooling), [`33-architecture-decision-records.md`](./33-architecture-decision-records.md).
+Related documents: [`07-field-engine.md`](./07-field-engine.md) (FieldTypeDefinition; `@tableos/field-ui` renderers/editors), [`10-view-engine.md`](./10-view-engine.md) (view configs, filter AST, query hashing), [`13-interface-builder.md`](./13-interface-builder.md), [`16-realtime.md`](./16-realtime.md) (WS protocol: `clientMutationId`, `op_ack`, change `seq`), [`17-api-architecture.md`](./17-api-architecture.md), [`19-permissions-and-multitenancy.md`](./19-permissions-and-multitenancy.md), [`25-security-observability-infrastructure.md`](./25-security-observability-infrastructure.md), [`26-architecture-style-stack-repo-services.md`](./26-architecture-style-stack-repo-services.md) (monorepo layout, tooling), [`33-architecture-decision-records.md`](./33-architecture-decision-records.md).
 
 > **Normative precedence.** Wire-level frame shapes of the WebSocket protocol are owned by doc 16; field type behavior (validation, coercion, formatting) by doc 07; view query semantics by doc 10. This document defines how the *client* consumes them. Where names below are illustrative of a frame (`op`, `op_ack`, `op_reject`, `change`, `resume`), doc 16's names win.
 
@@ -35,7 +35,7 @@ Derived non-functional requirements **[Ours]**:
 | F4 | Warm boot to first grid paint < 1.2 s | Schema cache in IndexedDB, SWR against `schema_version` |
 | F5 | Works through flaky networks; short offline tolerance | Durable mutation queue (IndexedDB), resume via `change_seq` |
 | F6 | WCAG 2.2 AA including the grid | Offscreen accessible DOM layer mirroring the canvas |
-| F7 | Same field semantics client & server | Isomorphic packages (`@tabula/formula`, field engine core from doc 07) |
+| F7 | Same field semantics client & server | Isomorphic packages (`@tableos/formula`, field engine core from doc 07) |
 | F8 | 30+ locales, RTL in V1+ | Compiled ICU messages; logical CSS properties |
 | F9 | Public share/form pages isolated from authenticated app | Separate app entry, separate origin, no session cookie |
 
@@ -45,7 +45,7 @@ D18 fixes the outcome; this section records *why*, so the decision can be revisi
 
 ### 38.2.1 UI framework
 
-| Option | Strengths | Weaknesses for Tabula | Verdict |
+| Option | Strengths | Weaknesses for TableOS | Verdict |
 |---|---|---|---|
 | **React 19** | Largest ecosystem (Radix, TanStack, dnd-kit, TipTap/ProseMirror bindings, CodeMirror/Monaco wrappers, react-aria); concurrent rendering (`useTransition`, `useDeferredValue`) good for filter/sort UIs; `useSyncExternalStore` gives a clean contract for an external record store; deepest hiring pool; React Compiler reduces memo boilerplate | VDOM overhead per update; easy to create re-render storms | **Chosen.** The hot path (grid) is canvas and bypasses React entirely, neutralizing React's main weakness. |
 | SolidJS | Fine-grained reactivity, no VDOM, excellent raw perf | Much smaller ecosystem (no Radix-equivalent maturity, fewer editors), hiring | Rejected: perf advantage is irrelevant once grid is canvas; ecosystem cost is high. |
@@ -109,7 +109,7 @@ Hence the **custom `RecordStore`** (D18): a normalized, mutable-inside/immutable
 | Headless primitives | **Radix UI** (+ `react-aria` hooks for date pickers/combobox virtual focus where Radix lacks) | Ariakit, Headless UI | D18; best a11y coverage + composition model |
 | Styling | **vanilla-extract** (see §41.6) | Tailwind v4, CSS Modules, Panda, StyleX | Typed theme contract shared with canvas; zero runtime |
 | Rich text | TipTap (ProseMirror) + Yjs in V1 (D9) | Lexical, Slate | ProseMirror schema = sanitization boundary; mature Yjs binding |
-| Formula editor | **CodeMirror 6** | Monaco | ~150 KB vs ~2 MB; custom language via Lezer grammar mirroring `@tabula/formula` tokens |
+| Formula editor | **CodeMirror 6** | Monaco | ~150 KB vs ~2 MB; custom language via Lezer grammar mirroring `@tableos/formula` tokens |
 | Script editor (automations) | **Monaco** (lazy, worker-based TS language service) | CodeMirror + TS LSP worker | Out-of-the-box TS intellisense against our generated script API `.d.ts` |
 | DnD (DOM) | dnd-kit | react-beautiful-dnd (archived), pragmatic-drag-and-drop | Accessible keyboard DnD, sensors, used for kanban/fields/builder |
 | Charts | **Apache ECharts** (lazy) | Recharts, visx, Vega-Lite | Canvas renderer handles 100k points; many chart types for interface dashboards |
@@ -123,25 +123,25 @@ Hence the **custom `RecordStore`** (D18): a normalized, mutable-inside/immutable
 
 ```
 apps/
-  web/            # authenticated app SPA        → https://app.tabula.example
-  share/          # public share/form SPA         → https://share.tabula.example  (no session cookie)
+  web/            # authenticated app SPA        → https://app.tableos.example
+  share/          # public share/form SPA         → https://share.tableos.example  (no session cookie)
   admin-console/  # internal staff console (support, support_access_grants) → VPN/SSO only
-  marketing/      # Astro (or Next.js) site       → https://tabula.example
+  marketing/      # Astro (or Next.js) site       → https://tableos.example
 packages/
-  grid/           # @tabula/grid – canvas grid engine (framework-agnostic core + React adapter)
-  ui/             # @tabula/ui – design system (tokens, primitives, components)
-  field-ui/       # @tabula/field-ui – per-field-type renderers (canvas+DOM), editors, filter inputs (doc 07)
-  formula/        # @tabula/formula – isomorphic parser/typechecker/evaluator (D8)
+  grid/           # @tableos/grid – canvas grid engine (framework-agnostic core + React adapter)
+  ui/             # @tableos/ui – design system (tokens, primitives, components)
+  field-ui/       # @tableos/field-ui – per-field-type renderers (canvas+DOM), editors, filter inputs (doc 07)
+  formula/        # @tableos/formula – isomorphic parser/typechecker/evaluator (D8)
   fields/         # isomorphic field-type core: validate/normalize/coerce/format (doc 07; name per doc 07)
-  api-client/     # @tabula/api-client – generated OpenAPI types + typed fetch + problem+json errors
-  data/           # @tabula/data – RecordStore, MutationQueue, RealtimeClient, schema cache (no React)
-  data-react/     # hooks binding @tabula/data to React (useRecord, useWindow, useMutation…)
+  api-client/     # @tableos/api-client – generated OpenAPI types + typed fetch + problem+json errors
+  data/           # @tableos/data – RecordStore, MutationQueue, RealtimeClient, schema cache (no React)
+  data-react/     # hooks binding @tableos/data to React (useRecord, useWindow, useMutation…)
   i18n/           # catalogs, locale loading, formatting helpers
   telemetry/      # RUM, Sentry init, OTel web, perf marks
   test-utils/     # fixtures, MSW handlers, fake realtime server
 ```
 
-Why `@tabula/data` is React-free: the grid engine, web workers (filter evaluation, CSV parse), and the share app all consume it; React is an adapter (`data-react`). This also makes the store unit-testable at memory speed.
+Why `@tableos/data` is React-free: the grid engine, web workers (filter evaluation, CSV parse), and the share app all consume it; React is an adapter (`data-react`). This also makes the store unit-testable at memory speed.
 
 ## 38.4 App shell
 
@@ -200,7 +200,7 @@ apps/web/src/
     views/
       host/                   # ViewHost, ViewSwitcher, ViewToolbar, view sidebar (sections)
       config/                 # FilterBuilder, SortBuilder, GroupBuilder, FieldVisibility, ColorRules, RowHeight
-      grid/                   # React adapter around @tabula/grid + grid-specific toolbars/menus
+      grid/                   # React adapter around @tableos/grid + grid-specific toolbars/menus
       kanban/  calendar/  gallery/  timeline/  gantt/  list/  form/
     record/                   # RecordDrawer, RecordPage, RecordPanel, LinkedRecordPicker, record history, comments tab
     comments/                 # threads, mentions composer, reactions
@@ -219,8 +219,8 @@ apps/web/src/
     ai/                       # AI field config, AI assist panels
     settings/                 # account: profile, security (MFA, sessions, tokens), notifications, preferences
     admin/                    # org admin: members, teams, SSO, SCIM, policies, audit log, billing
-  shared/                     # app-level shared UI not generic enough for @tabula/ui (EmptyState variants, PermissionGate)
-  data/                       # app glue for @tabula/data: query keys, query options, realtime → query patches
+  shared/                     # app-level shared UI not generic enough for @tableos/ui (EmptyState variants, PermissionGate)
+  data/                       # app glue for @tableos/data: query keys, query options, realtime → query patches
 ```
 
 Each feature exposes **one public entry** (`features/<name>/index.ts`) and may contain `components/`, `hooks/`, `stores/` (Zustand slices), `api/` (query options + mutations), `lib/`, `__tests__/`.
@@ -229,14 +229,14 @@ Each feature exposes **one public entry** (`features/<name>/index.ts`) and may c
 
 Enforced with `eslint-plugin-boundaries` + `dependency-cruiser` (graph-level cycle checks) — tooling owned by doc 26.
 
-| From \ To | `app` | `routes` | `features/*` (public) | `features/*` (internal) | `shared` | `data` | `@tabula/*` |
+| From \ To | `app` | `routes` | `features/*` (public) | `features/*` (internal) | `shared` | `data` | `@tableos/*` |
 |---|---|---|---|---|---|---|---|
 | `app` | ✓ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | `routes` | ✗ | ✓ | ✓ | ✗ | ✓ | ✓ | ✓ |
 | `features/X` | ✗ | ✗ | ✓ (other features' `index.ts` only, from allowlist) | own only | ✓ | ✓ | ✓ |
 | `shared` | ✗ | ✗ | ✗ | ✗ | ✓ | ✓ | ✓ |
-| `@tabula/data` | — | — | — | — | — | ✓ | `api-client`, `fields`, `formula` only (no React, no `ui`) |
-| `@tabula/grid` | — | — | — | — | — | — | `field-ui` (renderer interfaces), no `data` (talks to a `GridDataSource` interface) |
+| `@tableos/data` | — | — | — | — | — | ✓ | `api-client`, `fields`, `formula` only (no React, no `ui`) |
+| `@tableos/grid` | — | — | — | — | — | — | `field-ui` (renderer interfaces), no `data` (talks to a `GridDataSource` interface) |
 
 Allowed cross-feature edges (explicit allowlist): `views/* → record` (open record), `views/* → comments` (comment counts), `interfaces/* → views/config` (filter builder reuse), `automations/* → views/config`, `record → comments`, `record → history`. Anything else needs an ADR-lite PR note. Circular feature imports fail CI.
 
@@ -259,8 +259,8 @@ All IDs in URLs are **public prefixed IDs** (D5). URLs are the shareable, bookma
 | `/b/{baseId}/history` · `/b/{baseId}/trash` | Snapshots, trash | |
 | `/settings/{section}` | Account settings | `profile`, `security`, `tokens`, `notifications`, `appearance` |
 | `/org/{orgId}/admin/{section}` | Org admin | `members`, `teams`, `sso`, `scim`, `policies`, `audit`, `billing` |
-| `share.tabula.example/s/{shareToken}` | Public shared view/base/interface | separate app, no auth cookie |
-| `share.tabula.example/f/{shareToken}` | Public form | prefill via `?prefill_{fieldId}=…` (validated by field engine) |
+| `share.tableos.example/s/{shareToken}` | Public shared view/base/interface | separate app, no auth cookie |
+| `share.tableos.example/f/{shareToken}` | Public form | prefill via `?prefill_{fieldId}=…` (validated by field engine) |
 
 Typed search params (TanStack Router `validateSearch` with Zod):
 
@@ -294,7 +294,7 @@ flowchart LR
     RD[RecordDrawer]
     MD[Metadata UIs]
   end
-  subgraph Data["@tabula/data (no React)"]
+  subgraph Data["@tableos/data (no React)"]
     TQ[(TanStack Query cache<br/>metadata)]
     RS[(RecordStore<br/>per table)]
     MQ[MutationQueue]
@@ -305,7 +305,7 @@ flowchart LR
   API[(REST /api/v1<br/>openapi-fetch)]
   WS[(WebSocket<br/>/rt)]
   IDB[(IndexedDB)]
-  GRID[["@tabula/grid canvas engine"]]
+  GRID[["@tableos/grid canvas engine"]]
 
   VH -->|useWindow / GridDataSource| RS
   GRID -->|subscribe dirty cells| RS
@@ -331,7 +331,7 @@ flowchart LR
 
 ### 38.7.1 API client
 
-* Generated from the server OpenAPI document (`/v1/openapi.json`, D17) with `openapi-typescript` into `@tabula/api-client/src/schema.d.ts`. CI regenerates and fails on uncommitted diff.
+* Generated from the server OpenAPI document (`/v1/openapi.json`, D17) with `openapi-typescript` into `@tableos/api-client/src/schema.d.ts`. CI regenerates and fails on uncommitted diff.
 * Runtime: `openapi-fetch` with middleware:
   * `credentials: 'same-origin'`; first-party calls go to **`/api/v1/*` on the app origin** (CloudFront path-routes to ALB — see doc 25 §42.8), so cookie auth needs no CORS.
   * Adds `X-CSRF-Token` (double-submit, doc 25), `Idempotency-Key` for mutating calls (UUIDv7), `traceparent` (sampled), `X-Client-Version`.
@@ -399,7 +399,7 @@ sequenceDiagram
   U->>U: first interactive paint, flush queued offline ops (if any)
 ```
 
-* IndexedDB (`tabula` DB via `idb`): stores `schema` (key `baseId`, value `{schemaVersion, payload, savedAt}`), `mutationQueue`, `prefs-large`. Encrypted at rest? No — browser profile protection is the boundary; **logout wipes IndexedDB** and the SW cache; schema cache is per user id (`{userId}:{baseId}`) to avoid cross-account leakage on shared machines.
+* IndexedDB (`tableos` DB via `idb`): stores `schema` (key `baseId`, value `{schemaVersion, payload, savedAt}`), `mutationQueue`, `prefs-large`. Encrypted at rest? No — browser profile protection is the boundary; **logout wipes IndexedDB** and the SW cache; schema cache is per user id (`{userId}:{baseId}`) to avoid cross-account leakage on shared machines.
 * **Records are not persisted** to IndexedDB in MVP (size, staleness, privacy). Reconsider in V2 for offline-read mode.
 * Service Worker (Workbox): precache app shell and route chunks; `NetworkOnly` for `/api/*` and `/rt`. Updates: new SW waits; the app shows "New version available — reload" when idle, or auto-reloads on next navigation if `X-Min-Client-Version` from the API exceeds the running build (forced upgrade on protocol break).
 
@@ -612,7 +612,7 @@ stateDiagram-v2
 | Chunk | Contents | Load trigger | Budget (gz) |
 |---|---|---|---|
 | `entry` | runtime, router, shell, design-system core, data layer, i18n runtime | initial | ≤ 150 KB |
-| `view-grid` | `@tabula/grid`, field-ui **renderers** (all types — needed to paint), grid toolbar | first grid view | ≤ 110 KB |
+| `view-grid` | `@tableos/grid`, field-ui **renderers** (all types — needed to paint), grid toolbar | first grid view | ≤ 110 KB |
 | `view-{kanban,calendar,gallery,timeline,gantt,list,form}` | per view type | on switch | ≤ 60 KB each |
 | `editor-{fieldType}` | field-ui **editors** (date picker, attachment uploader, link picker, rich text) | first edit of that type; prefetched on cell hover after 300 ms idle | ≤ 40 KB each; TipTap ≤ 90 KB |
 | `formula-editor` | CodeMirror 6 + language | opening formula config | ≤ 120 KB |
@@ -704,7 +704,7 @@ Evaluation harness: seeded table 100k × 200 (mixed types incl. 20 multi-select,
 
 Why not *depend on* Glide directly:
 1. Deep integration needs with RecordStore change sets (damage keyed by `(recordId, fieldId)`), grouping with header/footer rows, summary bar, presence overlays and the a11y mirror all touch its core.
-2. Field rendering must route through `@tabula/field-ui` (doc 07) — one renderer contract shared by grid, kanban/gallery card fields (canvas) and printing.
+2. Field rendering must route through `@tableos/field-ui` (doc 07) — one renderer contract shared by grid, kanban/gallery card fields (canvas) and printing.
 3. The grid is the product's most important surface; owning it removes upstream-coupling risk.
 
 Cost: ~3 engineers × 2 quarters to parity, then 1–2 ongoing. De-risked by forking Glide's render loop in the spike and replacing modules incrementally.
@@ -732,7 +732,7 @@ packages/grid/
       OverlayRenderer.ts  # selection, cursor, presence, fill handle, drag ghosts, flash
       TextMeasure.ts      # measureText LRU, glyph advance tables, ellipsis, wrapping
       ImageCache.ts       # ImageBitmap LRU (thumbnails, avatars), in-flight dedupe
-      theme.ts            # resolved token values for canvas (from @tabula/ui theme)
+      theme.ts            # resolved token values for canvas (from @tableos/ui theme)
     interaction/
       InputController.ts  # pointer/keyboard/wheel/touch -> commands
       HitTest.ts          # (x,y) -> region/cell/handle
@@ -795,7 +795,7 @@ export type Damage =
   | { kind: 'all' };
 ```
 
-Field renderers come from `@tabula/field-ui` (doc 07 owns the complete interface; grid-facing subset):
+Field renderers come from `@tableos/field-ui` (doc 07 owns the complete interface; grid-facing subset):
 
 ```ts
 export interface CanvasCellRenderer<V = unknown, C = unknown> {
@@ -1007,7 +1007,7 @@ Routing: `InputController → Keymap.resolve(event, mode) → Command → handle
 
 ## 39.13 Cell editing overlay
 
-* `EditController` computes the viewport rect of the cell and mounts the **lazily-loaded** editor from `@tabula/field-ui` into the editor host via a React portal (`transform: translate(x, y)`), sized to the cell (inline) or anchored to it (Radix `Popover` with a virtual anchor).
+* `EditController` computes the viewport rect of the cell and mounts the **lazily-loaded** editor from `@tableos/field-ui` into the editor host via a React portal (`transform: translate(x, y)`), sized to the cell (inline) or anchored to it (Radix `Popover` with a virtual anchor).
 
 ```ts
 export interface FieldEditorProps<V, C> {
@@ -1034,12 +1034,12 @@ export interface FieldEditorProps<V, C> {
 1. Gather values for the primary range (multiple aligned ranges are concatenated like spreadsheets). Non-resident rows inside the range (e.g., select-all on 100k rows) are fetched in 1,000-row chunks with a cancellable progress toast; hard cap 1M cells per copy.
 2. Serialize:
    * `text/plain` — TSV via `renderer.toText` in *export* mode (links → primary values comma-joined; attachments → `name (url)`; multi-select → labels comma-joined). Cells with tab/newline/quote are quoted.
-   * `text/html` — `<table>` with text cells; the `<table>` carries `data-tabula='{"v":1,"baseId":"bas_…","fields":[{"id":"fld_…","type":"single_select"}],"rows":[[…canonical values…]]}'` enabling **lossless in-base paste** (option ids, record ids, attachment ids — re-validated server-side; other bases fall back to text).
+   * `text/html` — `<table>` with text cells; the `<table>` carries `data-tableos='{"v":1,"baseId":"bas_…","fields":[{"id":"fld_…","type":"single_select"}],"rows":[[…canonical values…]]}'` enabling **lossless in-base paste** (option ids, record ids, attachment ids — re-validated server-side; other bases fall back to text).
 3. Write with `navigator.clipboard.write(ClipboardItem)`; fallback to the `copy` event's `clipboardData`.
 4. Cut = copy + clear (one undo group). Cut/paste moves *values*, never records.
 
 **Paste** (handled on the `paste` event — permission-free):
-1. Source preference: `data-tabula` HTML (same base) → HTML table (Excel/Sheets/Numbers; preserves multi-line cells) → TSV (tolerant RFC-4180-like parser).
+1. Source preference: `data-tableos` HTML (same base) → HTML table (Excel/Sheets/Numbers; preserves multi-line cells) → TSV (tolerant RFC-4180-like parser).
 2. Target shape: single cursor + m×n data → anchored region; rows beyond the end prompt "Add 37 new records?"; columns beyond the last visible are truncated (never creates fields) with notice. Range selected + 1×1 data → fill range; data tiling evenly into range → tile.
 3. Coercion with the field engine **import coercion** `coerceFromText(text, config, ctx)` (doc 07) — the same code as CSV import — in a Web Worker for > 5,000 cells:
    * select: case-insensitive label match; unknown labels → users with `field.update` are offered "Create 4 new options" (schema op), else skipped and reported.
@@ -1113,7 +1113,7 @@ The engine maintains an **offscreen accessible DOM mirror** (visually hidden via
 ## 39.19 Inline formula field editing
 
 * Computed columns are read-only in cells; header menu → *Edit field* opens **FormulaEditor** (CodeMirror 6) inside the field config popover/dialog.
-* Powered by `@tabula/formula` (D8):
+* Powered by `@tableos/formula` (D8):
   * Lezer grammar mirrors the lexer for highlighting; **diagnostics** come from the real parser + type checker in a Web Worker (debounce 150 ms) → client validation ≡ server validation.
   * Autocomplete: functions (signature help + docs), field references (`{Field name}` — fuzzy over fields with type icons; the AST stores field **ids**; display shows names, so renames don't break formulas), operators, option literals.
   * Result type badge and **live preview** on the first 5 resident records with the same compiled closures; cross-table refs previewed only when data is resident.
@@ -1183,7 +1183,7 @@ The single most important frontend rule: **every piece of state has exactly one 
 | State kind | Examples | Owner / where it lives | Lifetime | Updated by | Read via |
 |---|---|---|---|---|---|
 | **Server metadata** | me, workspaces, base schema (tables/fields/views), members, permissions view, automations, interfaces (draft/published), comments, notifications, long operations | **TanStack Query** cache (`qk.*`) | session; `gcTime` 10 min | fetch; realtime bridge `setQueryData`; mutations with optimistic `onMutate` | `useQuery(queryOptions)` / `useSuspenseQuery` in routes |
-| **Record data** | cells, computed values, versions, pending ops, view windows, group trees, primary value caches | **RecordStore** (`@tabula/data`) per base session | base session (+60 s grace) | window fetches, realtime `change`, MutationQueue | `useRecord`, `useCell`, `useWindow` (`useSyncExternalStore`), grid `GridDataSource` |
+| **Record data** | cells, computed values, versions, pending ops, view windows, group trees, primary value caches | **RecordStore** (`@tableos/data`) per base session | base session (+60 s grace) | window fetches, realtime `change`, MutationQueue | `useRecord`, `useCell`, `useWindow` (`useSyncExternalStore`), grid `GridDataSource` |
 | **Mutations in flight** | pending ops, retries, offline queue | **MutationQueue** (memory + IndexedDB for durable kinds) | until ack/reject (≤ 24 h offline) | user edits | `useMutationStatus`, Unsynced Changes panel |
 | **Realtime connection** | socket state, `appliedSeq`, latency | **RealtimeClient** (memory) | tab | WS events | `useConnectionState` (status banner) |
 | **Presence** | collaborators in base, cursors, selections, "editing" | Zustand `presenceStore` (per base) | ephemeral | WS presence frames | grid overlay subscribes directly; avatars via selector |
@@ -1193,7 +1193,7 @@ The single most important frontend rule: **every piece of state has exactly one 
 | **Form state** | settings forms, field config dialogs | react-hook-form | dialog | inputs | form API |
 | **URL state** | baseId/tableId/viewId, `?r` record, `?f` field, `?q` search, admin tabs | **TanStack Router** (path + typed search) | navigation history | `navigate()` | `Route.useParams/useSearch` |
 | **Personal view state (server)** | column width overrides, collapsed groups, last scroll anchor, personal filters | `view_user_state` (server) via TanStack Query + debounced writes | durable, cross-device | user | query |
-| **Small local prefs** | theme (light/dark/system), density, font scale, sidebar width, last workspace fallback, dismissed tips | **localStorage** (`tabula:prefs:v1:{userId}`, ≤ 10 KB, versioned schema; synced to `user_preferences` when the setting is cross-device) | durable per device | settings UI | `usePref` (Zustand persist middleware) |
+| **Small local prefs** | theme (light/dark/system), density, font scale, sidebar width, last workspace fallback, dismissed tips | **localStorage** (`tableos:prefs:v1:{userId}`, ≤ 10 KB, versioned schema; synced to `user_preferences` when the setting is cross-device) | durable per device | settings UI | `usePref` (Zustand persist middleware) |
 | **Boot caches** | base schema snapshot + `schemaVersion` | **IndexedDB** `schema` store (per user) | until logout / version mismatch | after schema fetch | SchemaCache at boot |
 | **Offline queue** | durable mutations | **IndexedDB** `mutationQueue` | until ack | MutationQueue | MutationQueue |
 | **Secrets / tokens** | session | **HttpOnly cookie only** — never JS-readable; CSRF token cookie readable by design | session | server | API client middleware |
@@ -1238,7 +1238,7 @@ export const createGridUiStore = () => createStore<GridUiState>()(devtools(subsc
 | Anti-pattern | Why it hurts | Instead | Enforcement |
 |---|---|---|---|
 | Copying query data into Zustand/useState ("syncing" with `useEffect`) | Two sources of truth; stale UI after realtime updates | Read from Query/RecordStore; keep ids only | Review checklist; custom ESLint rule flags `useEffect` that calls setState with query `data` |
-| Records in TanStack Query (one query per view page) | Duplicate copies per view, O(n) structural sharing, no rebase | RecordStore | Lint: forbid `records:query` usage outside `@tabula/data` |
+| Records in TanStack Query (one query per view page) | Duplicate copies per view, O(n) structural sharing, no rebase | RecordStore | Lint: forbid `records:query` usage outside `@tableos/data` |
 | Per-cell React components in grid | 10k components/frame → jank | Canvas renderer contract | Package boundary |
 | Subscribing whole store (`useStore()` with no selector) | Re-render on every change | Narrow selectors + `shallow` | ESLint rule `zustand/require-selector` (custom) |
 | `useEffect` chains for derived state | Extra renders, ordering bugs | `useMemo` / selectors / React Compiler | Review |
@@ -1258,17 +1258,17 @@ export const createGridUiStore = () => createStore<GridUiState>()(devtools(subsc
 L4  Routes / Pages          ViewHostRoute, RecordPageRoute, InterfaceRuntimeRoute, AdminRoutes …
 L3  Feature components      DataGrid, Kanban, Calendar, RecordDrawer, FilterBuilder, InterfaceBuilder, AutomationBuilder …
 L2  Domain components       FieldTypeRenderer, FieldEditor, FieldPicker, RecordChip, UserChip, OptionChip, FormulaEditor, AttachmentUploader
-L1  Design system           @tabula/ui: Button, Input, Menu, Popover, Dialog, Drawer, Tabs, Tooltip, Toast, Table, Skeleton, EmptyState …
+L1  Design system           @tableos/ui: Button, Input, Menu, Popover, Dialog, Drawer, Tabs, Tooltip, Toast, Table, Skeleton, EmptyState …
 L0  Primitives & tokens     Radix primitives, react-aria hooks, vanilla-extract tokens
 ```
 
-A layer may only depend on layers below it. L2 domain components are in `@tabula/field-ui` (field-specific) or `apps/web/src/shared` (app-specific).
+A layer may only depend on layers below it. L2 domain components are in `@tableos/field-ui` (field-specific) or `apps/web/src/shared` (app-specific).
 
 ### 40.3.2 Component catalogue (responsibilities & props contracts)
 
 Props shown are the public contract (simplified; callbacks receive public IDs).
 
-**DataGrid** (`features/views/grid`, wraps `@tabula/grid`)
+**DataGrid** (`features/views/grid`, wraps `@tableos/grid`)
 * Responsibility: mount the engine for a grid view; build `GridDataSource` from RecordStore window + schema + permissions; host editors/menus; persist column ops.
 ```ts
 interface DataGridProps {
@@ -1283,15 +1283,15 @@ interface DataGridProps {
   ariaLabel: string;
 }
 ```
-* Depends on: `@tabula/grid`, `@tabula/field-ui`, `data-react`, `views/config` (column header menus reuse SortBuilder/FilterBuilder quick actions), `record` (open).
+* Depends on: `@tableos/grid`, `@tableos/field-ui`, `data-react`, `views/config` (column header menus reuse SortBuilder/FilterBuilder quick actions), `record` (open).
 
-**Cell / FieldTypeRenderer** (`@tabula/field-ui`)
+**Cell / FieldTypeRenderer** (`@tableos/field-ui`)
 * Canvas `CanvasCellRenderer` (39.4) + DOM `FieldValue` for non-grid surfaces (drawer, kanban card DOM fallback, interface elements, emails preview).
 ```ts
 interface FieldValueProps { field: FieldMeta; value: unknown; variant: 'cell' | 'card' | 'detail' | 'inline'; maxLines?: number; onActivate?(r: CellHitRegion): void }
 ```
 
-**FieldEditor** (`@tabula/field-ui`): type-specific editor resolved by registry; contract `FieldEditorProps` (39.13). Variants: `inline`, `popover`, `drawer` (record drawer uses full editors: rich text, attachments grid, linked records list).
+**FieldEditor** (`@tableos/field-ui`): type-specific editor resolved by registry; contract `FieldEditorProps` (39.13). Variants: `inline`, `popover`, `drawer` (record drawer uses full editors: rich text, attachments grid, linked records list).
 
 **FilterBuilder / SortBuilder / GroupBuilder** (`features/views/config`)
 * Edit the **filter AST** (doc 10) — nested AND/OR groups, operators per field type from field engine `filterOperators(type)`, value inputs from field-ui `FilterValueInput`.
@@ -1331,7 +1331,7 @@ interface RecordPanelProps {
 
 **LinkedRecordPicker**: search target table (server search + resident cache), create-new inline (respecting target permissions), multi-select with order, keyboard-first.
 
-**AttachmentUploader** (`@tabula/field-ui`)
+**AttachmentUploader** (`@tableos/field-ui`)
 * Drag/drop, paste images, file picker; multipart presigned upload direct to S3 quarantine (D15) via `UploadService` (chunks of 8 MB, 4 parallel, resumable via `uploadId` persisted in memory), progress, scan status (`attachment.scanned`), thumbnails when processed, previewer (images, PDF via pdf.js in sandboxed iframe on usercontent domain, video).
 ```ts
 interface AttachmentUploaderProps {
@@ -1426,12 +1426,12 @@ flowchart TB
     MS[Monaco ScriptEditor]
   end
   subgraph Engines["Engines & data"]
-    GE[["@tabula/grid"]]
-    FUI[["@tabula/field-ui registry"]]
-    FX[["@tabula/formula"]]
-    DATA[["@tabula/data + data-react"]]
+    GE[["@tableos/grid"]]
+    FUI[["@tableos/field-ui registry"]]
+    FX[["@tableos/formula"]]
+    DATA[["@tableos/data + data-react"]]
   end
-  UI[["@tabula/ui design system"]]
+  UI[["@tableos/ui design system"]]
 
   RV --> VH
   RR --> RP
@@ -1465,7 +1465,7 @@ flowchart TB
   L2 --> UI
 ```
 
-Notes: `@tabula/grid` depends only on the renderer *interface* from field-ui (no data layer); InterfaceRenderer reuses view feature components in "embedded" mode with element-scoped `effectiveQuery` and permissions, which is why views must accept `query`, `columns`, `readOnly` props rather than reading the URL directly.
+Notes: `@tableos/grid` depends only on the renderer *interface* from field-ui (no data layer); InterfaceRenderer reuses view feature components in "embedded" mode with element-scoped `effectiveQuery` and permissions, which is why views must accept `query`, `columns`, `readOnly` props rather than reading the URL directly.
 
 ### 40.3.4 Component rules
 
@@ -1478,7 +1478,7 @@ Notes: `@tabula/grid` depends only on the renderer *interface* from field-ui (no
 
 # §41 — Design System (Part 38)
 
-Package: `@tabula/ui` ("Tabula DS"). Our own visual language — neutral, dense-data-friendly, not derived from any competitor's artwork.
+Package: `@tableos/ui` ("TableOS DS"). Our own visual language — neutral, dense-data-friendly, not derived from any competitor's artwork.
 
 ## 41.1 Principles
 
@@ -1520,7 +1520,7 @@ Reference palette: 12-step scales (1 = app background … 12 = high-contrast tex
 | `--color-overlay` | black/40% | black/60% | modal scrim |
 | `--color-presence-1..12` | 12 distinguishable hues (step 9) | step 9 | collaborator cursors |
 
-Contrast is validated in CI by a token test (`@tabula/ui/tokens/contrast.test.ts` using APCA *and* WCAG 2 ratios) for every text/background pair declared in a pairs manifest.
+Contrast is validated in CI by a token test (`@tableos/ui/tokens/contrast.test.ts` using APCA *and* WCAG 2 ratios) for every text/background pair declared in a pairs manifest.
 
 ### 41.2.2 Select-option palette (accessible)
 
@@ -1574,7 +1574,7 @@ User **font scale** preference (100% / 112.5% / 125%) multiplies the type scale 
 | Feedback | `Toast` (Radix Toast; polite; actions like Undo), `Banner` (connection/offline/plan limit), `InlineAlert`, `ProgressBar`, `Spinner`, `Skeleton` (+ `SkeletonText`, `SkeletonTable`), `EmptyState` (illustration slot, title, description, primary action), `ErrorState` (message, retry, requestId copy) | | toasts never auto-dismiss when they contain actions for keyboard users until focus leaves (WCAG 2.2.1) |
 | Data display | `Table` (DOM, TanStack Table, for admin/settings lists ≤ few thousand rows), `List`, `Avatar`/`AvatarGroup`, `Badge`, `Chip`/`OptionChip`, `Kbd`, `Code`, `KeyValue`, `Card`, `Divider` | | |
 | Layout | `Stack`, `Inline`, `Grid`, `Box` (sprinkles), `ScrollArea` (Radix), `Resizable` panels, `VisuallyHidden`, `Portal` | | |
-| Domain-adjacent (in `@tabula/ui/patterns`) | `PermissionNotice`, `UpgradePrompt`, `ConnectionStatus`, `PresenceAvatars`, `ShortcutHint` | | |
+| Domain-adjacent (in `@tableos/ui/patterns`) | `PermissionNotice`, `UpgradePrompt`, `ConnectionStatus`, `PresenceAvatars`, `ShortcutHint` | | |
 
 Every component ships: TypeScript props with JSDoc, Storybook stories (all variants × density × theme), interaction tests (Storybook `play`), a11y test (axe), visual snapshot, and a docs page with do/don't.
 
@@ -1609,9 +1609,9 @@ Implemented as a `data-density` attribute on `<html>` switching token values; th
 | Ecosystem/hiring | Smaller | Very large |
 | Build integration | Vite plugin; SSR not needed | Vite plugin |
 
-**Decision:** **vanilla-extract** for `@tabula/ui` and feature components (Sprinkles for layout utilities give much of Tailwind's speed with type-checked tokens). Rationale: the design system is a long-lived library consumed by multiple apps (web, share, admin) and by a canvas renderer — typed contracts and token sharing outweigh authoring speed. Tailwind remains acceptable for the **marketing site** (Astro) where speed matters and canvas sharing doesn't.
+**Decision:** **vanilla-extract** for `@tableos/ui` and feature components (Sprinkles for layout utilities give much of Tailwind's speed with type-checked tokens). Rationale: the design system is a long-lived library consumed by multiple apps (web, share, admin) and by a canvas renderer — typed contracts and token sharing outweigh authoring speed. Tailwind remains acceptable for the **marketing site** (Astro) where speed matters and canvas sharing doesn't.
 
-Radix primitives are unstyled; our components wrap them (`@tabula/ui/src/components/Menu/Menu.tsx` + `Menu.css.ts`). We do **not** adopt a pre-styled kit (shadcn/ui-style copy-in is fine as a starting reference for structure, but code is ours).
+Radix primitives are unstyled; our components wrap them (`@tableos/ui/src/components/Menu/Menu.tsx` + `Menu.css.ts`). We do **not** adopt a pre-styled kit (shadcn/ui-style copy-in is fine as a starting reference for structure, but code is ours).
 
 ```
 packages/ui/
@@ -1646,12 +1646,12 @@ Icons: our own set drawn on 16/20 px grids (field-type icons included); exported
 
 ## 41.8 Storybook, documentation & visual regression
 
-* **Storybook 8** (Vite builder) for `@tabula/ui`, `@tabula/field-ui` (renderers in a canvas harness story per type × density × theme) and key feature components with MSW-mocked data. Published per PR (static build to S3 preview bucket + CloudFront) for design review.
+* **Storybook 8** (Vite builder) for `@tableos/ui`, `@tableos/field-ui` (renderers in a canvas harness story per type × density × theme) and key feature components with MSW-mocked data. Published per PR (static build to S3 preview bucket + CloudFront) for design review.
 * **Interaction tests:** Storybook `play` functions run by `@storybook/test-runner` in CI (Playwright).
 * **A11y:** `@storybook/addon-a11y` + test-runner axe checks; serious/critical violations fail CI.
 * **Visual regression:** **Chromatic** (managed, TurboSnap only-changed stories, review UI for designers) — alternative **Playwright screenshot tests** self-hosted (`toHaveScreenshot`) for cost control. Decision: Chromatic for the DS package (design review workflow is the value), Playwright screenshots for app-level flows and canvas renderer snapshots (deterministic fonts in Docker).
 * **Token docs** auto-generated from the contract (color tables with contrast ratios, spacing scale), plus usage guidelines (writing style, empty states, error messages).
-* **Versioning:** `@tabula/ui` is internal (workspace protocol) — no semver publishing; breaking changes via codemods (`jscodeshift`) in the same PR.
+* **Versioning:** `@tableos/ui` is internal (workspace protocol) — no semver publishing; breaking changes via codemods (`jscodeshift`) in the same PR.
 * **Design ↔ code:** Figma library mirrors tokens via Tokens Studio JSON exported from `tokens/` (code is source of truth; CI exports `tokens.json` for designers).
 
 ---

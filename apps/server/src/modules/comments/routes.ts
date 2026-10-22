@@ -1,5 +1,5 @@
-import { CommentEvents } from "@tabula/events";
-import { generateUuidV7 } from "@tabula/types";
+import { CommentEvents } from "@tableos/events";
+import { generateUuidV7 } from "@tableos/types";
 import { sql } from "kysely";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";

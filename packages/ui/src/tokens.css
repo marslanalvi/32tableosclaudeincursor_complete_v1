@@ -1,88 +1,88 @@
 /*
- * Tabula design tokens — aligned to DESIGN-airtable.md (the required design
+ * TableOS design tokens — aligned to DESIGN-airtable.md (the required design
  * standard): white canvas, near-black ink, hairline borders, link blue for
  * selection/links, near-black primary buttons, Inter as the Haas substitute.
  * Variable names are stable; every workstream consumes these.
  */
 :root {
   /* Surfaces */
-  --tabula-color-bg: #ffffff; /* canvas */
-  --tabula-color-bg-elevated: #ffffff;
-  --tabula-color-bg-subtle: #f8fafc; /* surface-soft */
-  --tabula-color-bg-strong: #e0e2e6; /* surface-strong */
-  --tabula-color-bg-dark: #181d26; /* surface-dark */
+  --tableos-color-bg: #ffffff; /* canvas */
+  --tableos-color-bg-elevated: #ffffff;
+  --tableos-color-bg-subtle: #f8fafc; /* surface-soft */
+  --tableos-color-bg-strong: #e0e2e6; /* surface-strong */
+  --tableos-color-bg-dark: #181d26; /* surface-dark */
 
   /* Text */
-  --tabula-color-text: #181d26; /* ink */
-  --tabula-color-text-body: #333840; /* body */
-  --tabula-color-text-muted: #41454d; /* muted */
-  --tabula-color-text-subtle: #6b7079;
-  --tabula-color-text-inverse: #ffffff;
+  --tableos-color-text: #181d26; /* ink */
+  --tableos-color-text-body: #333840; /* body */
+  --tableos-color-text-muted: #41454d; /* muted */
+  --tableos-color-text-subtle: #6b7079;
+  --tableos-color-text-inverse: #ffffff;
 
   /* Lines */
-  --tabula-color-border: #dddddd; /* hairline */
-  --tabula-color-border-strong: #9297a0;
+  --tableos-color-border: #dddddd; /* hairline */
+  --tableos-color-border-strong: #9297a0;
 
   /* Brand action: near-black primary button */
-  --tabula-color-primary: #181d26;
-  --tabula-color-primary-active: #0d1218;
-  --tabula-color-on-primary: #ffffff;
+  --tableos-color-primary: #181d26;
+  --tableos-color-primary-active: #0d1218;
+  --tableos-color-on-primary: #ffffff;
 
   /* Accent = link blue (links, selection, focus, active tab) */
-  --tabula-color-accent: #1b61c9;
-  --tabula-color-accent-hover: #1a3866;
-  --tabula-color-accent-muted: #dbe7fb;
-  --tabula-color-accent-subtle: #eef4fd;
-  --tabula-color-link: #1b61c9;
-  --tabula-color-info: #254fad;
-  --tabula-color-info-border: #458fff;
+  --tableos-color-accent: #1b61c9;
+  --tableos-color-accent-hover: #1a3866;
+  --tableos-color-accent-muted: #dbe7fb;
+  --tableos-color-accent-subtle: #eef4fd;
+  --tableos-color-link: #1b61c9;
+  --tableos-color-info: #254fad;
+  --tableos-color-info-border: #458fff;
 
-  --tabula-color-focus-ring: rgba(69, 143, 255, 0.45);
+  --tableos-color-focus-ring: rgba(69, 143, 255, 0.45);
 
-  --tabula-color-danger: #aa2d00; /* signature coral */
-  --tabula-color-danger-subtle: #fbeee9;
-  --tabula-color-success: #006400;
-  --tabula-color-success-border: #39bf45;
+  --tableos-color-danger: #aa2d00; /* signature coral */
+  --tableos-color-danger-subtle: #fbeee9;
+  --tableos-color-success: #006400;
+  --tableos-color-success-border: #39bf45;
 
   /* Signature surfaces (sparingly: cards, avatars, base icons) */
-  --tabula-color-signature-coral: #aa2d00;
-  --tabula-color-signature-forest: #0a2e0e;
-  --tabula-color-signature-cream: #f5e9d4;
-  --tabula-color-signature-peach: #fcab79;
-  --tabula-color-signature-mint: #a8d8c4;
-  --tabula-color-signature-yellow: #f4d35e;
-  --tabula-color-signature-mustard: #d9a441;
+  --tableos-color-signature-coral: #aa2d00;
+  --tableos-color-signature-forest: #0a2e0e;
+  --tableos-color-signature-cream: #f5e9d4;
+  --tableos-color-signature-peach: #fcab79;
+  --tableos-color-signature-mint: #a8d8c4;
+  --tableos-color-signature-yellow: #f4d35e;
+  --tableos-color-signature-mustard: #d9a441;
 
   /* Radius: xs 2 / sm 6 (inputs) / md 10 (cards) / lg 12 (buttons, dialogs) */
-  --tabula-radius-xs: 2px;
-  --tabula-radius-sm: 6px;
-  --tabula-radius-md: 10px;
-  --tabula-radius-lg: 12px;
-  --tabula-radius-full: 9999px;
+  --tableos-radius-xs: 2px;
+  --tableos-radius-sm: 6px;
+  --tableos-radius-md: 10px;
+  --tableos-radius-lg: 12px;
+  --tableos-radius-full: 9999px;
 
   /* Spacing (4px base) */
-  --tabula-space-1: 4px;
-  --tabula-space-2: 8px;
-  --tabula-space-3: 12px;
-  --tabula-space-4: 16px;
-  --tabula-space-5: 24px;
-  --tabula-space-6: 32px;
-  --tabula-space-7: 48px;
+  --tableos-space-1: 4px;
+  --tableos-space-2: 8px;
+  --tableos-space-3: 12px;
+  --tableos-space-4: 16px;
+  --tableos-space-5: 24px;
+  --tableos-space-6: 32px;
+  --tableos-space-7: 48px;
 
   /* Type: Haas → Inter substitute; weights 400/500 only (600 = legal) */
-  --tabula-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+  --tableos-font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Helvetica Neue", sans-serif;
-  --tabula-font-display: var(--tabula-font-sans);
-  --tabula-font-size-xs: 0.75rem; /* 12 */
-  --tabula-font-size-sm: 0.8125rem; /* 13 */
-  --tabula-font-size-md: 0.875rem; /* 14 body-md */
-  --tabula-font-size-lg: 1rem; /* 16 label/button */
-  --tabula-font-size-xl: 1.25rem; /* 20 title-md */
-  --tabula-font-size-2xl: 1.5rem; /* 24 title-lg */
-  --tabula-font-size-3xl: 2rem; /* 32 display-md */
+  --tableos-font-display: var(--tableos-font-sans);
+  --tableos-font-size-xs: 0.75rem; /* 12 */
+  --tableos-font-size-sm: 0.8125rem; /* 13 */
+  --tableos-font-size-md: 0.875rem; /* 14 body-md */
+  --tableos-font-size-lg: 1rem; /* 16 label/button */
+  --tableos-font-size-xl: 1.25rem; /* 20 title-md */
+  --tableos-font-size-2xl: 1.5rem; /* 24 title-lg */
+  --tableos-font-size-3xl: 2rem; /* 32 display-md */
 
   /* Elevation: color-block first, shadow second */
-  --tabula-shadow-sm: 0 1px 2px rgba(24, 29, 38, 0.06);
-  --tabula-shadow-md: 0 4px 16px rgba(24, 29, 38, 0.1);
-  --tabula-shadow-lg: 0 12px 32px rgba(24, 29, 38, 0.16);
+  --tableos-shadow-sm: 0 1px 2px rgba(24, 29, 38, 0.06);
+  --tableos-shadow-md: 0 4px 16px rgba(24, 29, 38, 0.1);
+  --tableos-shadow-lg: 0 12px 32px rgba(24, 29, 38, 0.16);
 }

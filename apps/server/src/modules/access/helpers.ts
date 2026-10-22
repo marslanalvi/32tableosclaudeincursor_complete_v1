@@ -1,11 +1,11 @@
 import { sql } from "kysely";
-import type { TabulaDb } from "@tabula/db";
+import type { TableOSDb } from "@tableos/db";
 import { requestMayAccess } from "../../kernel/request-context.js";
 import { compileForUser } from "./compile.js";
 
 /** Active org membership grants workspace-level access for MVP. */
 export async function userCanAccessWorkspace(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   workspaceId: string,
 ): Promise<{ ok: true; orgId: string } | { ok: false }> {
@@ -28,7 +28,7 @@ export async function userCanAccessWorkspace(
 }
 
 export async function resolveBaseContext(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   baseId: string,
 ): Promise<
@@ -76,7 +76,7 @@ export async function resolveBaseContext(
 }
 
 export async function resolveTableContext(
-  db: TabulaDb,
+  db: TableOSDb,
   userId: string,
   baseId: string,
   tableId: string,

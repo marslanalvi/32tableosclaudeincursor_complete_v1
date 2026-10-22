@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Local dogfood: Docker infra + migrate/seed + all Tabula dev processes.
+ * Local dogfood: Docker infra + migrate/seed + all TableOS dev processes.
  * Cross-platform (Node 22+). Ctrl+C stops spawned children.
  */
 import { spawn } from "node:child_process";

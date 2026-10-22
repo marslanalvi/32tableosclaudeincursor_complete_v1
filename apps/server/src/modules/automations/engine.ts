@@ -1,6 +1,6 @@
-import type { Env } from "@tabula/config";
-import type { TabulaDb } from "@tabula/db";
-import { decodePublicId, generateUuidV7 } from "@tabula/types";
+import type { Env } from "@tableos/config";
+import type { TableOSDb } from "@tableos/db";
+import { decodePublicId, generateUuidV7 } from "@tableos/types";
 import { sql } from "kysely";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
@@ -27,7 +27,7 @@ import {
 import type { ActionDef, StepResult, TriggerDef } from "./types.js";
 
 export interface EngineDeps {
-  db: TabulaDb;
+  db: TableOSDb;
   env: Env;
   log: { info: (o: unknown, m?: string) => void; warn: (o: unknown, m?: string) => void; error: (o: unknown, m?: string) => void };
 }
@@ -528,7 +528,7 @@ async function webhookAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unk
     }
   }
   const headers: Record<string, string> = {
-    "user-agent": "Tabula-Automations/1.0",
+    "user-agent": "TableOS-Automations/1.0",
     ...(body !== undefined ? { "content-type": "application/json" } : {}),
   };
   for (const [k, v] of Object.entries(cfg.headers ?? {})) {
@@ -604,7 +604,7 @@ async function scriptFetch(args: unknown[], remainingMs: number): Promise<unknow
   };
   const method = String(init.method ?? "GET").toUpperCase();
   if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) throw new StepError(`Unsupported method ${method}`);
-  const headers: Record<string, string> = { "user-agent": "Tabula-Automations/1.0" };
+  const headers: Record<string, string> = { "user-agent": "TableOS-Automations/1.0" };
   if (init.headers && typeof init.headers === "object") {
     for (const [k, v] of Object.entries(init.headers as Record<string, unknown>)) {
       if (/^(host|content-length|cookie)$/i.test(k)) continue;
@@ -733,7 +733,7 @@ async function scriptAction(ex: ExecCtx, cfg: ActionDef["config"]): Promise<unkn
   }
 }
 
-async function loadRun(db: TabulaDb, runId: string): Promise<RunRow | null> {
+async function loadRun(db: TableOSDb, runId: string): Promise<RunRow | null> {
   const res = await sql<RunRow>`
     SELECT r.id, r.automation_id, r.base_id, r.workspace_id, r.trigger_type, r.trigger_payload,
            r.is_test, r.causation_depth, r.attempts, r.max_attempts, r.steps,
@@ -750,7 +750,7 @@ async function loadRun(db: TabulaDb, runId: string): Promise<RunRow | null> {
 }
 
 async function finishRun(
-  db: TabulaDb,
+  db: TableOSDb,
   run: RunRow,
   status: "succeeded" | "failed" | "skipped" | "pending",
   steps: StepResult[],
