@@ -8,6 +8,15 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.5",
+    date: "2026-10-22",
+    title: "Field names in API responses.",
+    items: [
+      "API responses use field names and select option names instead of IDs.",
+      "Add returnFieldsByFieldId=true to get IDs that don't change when fields are renamed.",
+    ],
+  },
+  {
     version: "0.16.4",
     date: "2026-10-22",
     title: "Sample JSON in the API reference.",

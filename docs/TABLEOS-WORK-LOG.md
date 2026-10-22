@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.16.4**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.5**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,13 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.16.5: field names in API responses
+
+* Reported on live: `GET /v1/bases/…/tables/…/records` with a token returned `fields` keyed by `fld_…` with `opt_…` select values.
+* `modules/public-api/readable-fields.ts`, registered in `buildFastify` before idempotency: for API-token requests to `/v1/bases/:b/tables/:t/records[/…]` (not DELETE, `batch-delete` or `…/history`) a `preHandler` loads the table's field names and select options; a synchronous `onSend` rewrites `record`/`records[].fields` keys to names and single/multi-select values to option labels, and group `value`/`values` (by the request's `groupBy`) and aggregate keys (`sum:Orders`). The onSend can't await: handlers `void reply.send()` without returning the reply, so an async hook made Fastify send twice (`ERR_HTTP_HEADERS_SENT`). `returnFieldsByFieldId=true` (query string or body) keeps IDs. Session (app) requests are untouched. `/v1/tables/:t/…` goes through the forwarder's inner request, so it is rewritten once. Writes already accepted names and option labels (case-insensitive) without typecast, so the output round-trips. Lookups of select fields still show option IDs.
+* Help → API reference: "Field names in responses"; samples switched to names, plus "Read one record with field IDs".
+* Checks: `.data/verify-r24.mjs` updated (names by default, IDs with the flag in query string and body, app still gets IDs); `r25-ui.mjs` (20 samples, 28 JSON blocks); full regression suite green.
 
 ## v0.16.4: sample JSON in the API reference
 

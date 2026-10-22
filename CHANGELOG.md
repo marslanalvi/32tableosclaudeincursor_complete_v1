@@ -8,6 +8,15 @@ for how releases are cut. The same notes appear in the app under
 
 ## [Unreleased]
 
+## [0.16.5] - 2026-10-22
+
+### Changed
+- **The API returns field names instead of field IDs.** Every record endpoint called with an API
+  token (query, list, read one, create, batch create, update, batch update, group) keys `fields` by
+  field name and gives select values as option names (`"Status": "Active"`); group results use
+  names for values and aggregates (`"sum:Orders"`). Add `returnFieldsByFieldId=true` (query string or
+  JSON body) to get field IDs and option IDs, which survive renames. The app itself is unchanged.
+
 ## [0.16.4] - 2026-10-22
 
 ### Added

@@ -894,8 +894,16 @@ ${origin}/v1/bases/{baseId}/tables/{tableId}/records…`}</Pre>
         />
         <h2>Fields in requests</h2>
         <p>
-          In <code>fields</code>, use field IDs (<code>fld_…</code>, recommended because they survive renames) or field names. Responses always use
-          field IDs. Set <code>"typecast": true</code> to let TableOS convert values, e.g. a select option name into the option.
+          In <code>fields</code>, use field IDs (<code>fld_…</code>, recommended because they survive renames) or field names, and select
+          options by name or ID. Set <code>"typecast": true</code> to let TableOS convert values, e.g. create a select option that doesn’t exist
+          yet.
+        </p>
+        <h2>Field names in responses</h2>
+        <p>
+          Records come back keyed by <b>field name</b>, with <b>option names</b> for single and multiple selects (for example{" "}
+          <code>{`"Status": "Active"`}</code>); group results use names too. Add <code>returnFieldsByFieldId=true</code> to the query string, or{" "}
+          <code>{`"returnFieldsByFieldId": true`}</code> to a JSON body, to get field IDs and option IDs instead. Scripts that must keep working
+          after someone renames a field should use IDs.
         </p>
         <h2>Examples</h2>
         <h3>List records</h3>
@@ -908,7 +916,7 @@ ${origin}/v1/bases/{baseId}/tables/{tableId}/records…`}</Pre>
     "filter": { "kind": "condition", "fieldId": "fld_…", "op": "gte", "value": 10 }
   }'`}</Pre>
         <p>
-          The response is <code>{`{ "records": [{ "id": "rec_…", "fields": { "fld_…": … } }], "nextCursor": "…" }`}</code>. Pass{" "}
+          The response is <code>{`{ "records": [{ "id": "rec_…", "fields": { "Name": … } }], "nextCursor": "…" }`}</code>. Pass{" "}
           <code>nextCursor</code> back as <code>cursor</code> to get the next page; it is <code>null</code> on the last page. Use{" "}
           <code>"viewId": "viw_…"</code> to apply a view’s filters and sorting, <code>"search"</code> for text search and <code>"fields"</code> to limit
           the fields returned.
