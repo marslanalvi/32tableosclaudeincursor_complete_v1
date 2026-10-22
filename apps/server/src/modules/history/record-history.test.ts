@@ -97,4 +97,6 @@ test("kinds and sources", () => {
   assert.equal(sourceOf({ ...base, kind: "created", actorType: "system" }, "form"), "form");
   assert.equal(sourceOf({ ...base, kind: "created" }, "import"), "import");
   assert.equal(sourceOf({ ...base, actorType: "system" }, "form"), "system");
+  assert.equal(sourceOf({ ...base, via: "script" }, null), "api");
+  assert.equal(sourceOf({ ...base, kind: "created", via: "script" }, "script"), "api");
 });

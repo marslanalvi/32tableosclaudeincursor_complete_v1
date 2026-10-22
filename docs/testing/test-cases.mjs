@@ -377,16 +377,16 @@ export const MODULES = [
   ]),
 
   M("M28", "API and access tokens", "The public record API, token scopes and errors.", [
-    "Use curl, Postman or similar. Token from Members & access → API tokens. Base URL = the API address.",
+    "Use curl, Postman or similar. Token from Members & access → API tokens. Base URL = the TableOS address with no trailing slash; send the token as Authorization: Bearer tos_…. Find table IDs in the table tab menu → IDs & API, or with GET /v1/api/bases.",
   ], [
     ["Create a token", ["Create tokens: Read only; Read+Write; Read+Write+Delete; one limited to BASE-1; one with an expiry."], "Token shown once; listed with types, bases, expiry.", "P1", "API"],
     ["List bases", ["GET /v1/api/bases with the token."], "Only reachable bases with tables and IDs.", "P1", "API"],
     ["Schema", ["GET /v1/bases/{baseId} and GET /v1/tables/{tableId}."], "Tables and fields.", "P2", "API"],
-    ["Query records", ["POST …/records/query with pageSize, sort, filter (eq, contains, gt, empty, and/or), search, fields, viewId; follow nextCursor."], "Correct records and paging; nextCursor null on the last page.", "P1", "API"],
-    ["Read one record", ["GET …/records/{recordId}?fields=fld_a,fld_b."], "That record with the asked fields.", "P2", "API"],
-    ["Group", ["POST …/records/group."], "Grouped counts/aggregates.", "P3", "API"],
-    ["Create, update, delete", ["POST …/records; PATCH …/records/{id}; DELETE …/records/{id}; use field names and IDs; typecast true for a select option name."], "Works; changes appear live in the UI and in record history as “via API”.", "P1", "API"],
-    ["Batches of 500", ["POST …/records/batch with 500 records, then 501; PATCH …/records/batch; POST …/records/batch-delete."], "500 works; 501 refused with a clear error.", "P1", "Limit"],
+    ["Query records", [" /v1/tables/{tableId}/records/query with pageSize, sort, filter (eq, contains, gt, empty, and/or), search, fields, viewId; follow nextCursor."], "Correct records and paging; nextCursor null on the last page.", "P1", "API"],
+    ["Read one record", [" /v1/tables/{tableId}/records/{recordId}?fields=fld_a,fld_b."], "That record with the asked fields.", "P2", "API"],
+    ["Group", [" /v1/tables/{tableId}/records/group."], "Grouped counts/aggregates.", "P3", "API"],
+    ["Create, update, delete", [" /v1/tables/{tableId}/records;  /v1/tables/{tableId}/records/{id};  /v1/tables/{tableId}/records/{id}; use field names and IDs; typecast true for a select option name."], "Works; changes appear live in the UI and in record history as “via API”.", "P1", "API"],
+    ["Batches of 500", [" /v1/tables/{tableId}/records/batch with 500 records, then 501;  /v1/tables/{tableId}/records/batch;  /v1/tables/{tableId}/records/batch-delete."], "500 works; 501 refused with a clear error.", "P1", "Limit"],
     ["Token types enforced", ["Use the Read-only token to create; the Write token to delete."], "403 with the missing type named.", "P1", "Security"],
     ["Base limits enforced", ["Use the BASE-1-only token on BASE-2."], "404/403.", "P1", "Security"],
     ["Revoked/expired tokens", ["Revoke a token and call the API; wait for an expired one."], "401 immediately.", "P1", "Security"],

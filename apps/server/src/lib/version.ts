@@ -1,14 +1,20 @@
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-/** Release version (apps/server/package.json, kept in step by `scripts/version.mjs`) and the git commit. */
+/**
+ * Release version (apps/server/package.json, kept in step by `scripts/version.mjs`) and the git commit.
+ * The file sits two levels up from src/lib/ but one level up from the bundled dist/api.js.
+ */
 function readVersion(): string {
-  try {
-    const pkg = JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version?: string };
-    return pkg.version ?? "0.0.0";
-  } catch {
-    return "0.0.0";
+  for (const rel of ["../../package.json", "../package.json"]) {
+    try {
+      const pkg = JSON.parse(readFileSync(new URL(rel, import.meta.url), "utf8")) as { name?: string; version?: string };
+      if (pkg.name === "@tabula/server" && pkg.version) return pkg.version;
+    } catch {
+      // Not at this location; try the next.
+    }
   }
+  return "0.0.0";
 }
 
 function readCommit(): string | null {

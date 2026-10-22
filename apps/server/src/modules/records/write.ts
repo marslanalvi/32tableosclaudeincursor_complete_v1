@@ -40,7 +40,7 @@ export interface WriteContext {
   changeSeq: number;
   /** Acting user (created_by / updated_by); null for anonymous form posts. */
   userId: string | null;
-  via?: "ui" | "api" | "automation" | "import" | "form" | "undo" | "redo" | "restore" | "system";
+  via?: "ui" | "api" | "script" | "automation" | "import" | "form" | "undo" | "redo" | "restore" | "system";
   redis?: Redis | null;
   afterCommit?: (fn: () => Promise<void> | void) => void;
 }
@@ -60,7 +60,7 @@ function decodeFld(s: string): string | null {
 }
 
 /** Writes made directly by a person; system replays (undo, restore, automations' own bookkeeping) are not limited. */
-const PERMISSION_CHECKED_VIA = new Set<WriteContext["via"]>(["ui", "api", "import", undefined]);
+const PERMISSION_CHECKED_VIA = new Set<WriteContext["via"]>(["ui", "api", "script", "import", undefined]);
 
 /** Field permissions: reject values written into fields the acting user may not edit. */
 async function assertFieldPermissions(ctx: WriteContext, schema: TableSchema, prepared: PreparedFields[]): Promise<void> {

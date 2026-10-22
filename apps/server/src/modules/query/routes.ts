@@ -4,7 +4,7 @@ import { isFilterError } from "@tabula/filter";
 import { InvalidCursorError } from "@tabula/query";
 import type { AppContext } from "../../lib/app-context.js";
 import { parsePid } from "../../lib/public-ids.js";
-import { handleRouteError, notFound, validationProblem } from "../../http/errors.js";
+import { handleRouteError, notFound, sendApiError, validationProblem } from "../../http/errors.js";
 import { resolveTableContext } from "../access/helpers.js";
 import { assertCan } from "../access/assert.js";
 import { compileForUser } from "../access/compile.js";
@@ -123,6 +123,50 @@ export async function registerQueryRoutes(app: FastifyInstance, ctx: AppContext)
       }
     },
   );
+
+  // Browser- and curl-friendly listing: the query endpoint's paging with query-string options.
+  app.get<{
+    Params: { baseId: string; tableId: string };
+    Querystring: { pageSize?: string; cursor?: string; viewId?: string; search?: string; fields?: string | string[] };
+  }>("/v1/bases/:baseId/tables/:tableId/records", async (request, reply) => {
+    try {
+      const q = request.query;
+      const pageSize = q.pageSize === undefined ? undefined : Number(q.pageSize);
+      const body = queryBody.parse({
+        ...(pageSize !== undefined ? { pageSize } : {}),
+        ...(q.cursor ? { cursor: q.cursor } : {}),
+        ...(q.viewId ? { viewId: q.viewId } : {}),
+        ...(q.search ? { search: q.search } : {}),
+        ...(q.fields !== undefined
+          ? { fields: (Array.isArray(q.fields) ? q.fields : q.fields.split(",")).filter((x) => x !== "") }
+          : {}),
+      });
+      const auth = await authorize(request, reply);
+      if (!auth) return;
+      const userCtx = await loadUserQueryContext(ctx.db, auth.userId);
+      const result = await executeRecordQuery(
+        ctx.db,
+        auth.tableId,
+        {
+          search: body.search,
+          viewId: body.viewId ?? undefined,
+          pageSize: body.pageSize,
+          cursor: body.cursor ?? null,
+          fields: body.fields,
+        },
+        { user: userCtx, storage: ctx.storage },
+      );
+      void reply.send(result);
+    } catch (err) {
+      handleQueryError(request, reply, err);
+    }
+  });
+
+  for (const action of ["query", "group", "batch", "batch-delete"]) {
+    app.get(`/v1/bases/:baseId/tables/:tableId/records/${action}`, async (request, reply) => {
+      sendApiError(request, reply, 405, "METHOD_NOT_ALLOWED", `Use ${action === "batch" ? "POST or PATCH" : "POST"} for …/records/${action}`);
+    });
+  }
 
   app.get<{ Params: { baseId: string; tableId: string; recordId: string }; Querystring: { fields?: string | string[] } }>(
     "/v1/bases/:baseId/tables/:tableId/records/:recordId",

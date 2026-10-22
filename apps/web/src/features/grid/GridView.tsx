@@ -719,9 +719,14 @@ export function GridView(props: GridViewProps) {
   );
 
   const pasteText = useCallback(
-    async (text: string) => {
+    async (text: string, html = "") => {
       if (!canEditRecords || !active) return;
-      const grid = parseTsv(text);
+      const oneCell = !range || (range.top === range.bottom && range.left === range.right);
+      const activeType = fieldById(active.f)?.type;
+      // Multi-line text that isn't a spreadsheet block (no tabs, no HTML table) belongs in one JSON or long-text cell.
+      const wholeValue =
+        oneCell && (activeType === "json" || activeType === "long_text") && !text.includes("\t") && !/<table[\s>]/i.test(html);
+      const grid = wholeValue ? [[text]] : parseTsv(text);
       if (grid.length === 0) return;
       const r0 = range ? range.top : (navIndexById.get(active.r) ?? 0);
       const c0 = range ? range.left : (colIndexById.get(active.f) ?? 0);
@@ -737,6 +742,7 @@ export function GridView(props: GridViewProps) {
       const raw: Record<string, Record<string, unknown>> = {};
       const newRows: Record<string, unknown>[] = [];
       let typecast = false;
+      let invalidJson = 0;
       for (let i = 0; i < h; i++) {
         const rec = navRows[r0 + i];
         const fieldsPatch: Record<string, unknown> = {};
@@ -746,7 +752,10 @@ export function GridView(props: GridViewProps) {
           if (!f || !isEditableField(f, true, fieldAccessRef.current)) continue;
           const t = cellText(i, j);
           const v = parseTextToValue(f, t);
-          if (v === undefined) {
+          if (v === undefined && f.type === "json") {
+            // The server would store unparseable text as a JSON string; refuse it instead.
+            invalidJson++;
+          } else if (v === undefined) {
             rawPatch[f.id] = t;
             typecast = true;
           } else fieldsPatch[f.id] = v;
@@ -791,7 +800,8 @@ export function GridView(props: GridViewProps) {
         setActive({ r: lastRow.id, f: lastCol.id });
       }
       const n = updates.length + newRows.length;
-      if (n > 1) toastInfo(`Pasted into ${n} records`);
+      if (invalidJson) toastError(invalidJson === 1 ? "That isn’t valid JSON, so the cell wasn’t changed." : `${invalidJson} values aren’t valid JSON and weren’t pasted.`);
+      else if (n > 1) toastInfo(`Pasted into ${n} records`);
     },
     [canEditRecords, active, range, navIndexById, colIndexById, navRows, columns, fieldById, writes, hasMore, baseId, table.id, appendToCache, qc],
   );
@@ -814,7 +824,7 @@ export function GridView(props: GridViewProps) {
       const text = e.clipboardData?.getData("text/plain");
       if (text === undefined) return;
       e.preventDefault();
-      void pasteRef.current(text);
+      void pasteRef.current(text, e.clipboardData?.getData("text/html") ?? "");
     };
     document.addEventListener("copy", onCopy);
     document.addEventListener("cut", onCut);
@@ -1456,6 +1466,7 @@ export function GridView(props: GridViewProps) {
                     fields={allFields}
                     onChange={(v) => void writes.writeRecord(rec.id, { [f.id]: v })}
                     onDone={onEditDone}
+                    onInvalid={toastError}
                   />
                 ) : (
                   renderCellValue(f, rec.fields[f.id], { error: rec.errors?.[f.id], record: rec, fields: allFields, wrap })

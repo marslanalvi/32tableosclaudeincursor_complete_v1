@@ -63,6 +63,8 @@ export interface FieldValueEditorProps {
    * rating) aren't native form controls, so `htmlFor` can't name them; this does.
    */
   labelledBy?: string | undefined;
+  /** Text-like editors: the typed text couldn't be turned into a value, so nothing was saved. */
+  onInvalid?: ((message: string) => void) | undefined;
 }
 
 const TEXT_TYPES = new Set([
@@ -159,13 +161,25 @@ function useCommitOnUnmount(fn: () => void) {
  * Commit-once draft helper for text-like editors: commits on explicit
  * finish, on blur, and (as a safety net) on unmount if still dirty.
  */
-function useDraft(field: FieldLike, value: unknown, initialText: string | undefined, onChange: (v: unknown) => void) {
+function invalidMessage(field: FieldLike): string {
+  return field.type === "json" ? "That isn’t valid JSON, so the cell wasn’t changed." : "That isn’t a valid value for this field, so it wasn’t saved.";
+}
+
+function useDraft(
+  field: FieldLike,
+  value: unknown,
+  initialText: string | undefined,
+  onChange: (v: unknown) => void,
+  onInvalid?: (message: string) => void,
+) {
   const [draft, setDraft] = useState(() => initialText ?? valueToDraft(field, value));
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const finalized = useRef(false);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onInvalidRef = useRef(onInvalid);
+  onInvalidRef.current = onInvalid;
   const valueRef = useRef(value);
   valueRef.current = value;
   const fieldRef = useRef(field);
@@ -184,6 +198,7 @@ function useDraft(field: FieldLike, value: unknown, initialText: string | undefi
     dirty.current = false;
     if (next === undefined) {
       setDraft(valueToDraft(fieldRef.current, valueRef.current));
+      onInvalidRef.current?.(invalidMessage(fieldRef.current));
       return;
     }
     if (!sameValue(next, valueRef.current)) onChangeRef.current(next);
@@ -215,7 +230,7 @@ function useDraft(field: FieldLike, value: unknown, initialText: string | undefi
 
 function TextEditor(props: FieldValueEditorProps): ReactElement {
   const { field, value, onChange, mode = "form", autoFocus, initialText, onDone, placeholder, id } = props;
-  const d = useDraft(field, value, initialText, onChange);
+  const d = useDraft(field, value, initialText, onChange, props.onInvalid);
   const ref = useRef<HTMLInputElement>(null);
   const isNumeric = ["number", "currency", "percent"].includes(field.type);
 
@@ -296,10 +311,12 @@ function LongTextEditor(props: FieldValueEditorProps): ReactElement {
       onKeyDown={(e) => {
         if (mode !== "cell") return;
         e.stopPropagation();
-        if (e.key === "Escape" || (e.key === "Enter" && (e.metaKey || e.ctrlKey))) {
-          // Long text: Esc keeps the edit (Airtable behaviour) — never lose typed notes.
+        if (e.key === "Escape") {
           e.preventDefault();
-          if (d.finish(false)) onDone?.(e.key === "Escape" ? "escape" : "enter");
+          if (d.finish(true)) onDone?.("escape");
+        } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault();
+          if (d.finish(false)) onDone?.("enter");
         } else if (e.key === "Tab") {
           e.preventDefault();
           if (d.finish(false)) onDone?.(e.shiftKey ? "shift-tab" : "tab");

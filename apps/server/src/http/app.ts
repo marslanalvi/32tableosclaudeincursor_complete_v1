@@ -72,6 +72,8 @@ export async function buildFastify(ctx: AppContext) {
     genReqId: () => crypto.randomUUID(),
     requestIdHeader: "x-request-id",
     bodyLimit: 50 * 1024 * 1024,
+    // API clients often send `https://host//v1/…` (base URL ending in "/") or a trailing slash.
+    routerOptions: { ignoreTrailingSlash: true, ignoreDuplicateSlashes: true },
   });
 
   setAuditLogger(ctx.log);

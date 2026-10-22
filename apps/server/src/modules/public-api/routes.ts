@@ -4,8 +4,18 @@ import type { AppContext } from "../../lib/app-context.js";
 import { parsePid, pid } from "../../lib/public-ids.js";
 import { ApiError, handleRouteError } from "../../http/errors.js";
 import { compileForUser } from "../access/compile.js";
+import { normalizeApiPath } from "../access/api-tokens.js";
 
 const HOP_BY_HOP = new Set(["host", "content-length", "connection", "transfer-encoding", "keep-alive"]);
+
+function callerHeaders(request: FastifyRequest): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [k, v] of Object.entries(request.headers)) {
+    if (v === undefined || HOP_BY_HOP.has(k)) continue;
+    headers[k] = Array.isArray(v) ? v.join(", ") : v;
+  }
+  return headers;
+}
 
 /**
  * Developer-facing API conveniences:
@@ -63,30 +73,53 @@ export async function registerPublicApiRoutes(app: FastifyInstance, ctx: AppCont
       const baseId = r.rows[0]?.base_id;
       if (!baseId) throw new ApiError(404, "NOT_FOUND", "Table not found");
 
-      const [path, query] = request.url.split("?", 2) as [string, string | undefined];
-      const rest = path.slice(`/v1/tables/${request.params.tableId}`.length);
+      const query = request.url.split("?", 2)[1];
+      const rest = normalizeApiPath(request.url).slice(`/v1/tables/${request.params.tableId}`.length);
       const url = `/v1/bases/${pid("bas", baseId)}/tables/${request.params.tableId}${rest}${query ? `?${query}` : ""}`;
-
-      const headers: Record<string, string> = {};
-      for (const [k, v] of Object.entries(request.headers)) {
-        if (v === undefined || HOP_BY_HOP.has(k)) continue;
-        headers[k] = Array.isArray(v) ? v.join(", ") : v;
-      }
-      const res = await app.inject({
-        method: request.method as "GET",
-        url,
-        headers,
-        ...(request.body !== undefined ? { payload: JSON.stringify(request.body) } : {}),
-      });
-      for (const [k, v] of Object.entries(res.headers)) {
-        if (v === undefined || HOP_BY_HOP.has(k)) continue;
-        void reply.header(k, v);
-      }
-      void reply.code(res.statusCode).send(res.rawPayload);
+      await relay(request, reply, request.method, url, request.body);
     } catch (err) {
       handleRouteError(request, reply, err);
     }
   }
+
+  /** Serve the request with another route of this app, keeping the caller's credentials. */
+  async function relay(request: FastifyRequest, reply: FastifyReply, method: string, url: string, body: unknown) {
+    const res = await app.inject({
+      method: method as "GET",
+      url,
+      headers: callerHeaders(request),
+      ...(body !== undefined ? { payload: JSON.stringify(body) } : {}),
+    });
+    for (const [k, v] of Object.entries(res.headers)) {
+      if (v === undefined || HOP_BY_HOP.has(k)) continue;
+      void reply.header(k, v);
+    }
+    void reply.code(res.statusCode).send(res.rawPayload);
+  }
+
+  // One table's schema: the table entry of the base schema, so permissions and shape are identical.
+  app.get<{ Params: { baseId: string; tableId: string } }>("/v1/bases/:baseId/tables/:tableId", async (request, reply) => {
+    try {
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/bases/${encodeURIComponent(request.params.baseId)}`,
+        headers: callerHeaders(request),
+      });
+      if (res.statusCode !== 200) {
+        void reply
+          .code(res.statusCode)
+          .header("content-type", res.headers["content-type"] ?? "application/json")
+          .send(res.rawPayload);
+        return;
+      }
+      const base = res.json<{ id: string; tables: Array<{ id: string }> }>();
+      const table = base.tables.find((t) => t.id === request.params.tableId);
+      if (!table) throw new ApiError(404, "NOT_FOUND", "Table not found");
+      void reply.send({ ...table, baseId: base.id });
+    } catch (err) {
+      handleRouteError(request, reply, err);
+    }
+  });
 
   const methods = ["GET", "POST", "PATCH", "PUT", "DELETE"] as const;
   app.route({ method: [...methods], url: "/v1/tables/:tableId", handler: forward });

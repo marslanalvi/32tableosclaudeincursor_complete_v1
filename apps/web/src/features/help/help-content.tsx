@@ -840,6 +840,10 @@ Content-Type: application/json`}</Pre>
         </p>
         <Pre>{`${origin}/v1/tables/{tableId}/records…
 ${origin}/v1/bases/{baseId}/tables/{tableId}/records…`}</Pre>
+        <p>
+          Write the full path: <code>…</code> in the table below stands for one of these two prefixes, for example{" "}
+          <code>POST {origin}/v1/tables/tbl_…/records/query</code>.
+        </p>
         <h2>Endpoints</h2>
         <Table
           head={["Method and path", "Token type", "What it does"]}
@@ -848,6 +852,7 @@ ${origin}/v1/bases/{baseId}/tables/{tableId}/records…`}</Pre>
             [<code>GET /v1/bases/{"{baseId}"}</code>, "read", "A base’s tables and fields (schema)."],
             [<code>GET /v1/tables/{"{tableId}"}</code>, "read", "One table and its fields."],
             [<code>POST …/records/query</code>, "read", "List records with filter, sort, search, paging."],
+            [<code>GET …/records</code>, "read", "List records from a browser or script: ?pageSize=&cursor=&viewId=&fields=&search="],
             [<code>GET …/records/{"{recordId}"}</code>, "read", "One record. Optional ?fields=fld_a,fld_b"],
             [<code>POST …/records/group</code>, "read", "Grouped counts and aggregates."],
             [<code>POST …/records</code>, "write", "Create one record."],

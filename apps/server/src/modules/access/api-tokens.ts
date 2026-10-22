@@ -71,6 +71,15 @@ export async function resolveApiToken(db: TabulaDb, raw: string, ip: string | nu
 
 const RECORDS = /^\/v1\/(?:bases\/[^/]+\/)?tables\/[^/]+\/records(\/.*)?$/;
 
+/** The path the router matches: query string dropped, repeated slashes collapsed, no trailing slash. */
+export function normalizeApiPath(url: string): string {
+  const path = (url.split("?")[0] ?? url).replace(/\/{2,}/g, "/");
+  return path.length > 1 ? path.replace(/\/$/, "") : path;
+}
+
+export const TOKEN_ROUTES_HINT =
+  "API tokens can call GET /v1/api/bases, GET /v1/bases/{baseId}, GET /v1/tables/{tableId} and the /v1/tables/{tableId}/records… endpoints (see Help → API reference)";
+
 /**
  * The scope an API-token request needs, or null when tokens may not call this
  * route at all. Tokens are limited to the record API and schema reads.

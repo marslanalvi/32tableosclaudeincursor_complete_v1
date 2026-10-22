@@ -231,13 +231,14 @@ export function entryFromChange(row: ChangeLogRow, recordId: string, ctx: EntryC
   return entry;
 }
 
-export type HistorySource = "user" | "automation" | "form" | "import" | "undo" | "redo" | "restore" | "system";
+export type HistorySource = "user" | "api" | "automation" | "form" | "import" | "undo" | "redo" | "restore" | "system";
 
 export function sourceOf(e: Pick<RawEntry, "kind" | "actorType" | "via" | "clientMutationId">, createdVia: string | null): HistorySource {
   if (e.clientMutationId?.startsWith("aut:") || e.actorType === "automation") return "automation";
   if (e.via === "undo" || e.via === "redo" || e.via === "restore") return e.via;
   if (e.kind === "created" && (createdVia === "form" || createdVia === "import")) return createdVia;
   if (e.via === "form" || e.via === "import" || e.via === "automation") return e.via;
+  if (e.via === "script") return "api";
   if (e.actorType === "public_form") return "form";
   if (e.actorType === "system") return "system";
   return "user";
