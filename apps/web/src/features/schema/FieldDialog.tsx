@@ -133,7 +133,10 @@ export function FieldDialog({
     if (!picking) nameRef.current?.focus();
   }, [picking]);
 
-  const tables = (base.data?.tables ?? []) as unknown as TableLike[];
+  const tables = useMemo(
+    () => (base.data?.tables ?? []).map((t) => ({ ...t, synced: Boolean((t as { sync?: unknown }).sync) })) as unknown as TableLike[],
+    [base.data?.tables],
+  );
   const fields = table.fields as unknown as FieldLike[];
   const sample = useMemo(() => sampleRecordFromCache(qc, baseId, table.id), [qc, baseId, table.id]);
 
@@ -307,6 +310,7 @@ export function FieldDialog({
                   tableId={table.id}
                   fieldId={field?.id}
                   sampleRecord={sample}
+                  onAddLinkField={() => chooseType("link")}
                 />
                 {type === "link" && !editing ? (
                   <CrossBaseLinkPicker

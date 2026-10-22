@@ -18,6 +18,7 @@ import {
   toNumber,
   userLabel,
 } from "./format.js";
+import { isValidEmail, isValidPhone } from "@tabula/fields";
 import { openAttachmentViewer } from "./AttachmentViewer.js";
 import { LinkRecordPicker } from "./LinkRecordPicker.js";
 import { isReadOnlyFieldType } from "./metadata.js";
@@ -129,6 +130,12 @@ function draftToValue(field: FieldLike, draft: string): unknown {
       }
     case "long_text":
       return draft.trim() ? draft : null;
+    case "email":
+      if (!t) return null;
+      return isValidEmail(t) ? t : undefined;
+    case "phone":
+      if (!t) return null;
+      return isValidPhone(t) ? t : undefined;
     default:
       return t ? draft.trim() : null;
   }
@@ -162,7 +169,16 @@ function useCommitOnUnmount(fn: () => void) {
  * finish, on blur, and (as a safety net) on unmount if still dirty.
  */
 function invalidMessage(field: FieldLike): string {
-  return field.type === "json" ? "That isn’t valid JSON, so the cell wasn’t changed." : "That isn’t a valid value for this field, so it wasn’t saved.";
+  switch (field.type) {
+    case "json":
+      return "That isn’t valid JSON, so the cell wasn’t changed.";
+    case "email":
+      return "That isn’t a valid email address (like name@example.com), so it wasn’t saved.";
+    case "phone":
+      return "That isn’t a valid phone number (7 to 15 digits), so it wasn’t saved.";
+    default:
+      return "That isn’t a valid value for this field, so it wasn’t saved.";
+  }
 }
 
 function useDraft(

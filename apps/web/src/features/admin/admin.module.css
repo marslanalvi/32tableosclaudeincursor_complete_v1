@@ -44,17 +44,29 @@
   text-align: center;
 }
 
+/* Wraps instead of overflowing in narrow places such as the workspace Share dialog. */
 .inviteRow {
-  display: grid;
-  grid-template-columns: minmax(180px, 1.2fr) minmax(200px, 1.4fr) 130px auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--tabula-space-2);
   align-items: center;
 }
-.inviteRowOwner {
-  grid-template-columns: minmax(180px, 1.2fr) 110px minmax(200px, 1.4fr) 150px auto;
+.inviteRow > input {
+  flex: 2 1 200px;
+  min-width: 0;
+}
+.inviteRow > select {
+  flex: 1 1 130px;
+  min-width: 0;
+}
+.inviteRow > button {
+  flex: none;
+}
+.inviteRowOwner > select:first-of-type {
+  flex: 0 1 110px;
 }
 .full {
-  grid-column: 1 / -1;
+  flex: 1 1 100%;
 }
 .activityList {
   list-style: none;
@@ -409,7 +421,7 @@
 }
 
 @media (max-width: 720px) {
-  .inviteRow {
-    grid-template-columns: 1fr;
+  .inviteRow > * {
+    flex: 1 1 100%;
   }
 }

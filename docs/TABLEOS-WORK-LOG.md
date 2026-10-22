@@ -4,7 +4,7 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 
 * Repo: <https://github.com/marslanalvi/32tableosclaudeincursor_complete_v1> (earlier: <https://github.com/marslanalvi/tableosv1claudeincursor>)
 * Branches: `master` (released), `Awais-Improvements` (feature work, merged into `master` for v0.8.0)
-* Current version: **0.16.6**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
+* Current version: **0.16.7**. Release history in `CHANGELOG.md`; the release process is in `docs/VERSIONING.md`.
 * Architecture source of truth: `architecture/` (mirrored in `docs/architecture/`). Amendments made during this work are summarised in `00-canonical-decisions.md` §15.
 
 ---
@@ -23,6 +23,22 @@ TableOS is an Airtable-style product: workspaces → bases → tables → fields
 | UI checks | `$env:PW_VIEWPORT="1366x768"; node .data/r2-shell/pw.mjs .data/r2-shell/look-interfaces.mjs` (screenshots in `.data/r2-shell/shots/`) |
 
 ---
+
+## v0.16.7: fix phases 3 and 4
+
+* **M14-03 undo of a field type change:** `field.updated` wasn't in the history applier's `SUPPORTED` set, so `findUndoCandidate` marked it `undo_skipped` and undid the previous record edit instead (reproduced: two Ctrl+Z after two type changes reverted record edits, types stayed). Schema PATCH now stores, in the inverse op, the before name/type/description, `configToWire(...)` config and — on a type change or a config change — `{ slot, values: { recordId: cell } }` (`fieldValuesForUndo`, up to 20,000 filled cells); the forward op carries the after state for redo. `apply-ops` `field.updated`: `updateFieldInTx` with the old type/config, then the old config again (converting back can add options made from current values, e.g. "checked"), then `restoreFieldValues` (one UPDATE: old value or slot removed; per-record follow-up below 5,000 rows). `convertCellValue`: to checkbox, any non-empty value (except false/no/0/unchecked) becomes `true`.
+* **M11-08:** `isValidEmail` / `isValidPhone` in `@tabula/fields` (phone: 7–15 digits before an optional extension); used by the field definitions (server 422 with the value in the message) and `FieldValueEditor.draftToValue` (grid toast via `onInvalid`, nothing saved).
+* **M11-12:** Hassaan's screenshots were on a synced table ("Synced from New Base · Table 7"), which can't hold links. `LinkedFieldPickers` explains that (synced: lookups go in the linking table) or offers "Add a link field instead" (`onAddLinkField` → `chooseType("link")`); `TableLike.synced`.
+* **M11-06:** not a bug — the screenshot was the Share dialog's role list; the User field's picker lists the base's people (checked in the UI test).
+* **M15-13:** search already filtered rows (Arif's term matched every Record ID). GridView computes `cellMatches` over the loaded rows with `cellValueToText`, highlights them (`searchHit`, current `searchHitCurrent`), shows "N of M matching cells" with ↑/↓; Enter / Shift+Enter in the toolbar search box bump `searchStep` (table-grid → GridView).
+* **OTHER-01 (Zoonisha):** the palette's "Esc" was a `<kbd>`; now a close button, plus a window Esc listener while open.
+* **M23-05:** `.formCard` used `var(--ink)` defined only on `.formLayout`/view containers; inside an interface the Submit button was white on white. `.formCard` joins the token block.
+* **M31-03:** the + set `createOpen` (already open by default) and only moved focus. It now calls `createView("grid")`.
+* **M02-08:** `useLogout` navigates to `/login?next=<current path>`; login (and two-factor) honour `next`.
+* **OTHER-01 (Hussnain):** `.inviteRow` was a 5-column grid (~740 px min) in a narrower dialog; now flex-wrap.
+* **M10-01:** `ForbiddenActionError` → `actionRefusedText(action)` (plain words per action; also automations); `meta.action` kept. "+ Add or import" disabled with the reason when `useBaseRole().canEditSchema` is false. New blank tables still start with three empty rows (Airtable behaviour).
+* **M10-06:** `/access` filters grants to resources the viewer manages, so an Admin's own Viewer grant (and other people's grants elsewhere) disappeared and the card said "no workspaces or bases given yet". Members now carry `otherGrantCount`; your own row carries `ownAccess` (name + role) and the summary reads "Admin · your access: Viewer on Phase 3".
+* **Checks:** `.data/verify-r28.mjs` (24 checks), `.data/r2-shell/r28-ui.mjs` (lookup message, Ctrl+Z, invalid email, User picker, search highlights and Enter/Shift+Enter, palette Esc, + view, interface Submit colour, invite row inside the dialog, sign-out/sign-in return, Editor can't add tables). Full regression suite and earlier UI checks green.
 
 ## v0.16.6: fix phase 2 (sharing, sign-in security, limits)
 

@@ -267,6 +267,27 @@ export function mapPgError(err: unknown): ApiError | null {
   }
 }
 
+/** What a refused permission means, in the words of the roles (Owner, Creator, Editor, Commenter, Viewer). */
+const ACTION_REFUSED: Record<string, string> = {
+  "base.read": "You don't have access to this base.",
+  "base.manage_schema": "Only Creators and Owners of this base can add or change tables and fields. Ask one of them to give you the Creator role.",
+  "base.manage_members": "Only Creators and Owners of this base can manage who has access.",
+  "record.read": "You don't have access to these records.",
+  "record.create": "Your role on this base can't add records (Editors and above can).",
+  "record.update": "Your role on this base can't edit records (Editors and above can).",
+  "record.delete": "Your role on this base can't delete records (Editors and above can).",
+  "record.comment": "Your role on this base can't comment (Commenters and above can).",
+  "view.read": "You don't have access to this view.",
+  "view.create_collaborative": "Only Editors and above can create collaborative views. You can create a personal view.",
+  "view.update": "Your role on this base can't change shared views.",
+  "export.data": "Only Owners and Admins can export data.",
+  "api.access": "Your account can't use the API.",
+};
+
+export function actionRefusedText(action: string): string {
+  return ACTION_REFUSED[action] ?? `Your role on this base doesn't allow this (${action}).`;
+}
+
 const FIELD_LABELS: Record<string, string> = { name: "Name", body: "Comment", description: "Description", title: "Title" };
 
 /** Readable text for zod's default "String must contain at most N character(s)". */
@@ -297,7 +318,8 @@ export function problemFromError(err: unknown): TabulaError | null {
   }
   if (err instanceof ForbiddenActionError) {
     return createTabulaError(TabulaErrorCodes.FORBIDDEN, {
-      detail: `Missing permission: ${err.action}`,
+      detail: actionRefusedText(err.action),
+      meta: { action: err.action },
     });
   }
   if (err instanceof PlanLimitExceededError) {

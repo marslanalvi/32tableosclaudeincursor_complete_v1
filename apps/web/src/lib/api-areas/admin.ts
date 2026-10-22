@@ -50,6 +50,10 @@ export interface OrgMember {
   status: "active" | "suspended";
   joinedAt: string | null;
   grants: MemberGrant[];
+  /** Access in workspaces and bases I don't manage (counted, not listed). */
+  otherGrantCount?: number;
+  /** My own row: everything I was given, by name. */
+  ownAccess?: { resourceType: string; name: string; role: string }[];
   devices: MemberDevice[];
 }
 

@@ -538,10 +538,10 @@ export function ViewsSidebar({
         <button
           type="button"
           className={styles.newViewBtn}
-          aria-label="Create a new view"
-          title={canCreatePersonal ? "Create a new view" : "Viewers can't create views"}
-          disabled={!canCreatePersonal}
-          onClick={() => setCreateSection(true)}
+          aria-label="Create a grid view"
+          title={canCreatePersonal ? "Create a grid view (other types: Create… below)" : "Viewers can't create views"}
+          disabled={!canCreatePersonal || creating !== null}
+          onClick={() => void createView("grid")}
         >
           +
         </button>

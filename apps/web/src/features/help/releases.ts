@@ -8,6 +8,19 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    version: "0.16.7",
+    date: "2026-10-22",
+    title: "Undo field changes, search that finds cells, clearer permissions.",
+    items: [
+      "Ctrl+Z undoes a field type or options change, bringing back the type, options and every value.",
+      "Search in a view highlights matching cells; Enter and Shift+Enter move between them.",
+      "Email and phone fields refuse invalid values with a clear message.",
+      "Lookups, rollups and counts explain how to add the link they need.",
+      "Interface forms show their Submit button; the + next to “Find a view” creates a grid view.",
+      "Signing back in returns you to the page you were on; refusals say which role is needed.",
+    ],
+  },
+  {
     version: "0.16.6",
     date: "2026-10-22",
     title: "Safer share links, attachments on shared views, API rate limit.",

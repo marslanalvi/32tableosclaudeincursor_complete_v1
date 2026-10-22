@@ -13,7 +13,7 @@ import { compileForUser } from "../access/compile.js";
 import { withBaseTx, type BaseMutationContext, type MutationActor } from "../../kernel/mutation.js";
 import { bootstrapDefaultTable } from "../base/bootstrap-default-table.js";
 import { LimitsService } from "../billing/limits-service.js";
-import { fieldRowToDto, loadFieldNameMap, type FieldDto } from "./field-dto.js";
+import { configToWire, fieldRowToDto, loadFieldNameMap, type FieldDto } from "./field-dto.js";
 import {
   createFieldInTx,
   deleteFieldInTx,
@@ -67,6 +67,20 @@ function actor(user: NonNullable<FastifyRequest["user"]>): MutationActor {
     sessionId: user.sessionId,
     via: "api",
   };
+}
+
+/** Above this many filled cells, undoing a type change restores the type but not the old values. */
+const UNDO_VALUES_LIMIT = 20_000;
+
+async function fieldValuesForUndo(trx: SchemaOpContext["trx"], tableId: string, slot: number): Promise<Record<string, unknown> | null> {
+  const key = String(slot);
+  const r = await sql<{ id: string; v: unknown }>`
+    SELECT id, cells -> ${key} AS v FROM data.records
+    WHERE table_id = ${tableId} AND deleted_at IS NULL AND cells ? ${key}
+    LIMIT ${UNDO_VALUES_LIMIT + 1}
+  `.execute(trx);
+  if (r.rows.length > UNDO_VALUES_LIMIT) return null;
+  return Object.fromEntries(r.rows.map((x) => [x.id, x.v]));
 }
 
 function opCtx(
@@ -510,7 +524,11 @@ export async function registerSchemaRoutes(
         const body = fieldPatchBody.parse(request.body ?? {});
         const before = await loadFieldRow(ctx.db, s.tableId, fieldId);
         if (!before) throw new ApiError(404, "FIELD_NOT_FOUND", "Field not found");
+        const typeChanged = body.type !== undefined && body.type !== before.type;
+        const nameById = await loadFieldNameMap(ctx.db, s.baseId);
         await withBaseTx(ctx.db, txParams(s), async (mctx, trx) => {
+          // Undo needs the old values: a type change converts them, and dropping select options clears them.
+          const values = typeChanged || body.config !== undefined ? await fieldValuesForUndo(trx, s.tableId, before.slot) : null;
           const res = await updateFieldInTx(opCtx(ctx, mctx, trx, s.workspaceId, s.user.id), s.tableId, fieldId, {
             ...(body.name !== undefined ? { name: body.name } : {}),
             ...(body.description !== undefined ? { description: body.description } : {}),
@@ -519,7 +537,18 @@ export async function registerSchemaRoutes(
           });
           return {
             kind: "schema" as const,
-            ops: [{ op: "field.updated", tableId: s.tableId, fieldId, typeChanged: body.type !== undefined && body.type !== before.type }],
+            ops: [
+              {
+                op: "field.updated",
+                tableId: s.tableId,
+                fieldId,
+                typeChanged,
+                name: res.field.name,
+                type: res.field.type,
+                config: configToWire(res.field.type, res.field.config ?? {}, nameById),
+                description: res.field.description,
+              },
+            ],
             inverseOps: [
               {
                 op: "field.updated",
@@ -527,8 +556,9 @@ export async function registerSchemaRoutes(
                 fieldId,
                 name: before.name,
                 type: before.type,
-                config: before.config,
+                config: configToWire(before.type, before.config ?? {}, nameById),
                 description: before.description,
+                ...(values ? { slot: before.slot, values } : {}),
               },
             ],
             tableIds: res.tableIds,

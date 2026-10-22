@@ -7,6 +7,7 @@ import { loadSidecarFields, loadSidecarTableMeta } from "../recordstore/load-met
 import { deleteSidecars, upsertSidecars } from "../recordstore/sidecars.js";
 import { readRecordLinks } from "../links/record-links.js";
 import { createDeletionBatchInTx } from "./apply-inverse.js";
+import { updateFieldInTx } from "../schema/field-ops.js";
 
 type DbTrx = Transaction<Database>;
 
@@ -47,6 +48,7 @@ const SUPPORTED = new Set([
   "field.soft_deleted",
   "field.restored",
   "field.renamed",
+  "field.updated",
   "link_fields.created",
   "link_fields.deleted",
   "base.renamed",
@@ -114,6 +116,30 @@ async function adjustCounts(
 }
 
 /** Re-run sidecars + link sync + compute for a record whose cells changed. */
+/** Above this many records, restored values skip per-record follow-up work (search, dependents). */
+const RESTORE_FOLLOWUP_LIMIT = 5_000;
+
+/** Put a field's saved values back (undo of a type or options change): every record gets exactly its old value. */
+async function restoreFieldValues(trx: DbTrx, ctx: ApplyContext, tableId: string, slot: string, values: Record<string, unknown>): Promise<void> {
+  const touched = await sql<{ id: string; cells: Record<string, unknown> }>`
+    UPDATE data.records r
+    SET cells = CASE WHEN v.val IS NULL THEN r.cells - ${slot} ELSE jsonb_set(r.cells, ARRAY[${slot}], v.val, true) END,
+        version = r.version + 1, updated_by = ${ctx.userId}, updated_at = now(), last_change_seq = ${ctx.changeSeq}
+    FROM (
+      SELECT x.id, s.val
+      FROM data.records x
+      LEFT JOIN jsonb_each(${JSON.stringify(values)}::jsonb) s(key, val) ON s.key = x.id::text
+      WHERE x.table_id = ${tableId} AND x.deleted_at IS NULL AND (x.cells ? ${slot} OR s.val IS NOT NULL)
+    ) v
+    WHERE r.table_id = ${tableId} AND r.id = v.id
+    RETURNING r.id, r.cells
+  `.execute(trx);
+  if (touched.rows.length > RESTORE_FOLLOWUP_LIMIT) return;
+  for (const row of touched.rows) {
+    await afterCellsChanged(trx, ctx, tableId, row.id, row.cells ?? {}, { [slot]: row.cells?.[slot] ?? null });
+  }
+}
+
 async function afterCellsChanged(
   trx: DbTrx,
   ctx: ApplyContext,
@@ -518,6 +544,36 @@ export async function applyHistoryOpsInTx(
       case "field.restored":
         if (op.fieldId) await setFieldDeletedInTx(trx, ctx, op.fieldId, false, result);
         break;
+      case "field.updated": {
+        const f = op as HistoryOp & { type?: unknown; config?: unknown; description?: unknown; values?: unknown; slot?: unknown };
+        if (!f.fieldId || !f.tableId || typeof f.type !== "string") break;
+        await updateFieldInTx(
+          { trx, baseId: ctx.baseId, workspaceId: ctx.workspaceId, userId: ctx.userId, redis: ctx.redis },
+          f.tableId,
+          f.fieldId,
+          {
+            ...(typeof f.name === "string" ? { name: f.name } : {}),
+            type: f.type,
+            ...(f.config && typeof f.config === "object" ? { config: f.config as Record<string, unknown> } : {}),
+            ...(typeof f.description === "string" ? { description: f.description } : {}),
+          },
+        );
+        if (f.values && typeof f.values === "object" && typeof f.slot === "number") {
+          // Converting back can add options made from the current values; put back exactly the old ones first.
+          if (f.config && typeof f.config === "object") {
+            await updateFieldInTx(
+              { trx, baseId: ctx.baseId, workspaceId: ctx.workspaceId, userId: ctx.userId, redis: ctx.redis },
+              f.tableId,
+              f.fieldId,
+              { config: f.config as Record<string, unknown> },
+            );
+          }
+          await restoreFieldValues(trx, ctx, f.tableId, String(f.slot), f.values as Record<string, unknown>);
+        }
+        result.tableIds.add(f.tableId);
+        result.appliedOps.push({ op: "field.updated", tableId: f.tableId, fieldId: f.fieldId, typeChanged: true });
+        break;
+      }
       case "field.renamed": {
         if (!op.fieldId || typeof op.name !== "string") break;
         await sql`

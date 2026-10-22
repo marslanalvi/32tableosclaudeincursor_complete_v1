@@ -19,6 +19,7 @@ button.tfu-star{cursor:pointer}
 .tfu-thumb{width:auto;height:22px;max-width:44px;border-radius:3px;object-fit:cover;border:1px solid #dddddd;flex:none;background:#f8fafc}
 .tfu-file{display:inline-flex;align-items:center;justify-content:center;height:22px;min-width:22px;padding:0 4px;border-radius:3px;border:1px solid #dddddd;background:#f8fafc;font-size:10px;color:#41454d;flex:none;text-transform:uppercase}
 .tfu-error{color:#dc2626;font-size:12px}
+.tfu-linkbtn{border:0;background:none;padding:0;color:#2563eb;font:inherit;cursor:pointer;text-decoration:underline}
 .tfu-muted{color:#9297a0}
 .tfu-num{display:block;width:100%;text-align:right;font-variant-numeric:tabular-nums}
 .tfu-btn{border:1px solid #dddddd;background:#fff;color:#181d26;border-radius:6px;padding:2px 10px;font:inherit;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}

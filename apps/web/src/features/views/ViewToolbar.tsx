@@ -588,6 +588,7 @@ export function ViewToolbar({
   canEdit,
   search,
   onSearchChange,
+  onSearchStep,
   onShare,
   recordCount,
   saveError,
@@ -608,6 +609,8 @@ export function ViewToolbar({
   canEdit: boolean;
   search: string;
   onSearchChange: (q: string) => void;
+  /** Enter / Shift+Enter in the search box (grid: next / previous matching cell). */
+  onSearchStep?: (dir: 1 | -1) => void;
   onShare?: () => void;
   recordCount?: number;
   saveError?: string | null;
@@ -892,6 +895,9 @@ export function ViewToolbar({
                     if (e.key === "Escape") {
                       onSearchChange("");
                       setOpen(null);
+                    } else if (e.key === "Enter" && onSearchStep) {
+                      e.preventDefault();
+                      onSearchStep(e.shiftKey ? -1 : 1);
                     }
                   }}
                   onBlur={() => {

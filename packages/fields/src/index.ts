@@ -1,6 +1,8 @@
 export * from "./types.js";
 export {
   fieldDefinitions,
+  isValidEmail,
+  isValidPhone,
   normalizeSelectOptions,
   parseNumberLoose,
   parseDateLoose,

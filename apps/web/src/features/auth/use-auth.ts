@@ -74,9 +74,12 @@ export function useLogout() {
   return useMutation({
     mutationFn: () => shellApi.logout(),
     onSettled: () => {
+      // Signing back in returns to the page you were on (e.g. a base).
+      const here = `${window.location.pathname}${window.location.search}`;
+      const next = safeNextPath(here);
       queryClient.clear();
       clearBaseStructures();
-      void router.navigate({ to: "/login" });
+      void router.navigate({ to: "/login", search: next !== "/" ? { next } : {} });
     },
   });
 }

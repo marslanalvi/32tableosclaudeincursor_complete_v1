@@ -270,7 +270,7 @@ export const API_SAMPLES: ApiSample[] = [
     path: "/v1/version",
     tokenType: "none",
     status: 200,
-    response: { name: "TableOS", version: "0.16.6", commit: "7f47bce", startedAt: "2026-10-22T08:16:19.474Z" },
+    response: { name: "TableOS", version: "0.16.7", commit: "7f47bce", startedAt: "2026-10-22T08:16:19.474Z" },
   },
 ];
 

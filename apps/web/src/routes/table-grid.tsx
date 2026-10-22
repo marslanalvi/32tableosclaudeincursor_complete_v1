@@ -40,6 +40,7 @@ interface GridViewProps {
   sorts: ViewConfig["sorts"];
   groups: ViewConfig["groups"];
   search: string;
+  searchStep?: { n: number; dir: 1 | -1 } | undefined;
   hiddenFieldIds: string[];
   fieldOrder: string[];
   fieldWidths: Record<string, number>;
@@ -127,6 +128,8 @@ export function TableGridPage({
     return () => clearTimeout(t);
   }, [search]);
   const [count, setCount] = useState<number | undefined>(undefined);
+  // Enter / Shift+Enter in the search box: move to the next / previous matching cell.
+  const [searchStep, setSearchStep] = useState<{ n: number; dir: 1 | -1 }>({ n: 0, dir: 1 });
   const [recordId, setRecordId] = useRecordParam();
   const [addFieldOpen, setAddFieldOpen] = useState(false);
 
@@ -181,6 +184,7 @@ export function TableGridPage({
         canEdit={canEdit}
         search={search}
         onSearchChange={setSearch}
+        onSearchStep={(dir) => setSearchStep((s) => ({ n: s.n + 1, dir }))}
         saveError={saveError}
         {...(onOpenShare ? { onShare: onOpenShare } : {})}
         {...(views ? { views } : {})}
@@ -201,6 +205,7 @@ export function TableGridPage({
               sorts={config.sorts}
               groups={config.groups}
               search={appliedSearch}
+              searchStep={searchStep}
               hiddenFieldIds={config.hiddenFieldIds}
               fieldOrder={config.fieldOrder}
               fieldWidths={config.fieldWidths}

@@ -299,6 +299,23 @@ export async function registerMembersRoutes(app: FastifyInstance, ctx: AppContex
               expiresAt: iso(g.expires_at),
               expired: g.expires_at ? new Date(g.expires_at) < new Date() : false,
             })),
+          /** Access in workspaces and bases the viewer doesn't manage (not listed above, but real). */
+          otherGrantCount: grants.rows.filter((g) => g.principal_id === m.user_id && !visibleIds.has(g.resource_id)).length,
+          /** Your own row: everything you were given, by name. */
+          ...(m.user_id === actor.userId
+            ? {
+                ownAccess: grants.rows
+                  .filter((g) => g.principal_id === m.user_id)
+                  .map((g) => ({
+                    resourceType: g.resource_type,
+                    name:
+                      g.resource_type === "workspace"
+                        ? (workspaces.rows.find((w) => w.id === g.resource_id)?.name ?? "a workspace")
+                        : (bases.rows.find((b) => b.base_id === g.resource_id)?.name ?? "a base"),
+                    role: g.role,
+                  })),
+              }
+            : {}),
           devices: devices.rows
             .filter((d) => d.user_id === m.user_id)
             .map((d) => ({
